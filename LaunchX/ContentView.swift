@@ -116,6 +116,19 @@ struct ContentView: View {
             PanelManager.shared.hidePanel()
             return nil
         default:
+            // Emacs-style navigation: Ctrl+N (Down), Ctrl+P (Up)
+            if event.modifierFlags.contains(.control) {
+                switch Int(event.keyCode) {
+                case kVK_ANSI_N:
+                    viewModel.moveSelectionDown()
+                    return nil
+                case kVK_ANSI_P:
+                    viewModel.moveSelectionUp()
+                    return nil
+                default:
+                    break
+                }
+            }
             return event
         }
     }
