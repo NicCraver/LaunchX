@@ -12,7 +12,7 @@ class PanelManager: ObservableObject {
 
     private init() {
         // Define standard size for the search window
-        let panelSize = NSSize(width: 600, height: 50)  // Initial height, can grow
+        let panelSize = NSSize(width: 650, height: 50)  // Initial height, can grow
         let screenRect = NSScreen.main?.frame ?? .zero
         let centerOrigin = NSPoint(
             x: screenRect.midX - panelSize.width / 2,
