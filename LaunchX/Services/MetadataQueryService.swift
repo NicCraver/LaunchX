@@ -48,10 +48,7 @@ class MetadataQueryService: ObservableObject {
 
             // Construct the MDQuery string
             // We want all items in the scope, usually Applications and user documents.
-            let queryString = """
-                kMDItemContentTypeTree == "public.item" &&
-                kMDItemContentType != "com.apple.systempreference.prefpane"
-                """ as CFString
+            let queryString = "kMDItemFSName == '*'" as CFString
 
             // Use kCFAllocatorDefault for create
             guard let query = MDQueryCreate(kCFAllocatorDefault, queryString, nil, nil) else {
@@ -65,6 +62,7 @@ class MetadataQueryService: ObservableObject {
             // Set Search Scopes (Directories)
             // MDQuerySetSearchScope takes an array of CFURLs
             let scopeURLs = config.searchScopes.map { URL(fileURLWithPath: $0) as CFURL }
+            print("MetadataQueryService: Starting query with scopes: \(config.searchScopes)")
             MDQuerySetSearchScope(query, scopeURLs as CFArray, 0)
 
             // Set Update Handler (Batching is handled by MDQuery but we process on main or background?)
@@ -136,6 +134,7 @@ class MetadataQueryService: ObservableObject {
     // MARK: - Query Handlers
 
     @objc private func queryDidFinishGathering(_ notification: Notification) {
+        print("MetadataQueryService: queryDidFinishGathering")
         processQueryResults(isInitial: true)
         DispatchQueue.main.async {
             self.isIndexing = false
@@ -150,6 +149,8 @@ class MetadataQueryService: ObservableObject {
         guard let query = self.query else { return }
 
         let count = MDQueryGetResultCount(query)
+        print("MetadataQueryService: MDQuery returned \(count) raw items")
+
         var newItems: [IndexedItem] = []
         newItems.reserveCapacity(count)
 
