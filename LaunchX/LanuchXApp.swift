@@ -20,6 +20,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var isQuitting = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Transform into an accessory app (hide Dock icon, show over full-screen apps)
+        NSApp.setActivationPolicy(.accessory)
+
         // Disable automatic window tabbing (Sierra+)
         NSWindow.allowsAutomaticWindowTabbing = false
 
