@@ -7,10 +7,10 @@ import Foundation
 ///
 /// Workflow:
 /// 1. Uses NSMetadataQuery to fetch metadata for configured scopes efficiently.
-/// 2. Extracts metadata on the main thread (NSMetadataItem is not thread-safe).
-/// 3. Offloads heavy processing (Pinyin generation, filtering) to a background queue.
+/// 2. Captures results snapshot on the main thread (fast).
+/// 3. Offloads metadata extraction and heavy processing (Pinyin) to concurrent background threads.
 /// 4. Splits index into Apps and Files for prioritized searching.
-/// 5. Provides async search with strict result limits.
+/// 5. Provides async search with batch processing to allow rapid cancellation.
 class MetadataQueryService: ObservableObject {
     static let shared = MetadataQueryService()
 
@@ -18,12 +18,16 @@ class MetadataQueryService: ObservableObject {
     @Published var indexedItemCount: Int = 0
 
     // Split index for optimization
+    // IndexedItem is a class, so array copies are cheap (copying references)
     private var appsIndex: [IndexedItem] = []
     private var filesIndex: [IndexedItem] = []
 
-    // Processing queue for heavy lifting (Pinyin calculation, Search filtering)
-    private let processingQueue = DispatchQueue(
-        label: "com.launchx.metadata.processing", qos: .userInitiated)
+    // Processing queue for search requests
+    private let searchQueue = DispatchQueue(
+        label: "com.launchx.metadata.search", qos: .userInteractive)
+
+    // Global concurrent queue for heavy indexing
+    private let indexingQueue = DispatchQueue.global(qos: .userInitiated)
 
     private var query: NSMetadataQuery?
     private var searchConfig: SearchConfig = SearchConfig()
@@ -35,32 +39,25 @@ class MetadataQueryService: ObservableObject {
 
     // MARK: - Public API
 
-    /// Starts or restarts the indexing process based on the provided configuration.
     func startIndexing(with config: SearchConfig) {
-        // Ensure main thread for NSMetadataQuery setup
         DispatchQueue.main.async {
             self.stopIndexing()
-
             self.searchConfig = config
             self.isIndexing = true
 
             let query = NSMetadataQuery()
             self.query = query
 
-            // Set Search Scopes
             query.searchScopes = config.searchScopes
 
-            // Predicate
-            // Equivalent to: kMDItemContentTypeTree == "public.item" && kMDItemContentType != "com.apple.systempreference.prefpane"
+            // Predicate: public.item, excluding prefpanes
             let predicate = NSPredicate(
-                format:
-                    "%K == 'public.item' AND %K != 'com.apple.systempreference.prefpane'",
+                format: "%K == 'public.item' AND %K != 'com.apple.systempreference.prefpane'",
                 NSMetadataItemContentTypeTreeKey,
                 NSMetadataItemContentTypeKey
             )
             query.predicate = predicate
 
-            // Observers
             NotificationCenter.default.addObserver(
                 self,
                 selector: #selector(self.queryDidFinishGathering(_:)),
@@ -78,8 +75,6 @@ class MetadataQueryService: ObservableObject {
             print(
                 "MetadataQueryService: Starting NSMetadataQuery with scopes: \(config.searchScopes)"
             )
-
-            // Start the query on the Main RunLoop
             if !query.start() {
                 print("MetadataQueryService: Failed to start NSMetadataQuery")
                 self.isIndexing = false
@@ -99,7 +94,9 @@ class MetadataQueryService: ObservableObject {
         }
     }
 
-    /// Async search with prioritization and limiting.
+    // MARK: - Search Logic
+
+    /// Async search with batch processing for responsiveness.
     /// - Parameters:
     ///   - text: The search query.
     ///   - completion: Callback with results (Apps first, then Files).
@@ -112,70 +109,112 @@ class MetadataQueryService: ObservableObject {
             return
         }
 
-        // Capture snapshot of indices on Main Thread (thread-safe COW)
-        let appsSnapshot = self.appsIndex
-        let filesSnapshot = self.filesIndex
+        // Snapshot indices (Cheap pointer copy since IndexedItem is a class)
+        let apps = self.appsIndex
+        let files = self.filesIndex
 
-        // Create work item
-        let workItem = DispatchWorkItem {
-            // Check cancellation
-            if self.currentSearchWorkItem?.isCancelled ?? true { return }
+        // Pre-compute query specifics once
+        let lowerQuery = text.lowercased()
 
-            // 1. Search Apps (Top Priority)
-            let matchedApps = appsSnapshot.filter { $0.searchableName.matches(text) }
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self = self else { return }
 
-            // Sort Apps: Exact > Prefix > Contains > Usage
+            // Helper to check cancellation
+            func isCancelled() -> Bool {
+                return self.currentSearchWorkItem?.isCancelled ?? true
+            }
+
+            if isCancelled() { return }
+
+            // 1. Apps Search (Batch processing)
+            var matchedApps: [IndexedItem] = []
+            let appChunkSize = 200
+
+            for i in stride(from: 0, to: apps.count, by: appChunkSize) {
+                if isCancelled() { return }
+
+                let end = min(i + appChunkSize, apps.count)
+                let chunk = apps[i..<end]
+
+                for app in chunk {
+                    // Extremely fast path: contains check on pre-computed lowercase name
+                    if app.lowerName.contains(lowerQuery) {
+                        matchedApps.append(app)
+                        continue
+                    }
+                    // Slow path: Pinyin (only check if fast path fails)
+                    if app.searchableName.matches(text) {
+                        matchedApps.append(app)
+                    }
+                }
+            }
+
+            // Sort Apps
             let sortedApps = matchedApps.sorted { lhs, rhs in
-                // Heuristic sorting
-                let lName = lhs.name.lowercased()
-                let rName = rhs.name.lowercased()
-                let q = text.lowercased()
+                // Exact match priority
+                if lhs.lowerName == lowerQuery { return true }
+                if rhs.lowerName == lowerQuery { return false }
 
-                if lName == q { return true }
-                if rName == q { return false }
+                // Prefix priority
+                let lPrefix = lhs.lowerName.hasPrefix(lowerQuery)
+                let rPrefix = rhs.lowerName.hasPrefix(lowerQuery)
+                if lPrefix && !rPrefix { return true }
+                if !lPrefix && rPrefix { return false }
 
-                if lName.hasPrefix(q) && !rName.hasPrefix(q) { return true }
-                if !lName.hasPrefix(q) && rName.hasPrefix(q) { return false }
-
+                // Usage/Date priority
                 return lhs.lastUsed > rhs.lastUsed
             }
-            // Strict limit for apps
+
             let topApps = Array(sortedApps.prefix(10))
 
-            // Check cancellation
-            if self.currentSearchWorkItem?.isCancelled ?? true { return }
+            if isCancelled() { return }
 
-            // 2. Search Files (Lower Priority)
-            // Optimization: If text is very short (1 char), only search if strictly necessary, or limit scan?
-            // For now, we scan all but strictly limit output.
-            let matchedFiles = filesSnapshot.filter { $0.searchableName.matches(text) }
+            // 2. Files Search (Batch processing)
+            var matchedFiles: [IndexedItem] = []
+            let fileChunkSize = 1000  // Process files in larger chunks
+
+            for i in stride(from: 0, to: files.count, by: fileChunkSize) {
+                if isCancelled() { return }
+
+                let end = min(i + fileChunkSize, files.count)
+                let chunk = files[i..<end]
+
+                for file in chunk {
+                    if file.lowerName.contains(lowerQuery) {
+                        matchedFiles.append(file)
+                        continue
+                    }
+                    if file.searchableName.matches(text) {
+                        matchedFiles.append(file)
+                    }
+                }
+            }
 
             let sortedFiles = matchedFiles.sorted { lhs, rhs in
                 return lhs.lastUsed > rhs.lastUsed
             }
-            // Strict limit for files
+
             let topFiles = Array(sortedFiles.prefix(20))
 
             let combined = topApps + topFiles
 
             DispatchQueue.main.async {
                 // Ensure we are still the relevant search
-                if !(self.currentSearchWorkItem?.isCancelled ?? true) {
+                if !isCancelled() {
                     completion(combined)
                 }
             }
         }
 
         self.currentSearchWorkItem = workItem
-        processingQueue.async(execute: workItem)
+        searchQueue.async(execute: workItem)
     }
 
-    // MARK: - Query Handlers
+    // MARK: - Handlers
 
     @objc private func queryDidFinishGathering(_ notification: Notification) {
         print("MetadataQueryService: NSMetadataQuery finished gathering")
         processQueryResults(isInitial: true)
-        isIndexing = false
     }
 
     @objc private func queryDidUpdate(_ notification: Notification) {
@@ -191,49 +230,51 @@ class MetadataQueryService: ObservableObject {
         // Capture snapshot on Main Thread (fast)
         let results = query.results as? [NSMetadataItem] ?? []
 
-        // Resume updates immediately so we don't block the query for long
+        // Resume updates immediately
         query.enableUpdates()
 
-        // Offload processing to background
-        processingQueue.async { [weak self] in
+        if results.isEmpty {
+            if isInitial { isIndexing = false }
+            return
+        }
+
+        // Offload ALL processing to background
+        indexingQueue.async { [weak self] in
             guard let self = self else { return }
 
             let count = results.count
-            var newApps: [IndexedItem] = []
-            var newFiles: [IndexedItem] = []
+            // Use UnsafeMutablePointer for lock-free parallel writing of object references
+            let tempBuffer = UnsafeMutablePointer<IndexedItem?>.allocate(capacity: count)
+            tempBuffer.initialize(repeating: nil, count: count)
 
-            // Pre-allocate decent capacity
-            newApps.reserveCapacity(500)
-            newFiles.reserveCapacity(count)
+            defer {
+                tempBuffer.deinitialize(count: count)
+                tempBuffer.deallocate()
+            }
 
-            // Prepare exclusion checks
+            // Capture config for thread safety
             let excludedPaths = self.searchConfig.excludedPaths
             let excludedNames = self.searchConfig.excludedNames
             let excludedNamesSet = Set(excludedNames)
 
-            // Iterate results
-            for item in results {
-                // Get Path
+            // Parallel Loop
+            DispatchQueue.concurrentPerform(iterations: count) { i in
+                let item = results[i]
+
                 guard let path = item.value(forAttribute: NSMetadataItemPathKey) as? String else {
-                    continue
+                    return
                 }
 
-                // --- High Performance Filtering ---
-
-                // 1. Path Exclusion (e.g. inside .git or node_modules)
                 let pathComponents = path.components(separatedBy: "/")
 
-                // Optimization: Quick check if any excluded name exists in path
-                if !excludedNamesSet.isDisjoint(with: pathComponents) { continue }
+                // Filtering
+                if !excludedNamesSet.isDisjoint(with: pathComponents) { return }
 
-                // 2. Exact Path Exclusion
                 if !excludedPaths.isEmpty {
-                    if excludedPaths.contains(where: { path.hasPrefix($0) }) { continue }
+                    if excludedPaths.contains(where: { path.hasPrefix($0) }) { return }
                 }
 
-                // --- Extraction ---
-
-                // Prioritize Display Name (Localized) for Pinyin
+                // Prioritize Display Name
                 let name =
                     item.value(forAttribute: NSMetadataItemDisplayNameKey) as? String
                     ?? item.value(forAttribute: NSMetadataItemFSNameKey) as? String
@@ -243,31 +284,42 @@ class MetadataQueryService: ObservableObject {
                     item.value(forAttribute: NSMetadataItemContentModificationDateKey) as? Date
                     ?? Date()
 
-                // Check if directory
                 let contentType = item.value(forAttribute: NSMetadataItemContentTypeKey) as? String
+
+                // Object Creation (Heavy Pinyin Calculation happens here inside init)
                 let isDirectory =
                     (contentType == "public.folder" || contentType == "com.apple.mount-point")
-
-                // Check if App
                 let isApp = (contentType == "com.apple.application-bundle")
 
-                let cachedItem = IndexedItem(
-                    id: UUID(),
+                let indexedItem = IndexedItem(
                     name: name,
                     path: path,
                     lastUsed: date,
                     isDirectory: isDirectory,
+                    isApp: isApp,
                     searchableName: CachedSearchableString(name)
                 )
 
-                if isApp {
-                    newApps.append(cachedItem)
-                } else {
-                    newFiles.append(cachedItem)
+                tempBuffer[i] = indexedItem
+            }
+
+            // Collect results
+            var newApps: [IndexedItem] = []
+            var newFiles: [IndexedItem] = []
+            newApps.reserveCapacity(500)
+            newFiles.reserveCapacity(count)
+
+            for i in 0..<count {
+                if let item = tempBuffer[i] {
+                    if item.isApp {
+                        newApps.append(item)
+                    } else {
+                        newFiles.append(item)
+                    }
                 }
             }
 
-            // Sort Apps by name length/usage initially
+            // Initial sort for Apps
             newApps.sort { $0.name.count < $1.name.count }
 
             // Update State on Main Thread
@@ -275,10 +327,11 @@ class MetadataQueryService: ObservableObject {
                 self.appsIndex = newApps
                 self.filesIndex = newFiles
                 self.indexedItemCount = newApps.count + newFiles.count
+                self.isIndexing = false
 
                 if isInitial {
                     print(
-                        "MetadataQueryService: Initial index complete. Apps: \(newApps.count), Files: \(newFiles.count)"
+                        "MetadataQueryService: Indexing complete. Apps: \(newApps.count), Files: \(newFiles.count)"
                     )
                 }
             }
@@ -288,15 +341,30 @@ class MetadataQueryService: ObservableObject {
 
 // MARK: - Models
 
-struct IndexedItem: Identifiable {
-    let id: UUID
+/// Changed from struct to final class to avoid Copy-On-Write overhead during search filtering
+final class IndexedItem: Identifiable {
+    let id = UUID()
     let name: String
+    let lowerName: String
     let path: String
     let lastUsed: Date
     let isDirectory: Bool
+    let isApp: Bool
     let searchableName: CachedSearchableString
 
-    // Convert to the UI model
+    init(
+        name: String, path: String, lastUsed: Date, isDirectory: Bool, isApp: Bool,
+        searchableName: CachedSearchableString
+    ) {
+        self.name = name
+        self.lowerName = name.lowercased()  // Pre-compute for fast search
+        self.path = path
+        self.lastUsed = lastUsed
+        self.isDirectory = isDirectory
+        self.isApp = isApp
+        self.searchableName = searchableName
+    }
+
     func toSearchResult() -> SearchResult {
         return SearchResult(
             id: id,
