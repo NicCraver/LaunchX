@@ -16,7 +16,7 @@ class FileSearchService: ObservableObject {
         metadataService.startIndexing(with: config)
     }
 
-    /// Performs a high-speed in-memory search
+    /// Performs an async search via MetadataQueryService
     func search(query text: String) {
         guard !text.isEmpty else {
             resultsSubject.send([])
@@ -24,13 +24,15 @@ class FileSearchService: ObservableObject {
         }
 
         // Delegate to the in-memory index service
-        // This is extremely fast (microseconds/milliseconds)
-        let indexItems = metadataService.search(text: text)
+        // The search is performed asynchronously on a background queue,
+        // but the completion handler is called on the Main Thread.
+        metadataService.search(text: text) { [weak self] indexItems in
+            // Map internal IndexItems to UI SearchResults
+            // This happens on the main thread, which is good for creating NSImages (icons).
+            let results = indexItems.map { $0.toSearchResult() }
 
-        // Map internal IndexItems to UI SearchResults
-        let results = indexItems.map { $0.toSearchResult() }
-
-        resultsSubject.send(results)
+            self?.resultsSubject.send(results)
+        }
     }
 
     /// Triggers a re-index if settings change (e.g. user adds a new folder)

@@ -1,6 +1,6 @@
-import SwiftUI
-import Combine
 import AppKit
+import Combine
+import SwiftUI
 
 class SearchViewModel: ObservableObject {
     @Published var searchText = ""
@@ -13,7 +13,6 @@ class SearchViewModel: ObservableObject {
     init() {
         // Debounce search text changes
         $searchText
-            .debounce(for: .milliseconds(150), scheduler: RunLoop.main)
             .removeDuplicates()
             .sink { [weak self] text in
                 self?.searchService.search(query: text)
@@ -25,7 +24,7 @@ class SearchViewModel: ObservableObject {
             .receive(on: RunLoop.main)
             .sink { [weak self] newResults in
                 self?.results = newResults
-                self?.selectedIndex = 0 // Reset selection when results change
+                self?.selectedIndex = 0  // Reset selection when results change
             }
             .store(in: &cancellables)
     }

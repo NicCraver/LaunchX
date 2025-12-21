@@ -4,21 +4,32 @@ import Foundation
 
 /// A high-performance service that builds and maintains an in-memory index
 /// of files using the high-level NSMetadataQuery API.
+///
+/// Workflow:
+/// 1. Uses NSMetadataQuery to fetch metadata for configured scopes efficiently.
+/// 2. Extracts metadata on the main thread (NSMetadataItem is not thread-safe).
+/// 3. Offloads heavy processing (Pinyin generation, filtering) to a background queue.
+/// 4. Splits index into Apps and Files for prioritized searching.
+/// 5. Provides async search with strict result limits.
 class MetadataQueryService: ObservableObject {
     static let shared = MetadataQueryService()
 
     @Published var isIndexing: Bool = false
     @Published var indexedItemCount: Int = 0
 
-    // The main in-memory index
-    private(set) var indexedItems: [IndexedItem] = []
+    // Split index for optimization
+    private var appsIndex: [IndexedItem] = []
+    private var filesIndex: [IndexedItem] = []
 
-    // Processing queue for heavy lifting (Pinyin calculation)
+    // Processing queue for heavy lifting (Pinyin calculation, Search filtering)
     private let processingQueue = DispatchQueue(
         label: "com.launchx.metadata.processing", qos: .userInitiated)
 
     private var query: NSMetadataQuery?
     private var searchConfig: SearchConfig = SearchConfig()
+
+    // Cancellation token for search requests
+    private var currentSearchWorkItem: DispatchWorkItem?
 
     private init() {}
 
@@ -88,28 +99,75 @@ class MetadataQueryService: ObservableObject {
         }
     }
 
-    /// Fast in-memory search using Pinyin matcher
-    func search(text: String, limit: Int = 50) -> [IndexedItem] {
-        guard !text.isEmpty else { return [] }
+    /// Async search with prioritization and limiting.
+    /// - Parameters:
+    ///   - text: The search query.
+    ///   - completion: Callback with results (Apps first, then Files).
+    func search(text: String, completion: @escaping ([IndexedItem]) -> Void) {
+        // Cancel previous pending search
+        currentSearchWorkItem?.cancel()
 
-        // Filter on main thread (fast for <50k items)
-        let itemsToCheck = indexedItems
-
-        let matches = itemsToCheck.filter { item in
-            item.searchableName.matches(text)
+        guard !text.isEmpty else {
+            completion([])
+            return
         }
 
-        // Sort
-        let sorted = matches.sorted { lhs, rhs in
-            // Prefer shorter names (exact matches)
-            if lhs.name.count != rhs.name.count {
-                return lhs.name.count < rhs.name.count
+        // Capture snapshot of indices on Main Thread (thread-safe COW)
+        let appsSnapshot = self.appsIndex
+        let filesSnapshot = self.filesIndex
+
+        // Create work item
+        let workItem = DispatchWorkItem {
+            // Check cancellation
+            if self.currentSearchWorkItem?.isCancelled ?? true { return }
+
+            // 1. Search Apps (Top Priority)
+            let matchedApps = appsSnapshot.filter { $0.searchableName.matches(text) }
+
+            // Sort Apps: Exact > Prefix > Contains > Usage
+            let sortedApps = matchedApps.sorted { lhs, rhs in
+                // Heuristic sorting
+                let lName = lhs.name.lowercased()
+                let rName = rhs.name.lowercased()
+                let q = text.lowercased()
+
+                if lName == q { return true }
+                if rName == q { return false }
+
+                if lName.hasPrefix(q) && !rName.hasPrefix(q) { return true }
+                if !lName.hasPrefix(q) && rName.hasPrefix(q) { return false }
+
+                return lhs.lastUsed > rhs.lastUsed
             }
-            // Prefer newer files
-            return lhs.lastUsed > rhs.lastUsed
+            // Strict limit for apps
+            let topApps = Array(sortedApps.prefix(10))
+
+            // Check cancellation
+            if self.currentSearchWorkItem?.isCancelled ?? true { return }
+
+            // 2. Search Files (Lower Priority)
+            // Optimization: If text is very short (1 char), only search if strictly necessary, or limit scan?
+            // For now, we scan all but strictly limit output.
+            let matchedFiles = filesSnapshot.filter { $0.searchableName.matches(text) }
+
+            let sortedFiles = matchedFiles.sorted { lhs, rhs in
+                return lhs.lastUsed > rhs.lastUsed
+            }
+            // Strict limit for files
+            let topFiles = Array(sortedFiles.prefix(20))
+
+            let combined = topApps + topFiles
+
+            DispatchQueue.main.async {
+                // Ensure we are still the relevant search
+                if !(self.currentSearchWorkItem?.isCancelled ?? true) {
+                    completion(combined)
+                }
+            }
         }
 
-        return Array(sorted.prefix(limit))
+        self.currentSearchWorkItem = workItem
+        processingQueue.async(execute: workItem)
     }
 
     // MARK: - Query Handlers
@@ -141,8 +199,12 @@ class MetadataQueryService: ObservableObject {
             guard let self = self else { return }
 
             let count = results.count
-            var newItems: [IndexedItem] = []
-            newItems.reserveCapacity(count)
+            var newApps: [IndexedItem] = []
+            var newFiles: [IndexedItem] = []
+
+            // Pre-allocate decent capacity
+            newApps.reserveCapacity(500)
+            newFiles.reserveCapacity(count)
 
             // Prepare exclusion checks
             let excludedPaths = self.searchConfig.excludedPaths
@@ -186,6 +248,9 @@ class MetadataQueryService: ObservableObject {
                 let isDirectory =
                     (contentType == "public.folder" || contentType == "com.apple.mount-point")
 
+                // Check if App
+                let isApp = (contentType == "com.apple.application-bundle")
+
                 let cachedItem = IndexedItem(
                     id: UUID(),
                     name: name,
@@ -195,17 +260,25 @@ class MetadataQueryService: ObservableObject {
                     searchableName: CachedSearchableString(name)
                 )
 
-                newItems.append(cachedItem)
+                if isApp {
+                    newApps.append(cachedItem)
+                } else {
+                    newFiles.append(cachedItem)
+                }
             }
+
+            // Sort Apps by name length/usage initially
+            newApps.sort { $0.name.count < $1.name.count }
 
             // Update State on Main Thread
             DispatchQueue.main.async {
-                self.indexedItems = newItems
-                self.indexedItemCount = newItems.count
+                self.appsIndex = newApps
+                self.filesIndex = newFiles
+                self.indexedItemCount = newApps.count + newFiles.count
 
                 if isInitial {
                     print(
-                        "MetadataQueryService: Initial index complete. Total filtered items: \(newItems.count)"
+                        "MetadataQueryService: Initial index complete. Apps: \(newApps.count), Files: \(newFiles.count)"
                     )
                 }
             }

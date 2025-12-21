@@ -13,7 +13,7 @@ class StringFuzzyMatcher {
         if query.isEmpty { return true }
 
         // 1. Fast path: Direct containment (Case Insensitive)
-        if target.localizedStandardContains(query) {
+        if target.range(of: query, options: .caseInsensitive) != nil {
             return true
         }
 
@@ -28,12 +28,14 @@ class StringFuzzyMatcher {
 
         // Check Full Pinyin (e.g. "weixin" matches "Wei Xin")
         // We remove spaces from pinyin to allow "weixin" to match "Wei Xin"
-        if pinyin.replacingOccurrences(of: " ", with: "").localizedStandardContains(query) {
+        if pinyin.replacingOccurrences(of: " ", with: "").range(
+            of: query, options: .caseInsensitive) != nil
+        {
             return true
         }
 
         // Check Acronym (e.g. "wx" matches "Wei Xin")
-        if acronym.localizedStandardContains(query) {
+        if acronym.range(of: query, options: .caseInsensitive) != nil {
             return true
         }
 
@@ -66,7 +68,7 @@ struct CachedSearchableString {
 
     func matches(_ query: String) -> Bool {
         // 1. Fast direct match
-        if original.localizedStandardContains(query) { return true }
+        if original.range(of: query, options: .caseInsensitive) != nil { return true }
 
         // If no pinyin was calculated (because it was ASCII target), we are done
         if !hasPinyin { return false }
