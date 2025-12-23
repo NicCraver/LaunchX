@@ -1,5 +1,5 @@
-import Foundation
 import Cocoa
+import Foundation
 
 /// File system scanner for building the initial index
 /// Uses lazy enumeration for memory efficiency
@@ -15,6 +15,56 @@ final class FileIndexer {
     private let batchSize = 1000  // Commit every 1000 files
     private var isScanning = false
     private var shouldCancel = false
+
+    // MARK: - Localized Name Helper
+
+    /// Get localized app name from InfoPlist.strings (supports Chinese names like "微信")
+    private func getLocalizedAppName(at appPath: String) -> String? {
+        let resourcesPath = appPath + "/Contents/Resources"
+        let fm = FileManager.default
+
+        // Try Chinese localization directories
+        let lprojDirs = ["zh-Hans.lproj", "zh-Hant.lproj", "zh_CN.lproj", "zh_TW.lproj"]
+
+        for lproj in lprojDirs {
+            let stringsPath = resourcesPath + "/" + lproj + "/InfoPlist.strings"
+            guard fm.fileExists(atPath: stringsPath),
+                let data = fm.contents(atPath: stringsPath)
+            else { continue }
+
+            // Try as property list first
+            if let plist = try? PropertyListSerialization.propertyList(from: data, format: nil)
+                as? [String: String],
+                let displayName = plist["CFBundleDisplayName"] ?? plist["CFBundleName"]
+            {
+                return displayName
+            }
+
+            // Try reading as UTF-16 (common encoding for .strings files)
+            if let str = String(data: data, encoding: .utf16) {
+                let pattern = "\"CFBundleDisplayName\"\\s*=\\s*\"([^\"]+)\""
+                if let regex = try? NSRegularExpression(pattern: pattern),
+                    let match = regex.firstMatch(
+                        in: str, range: NSRange(str.startIndex..., in: str)),
+                    let range = Range(match.range(at: 1), in: str)
+                {
+                    return String(str[range])
+                }
+
+                // Try CFBundleName if CFBundleDisplayName not found
+                let namePattern = "\"CFBundleName\"\\s*=\\s*\"([^\"]+)\""
+                if let regex = try? NSRegularExpression(pattern: namePattern),
+                    let match = regex.firstMatch(
+                        in: str, range: NSRange(str.startIndex..., in: str)),
+                    let range = Range(match.range(at: 1), in: str)
+                {
+                    return String(str[range])
+                }
+            }
+        }
+
+        return nil
+    }
 
     // MARK: - Public API
 
@@ -56,16 +106,18 @@ final class FileIndexer {
                 if self.shouldCancel { break }
 
                 let url = URL(fileURLWithPath: path)
-                guard let enumerator = FileManager.default.enumerator(
-                    at: url,
-                    includingPropertiesForKeys: [
-                        .isDirectoryKey,
-                        .contentModificationDateKey,
-                        .fileSizeKey,
-                        .isApplicationKey
-                    ],
-                    options: [.skipsHiddenFiles, .skipsPackageDescendants]
-                ) else { continue }
+                guard
+                    let enumerator = FileManager.default.enumerator(
+                        at: url,
+                        includingPropertiesForKeys: [
+                            .isDirectoryKey,
+                            .contentModificationDateKey,
+                            .fileSizeKey,
+                            .isApplicationKey,
+                        ],
+                        options: [.skipsHiddenFiles, .skipsPackageDescendants]
+                    )
+                else { continue }
 
                 while let fileURL = enumerator.nextObject() as? URL {
                     if self.shouldCancel { break }
@@ -124,7 +176,9 @@ final class FileIndexer {
             self.isScanning = false
 
             DispatchQueue.main.async {
-                print("FileIndexer: Scan complete. Total: \(totalScanned), Duration: \(String(format: "%.2f", duration))s")
+                print(
+                    "FileIndexer: Scan complete. Total: \(totalScanned), Duration: \(String(format: "%.2f", duration))s"
+                )
                 completion?(totalScanned, duration)
             }
         }
@@ -132,7 +186,9 @@ final class FileIndexer {
 
     /// Scan only application directories (faster for app-only search)
     func scanApplications(
-        paths: [String] = ["/Applications", "/System/Applications", "/System/Applications/Utilities"],
+        paths: [String] = [
+            "/Applications", "/System/Applications", "/System/Applications/Utilities",
+        ],
         progress: ProgressCallback? = nil,
         completion: CompletionCallback? = nil
     ) {
@@ -163,11 +219,13 @@ final class FileIndexer {
                 if self.shouldCancel { break }
 
                 let url = URL(fileURLWithPath: path)
-                guard let contents = try? FileManager.default.contentsOfDirectory(
-                    at: url,
-                    includingPropertiesForKeys: [.contentModificationDateKey],
-                    options: [.skipsHiddenFiles]
-                ) else { continue }
+                guard
+                    let contents = try? FileManager.default.contentsOfDirectory(
+                        at: url,
+                        includingPropertiesForKeys: [.contentModificationDateKey],
+                        options: [.skipsHiddenFiles]
+                    )
+                else { continue }
 
                 for fileURL in contents {
                     if self.shouldCancel { break }
@@ -197,7 +255,9 @@ final class FileIndexer {
             self.isScanning = false
 
             DispatchQueue.main.async {
-                print("FileIndexer: App scan complete. Total: \(totalScanned), Duration: \(String(format: "%.3f", duration))s")
+                print(
+                    "FileIndexer: App scan complete. Total: \(totalScanned), Duration: \(String(format: "%.3f", duration))s"
+                )
                 completion?(totalScanned, duration)
             }
         }
@@ -220,7 +280,7 @@ final class FileIndexer {
             .isDirectoryKey,
             .contentModificationDateKey,
             .fileSizeKey,
-            .isApplicationKey
+            .isApplicationKey,
         ])
 
         let isDirectory = resourceValues?.isDirectory ?? false
@@ -231,19 +291,32 @@ final class FileIndexer {
         // Get display name
         let name: String
         if isApp {
-            // For apps, use the name without .app extension
-            name = url.deletingPathExtension().lastPathComponent
+            // For apps, use localized display name (e.g., "微信" instead of "WeChat")
+            name =
+                getLocalizedAppName(at: url.path)
+                ?? FileManager.default.displayName(atPath: url.path)
+                .replacingOccurrences(of: ".app", with: "")
         } else {
             name = url.lastPathComponent
         }
 
-        // Calculate pinyin for Chinese characters
+        // Get the actual filename for matching (e.g., "WeChat" for WeChat.app)
+        let actualFileName = url.deletingPathExtension().lastPathComponent
+
+        // Calculate pinyin for Chinese characters in display name
         var pinyinFull: String? = nil
         var pinyinAcronym: String? = nil
 
         if name.hasMultiByteCharacters {
             pinyinFull = name.pinyin.lowercased().replacingOccurrences(of: " ", with: "")
             pinyinAcronym = name.pinyinAcronym.lowercased()
+        }
+
+        // For apps where display name differs from filename, also index the filename
+        // This allows searching "wechat" to find "微信"
+        var fileNameForSearch: String? = nil
+        if isApp && name.lowercased() != actualFileName.lowercased() {
+            fileNameForSearch = actualFileName.lowercased()
         }
 
         return FileRecord(
@@ -262,8 +335,10 @@ final class FileIndexer {
     private func createAppRecord(from url: URL) -> FileRecord? {
         let resourceValues = try? url.resourceValues(forKeys: [.contentModificationDateKey])
 
-        // Get localized display name
-        let name = FileManager.default.displayName(atPath: url.path)
+        // Get localized display name (prefer Chinese localization, fallback to system display name)
+        let name =
+            getLocalizedAppName(at: url.path)
+            ?? FileManager.default.displayName(atPath: url.path)
             .replacingOccurrences(of: ".app", with: "")
 
         // Calculate pinyin for Chinese characters
