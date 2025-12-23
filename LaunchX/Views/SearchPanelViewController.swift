@@ -14,7 +14,7 @@ class SearchPanelViewController: NSViewController {
     // MARK: - State
     private var results: [SearchResult] = []
     private var selectedIndex: Int = 0
-    private let metadataService = MetadataQueryService.shared
+    private let searchEngine = SearchEngine.shared
 
     // MARK: - Constants
     private let rowHeight: CGFloat = 44
@@ -40,9 +40,9 @@ class SearchPanelViewController: NSViewController {
         setupUI()
         setupKeyboardMonitor()
 
-        // Start indexing with saved config
-        let config = SearchConfig.load()
-        metadataService.startIndexing(with: config)
+        // SearchEngine handles indexing automatically on init
+        // Just trigger a reference to ensure it starts
+        _ = searchEngine.isReady
 
         // Register for panel hide callback
         PanelManager.shared.onWillHide = { [weak self] in
@@ -184,8 +184,8 @@ class SearchPanelViewController: NSViewController {
             return
         }
 
-        let searchResults = metadataService.searchSync(text: query)
-        results = searchResults.map { $0.toSearchResult() }
+        let searchResults = searchEngine.searchSync(text: query)
+        results = searchResults
         selectedIndex = results.isEmpty ? 0 : 0
         tableView.reloadData()
         updateVisibility()

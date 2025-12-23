@@ -13,12 +13,10 @@ class SearchViewModel: ObservableObject {
     @Published private(set) var results: [SearchResult] = []
     @Published var selectedIndex = 0
 
-    private let metadataService = MetadataQueryService.shared
+    private let searchEngine = SearchEngine.shared
 
     init() {
-        // Start indexing on init
-        let config = SearchConfig()
-        metadataService.startIndexing(with: config)
+        // SearchEngine handles indexing automatically on init
     }
 
     // MARK: - Search Logic (Called directly from NSTextField delegate)
@@ -33,10 +31,10 @@ class SearchViewModel: ObservableObject {
         }
 
         // Direct synchronous search on pre-built index
-        let searchResults = metadataService.searchSync(text: query)
+        let searchResults = searchEngine.searchSync(text: query)
 
-        // Map to UI results
-        results = searchResults.map { $0.toSearchResult() }
+        // Already SearchResult type
+        results = searchResults
         selectedIndex = 0
     }
 
