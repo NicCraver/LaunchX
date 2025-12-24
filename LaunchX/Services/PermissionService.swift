@@ -84,17 +84,25 @@ class PermissionService: ObservableObject {
     // MARK: - Accessibility
 
     func requestAccessibility() {
+        // 只调用系统API显示权限弹窗，不自动打开设置
         let options: NSDictionary = [
             kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true
         ]
         AXIsProcessTrustedWithOptions(options)
+    }
+
+    func openAccessibilitySettings() {
         openSystemSettings(pane: "Privacy_Accessibility")
     }
 
     // MARK: - Screen Recording
 
     func requestScreenRecording() {
+        // 只调用系统API显示权限弹窗，不自动打开设置
         CGRequestScreenCaptureAccess()
+    }
+
+    func openScreenRecordingSettings() {
         openSystemSettings(pane: "Privacy_ScreenCapture")
     }
 
@@ -122,7 +130,14 @@ class PermissionService: ObservableObject {
     }
 
     func requestFullDiskAccess() {
+        // Full Disk Access 没有系统弹窗，直接打开设置
         openSystemSettings(pane: "Privacy_AllFiles")
+    }
+
+    // MARK: - Helper
+
+    var allPermissionsGranted: Bool {
+        return isAccessibilityGranted && isScreenRecordingGranted && isFullDiskAccessGranted
     }
 
     // MARK: - Helper

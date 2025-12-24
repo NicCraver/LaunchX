@@ -15,13 +15,25 @@ struct PermissionSettingsView: View {
                 PermissionBadge(
                     title: "Accessibility",
                     isGranted: permissionService.isAccessibilityGranted,
-                    action: { permissionService.requestAccessibility() }
+                    action: {
+                        if permissionService.isAccessibilityGranted {
+                            permissionService.openAccessibilitySettings()
+                        } else {
+                            permissionService.requestAccessibility()
+                        }
+                    }
                 )
 
                 PermissionBadge(
                     title: "Screen Recording",
                     isGranted: permissionService.isScreenRecordingGranted,
-                    action: { permissionService.requestScreenRecording() }
+                    action: {
+                        if permissionService.isScreenRecordingGranted {
+                            permissionService.openScreenRecordingSettings()
+                        } else {
+                            permissionService.requestScreenRecording()
+                        }
+                    }
                 )
 
                 PermissionBadge(

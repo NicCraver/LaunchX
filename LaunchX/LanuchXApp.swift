@@ -37,22 +37,28 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             PanelManager.shared.togglePanel()
         }
 
-        setupStatusItem()
+        // setupStatusItem()  // 暂时隐藏菜单栏图标
         checkPermissions()
     }
 
     func checkPermissions() {
         let isFirstLaunch = !UserDefaults.standard.bool(forKey: "hasLaunchedBefore")
 
-        if isFirstLaunch {
-            UserDefaults.standard.set(true, forKey: "hasLaunchedBefore")
-            // Open onboarding on first launch
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+        // 检查权限状态
+        PermissionService.shared.checkAllPermissions()
+
+        // 延迟检查，等待权限状态更新
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            let allGranted = PermissionService.shared.allPermissionsGranted
+
+            if isFirstLaunch {
+                UserDefaults.standard.set(true, forKey: "hasLaunchedBefore")
+                // 首次启动，打开引导页
+                self.openOnboarding()
+            } else if !allGranted {
+                // 非首次启动但权限未完成，继续显示引导页
                 self.openOnboarding()
             }
-        } else {
-            // Just check permissions state without forcing UI
-            PermissionService.shared.checkAllPermissions()
         }
     }
 
