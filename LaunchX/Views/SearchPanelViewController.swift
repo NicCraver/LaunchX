@@ -830,6 +830,12 @@ extension SearchPanelViewController: NSTextFieldDelegate {
             return
         }
 
+        // 文件夹打开模式：搜索打开方式
+        if isInFolderOpenMode {
+            performFolderOpenerSearch(query)
+            return
+        }
+
         // 普通模式：搜索应用和文件
         performSearch(query)
     }
@@ -860,7 +866,8 @@ extension SearchPanelViewController: NSTableViewDelegate {
 
         let item = results[row]
         let isSelected = row == selectedIndex
-        cellView?.configure(with: item, isSelected: isSelected)
+        // 在文件夹打开模式下隐藏箭头（不能再 Tab）
+        cellView?.configure(with: item, isSelected: isSelected, hideArrow: isInFolderOpenMode)
 
         return cellView
     }
@@ -970,7 +977,7 @@ class ResultCellView: NSView {
         ])
     }
 
-    func configure(with item: SearchResult, isSelected: Bool) {
+    func configure(with item: SearchResult, isSelected: Bool, hideArrow: Bool = false) {
         iconView.image = item.icon
         nameLabel.stringValue = item.name
 
@@ -980,9 +987,10 @@ class ResultCellView: NSView {
         pathLabel.stringValue = isApp ? "" : item.path
 
         // 检测是否为支持的 IDE 或文件夹，显示箭头指示器
+        // hideArrow 为 true 时强制隐藏（如文件夹打开模式下）
         let isIDE = IDEType.detect(from: item.path) != nil
         let isFolder = item.isDirectory && !isApp
-        let showArrow = isIDE || isFolder
+        let showArrow = !hideArrow && (isIDE || isFolder)
         arrowIndicator.isHidden = !showArrow
 
         // 切换 nameLabel trailing 约束
