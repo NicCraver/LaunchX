@@ -10,6 +10,7 @@ class PermissionService: ObservableObject {
     @Published var isFullDiskAccessGranted: Bool = false
 
     private var refreshTimer: Timer?
+    private var isChecking = false
 
     private init() {
         checkAllPermissions()
@@ -17,12 +18,22 @@ class PermissionService: ObservableObject {
     }
 
     private func startPeriodicCheck() {
+        // 每 2 秒检查一次权限状态
         refreshTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
             self?.checkAllPermissions()
         }
     }
 
+    func stopPeriodicCheck() {
+        refreshTimer?.invalidate()
+        refreshTimer = nil
+    }
+
     func checkAllPermissions() {
+        // 防止重复检查
+        guard !isChecking else { return }
+        isChecking = true
+
         // 在后台线程统一检查所有权限，然后一次性更新 UI
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
@@ -42,8 +53,14 @@ class PermissionService: ObservableObject {
                 if self.isFullDiskAccessGranted != fullDiskAccess {
                     self.isFullDiskAccessGranted = fullDiskAccess
                 }
+                self.isChecking = false
             }
         }
+    }
+
+    /// 同步检查辅助功能权限（用于启动时快速检查）
+    func checkAccessibilitySync() -> Bool {
+        return AXIsProcessTrusted()
     }
 
     // MARK: - Screen Recording
@@ -84,11 +101,16 @@ class PermissionService: ObservableObject {
     // MARK: - Accessibility
 
     func requestAccessibility() {
-        // 只调用系统API显示权限弹窗，不自动打开设置
+        // 调用系统API显示权限弹窗
         let options: NSDictionary = [
             kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true
         ]
         AXIsProcessTrustedWithOptions(options)
+
+        // 立即检查一次权限状态
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            self?.checkAllPermissions()
+        }
     }
 
     func openAccessibilitySettings() {
@@ -98,8 +120,13 @@ class PermissionService: ObservableObject {
     // MARK: - Screen Recording
 
     func requestScreenRecording() {
-        // 只调用系统API显示权限弹窗，不自动打开设置
+        // 调用系统API显示权限弹窗
         CGRequestScreenCaptureAccess()
+
+        // 立即检查一次权限状态
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            self?.checkAllPermissions()
+        }
     }
 
     func openScreenRecordingSettings() {
@@ -138,6 +165,11 @@ class PermissionService: ObservableObject {
 
     var allPermissionsGranted: Bool {
         return isAccessibilityGranted && isScreenRecordingGranted && isFullDiskAccessGranted
+    }
+
+    /// 检查是否有基本功能所需的权限（辅助功能）
+    var hasRequiredPermissions: Bool {
+        return isAccessibilityGranted
     }
 
     // MARK: - Helper
