@@ -30,6 +30,11 @@ class SearchPanelViewController: NSViewController {
     private var ideProjects: [IDEProject] = []
     private var filteredIDEProjects: [IDEProject] = []
 
+    // 文件夹打开方式选择模式状态
+    private var isInFolderOpenMode: Bool = false
+    private var currentFolder: SearchResult? = nil
+    private var folderOpeners: [IDERecentProjectsService.FolderOpenerApp] = []
+
     // MARK: - Constants
     private let rowHeight: CGFloat = 44
     private let headerHeight: CGFloat = 80
@@ -265,6 +270,15 @@ class SearchPanelViewController: NSViewController {
             searchField.placeholderString = "LaunchX Search..."
         }
 
+        // 如果在文件夹打开模式，先恢复普通模式 UI
+        if isInFolderOpenMode {
+            isInFolderOpenMode = false
+            currentFolder = nil
+            folderOpeners = []
+            restoreNormalModeUI()
+            searchField.placeholderString = "LaunchX Search..."
+        }
+
         searchField.stringValue = ""
         selectedIndex = 0
 
@@ -382,18 +396,26 @@ class SearchPanelViewController: NSViewController {
         }
 
         switch Int(event.keyCode) {
-        case 51:  // Delete - IDE 项目模式下，输入框为空时退出
+        case 51:  // Delete - IDE 项目模式或文件夹打开模式下，输入框为空时退出
             if isComposing { return event }
-            if isInIDEProjectMode && searchField.stringValue.isEmpty {
-                exitIDEProjectMode()
+            if (isInIDEProjectMode || isInFolderOpenMode) && searchField.stringValue.isEmpty {
+                if isInIDEProjectMode {
+                    exitIDEProjectMode()
+                } else {
+                    exitFolderOpenMode()
+                }
                 return nil
             }
             return event
-        case 48:  // Tab - 进入 IDE 项目模式
+        case 48:  // Tab - 进入 IDE 项目模式或文件夹打开模式
             if isComposing { return event }
-            if !isInIDEProjectMode {
-                // 尝试进入 IDE 项目模式
+            if !isInIDEProjectMode && !isInFolderOpenMode {
+                // 先尝试进入 IDE 项目模式
                 if tryEnterIDEProjectMode() {
+                    return nil
+                }
+                // 再尝试进入文件夹打开模式
+                if tryEnterFolderOpenMode() {
                     return nil
                 }
             }
@@ -408,9 +430,13 @@ class SearchPanelViewController: NSViewController {
             return nil
         case 53:  // Escape
             if isComposing { return event }  // 让输入法取消
-            // 如果在 IDE 项目模式，先退出该模式
+            // 如果在 IDE 项目模式或文件夹打开模式，先退出该模式
             if isInIDEProjectMode {
                 exitIDEProjectMode()
+                return nil
+            }
+            if isInFolderOpenMode {
+                exitFolderOpenMode()
                 return nil
             }
             PanelManager.shared.hidePanel()
@@ -551,6 +577,105 @@ class SearchPanelViewController: NSViewController {
         updateVisibility()
     }
 
+    // MARK: - Folder Open Mode
+
+    /// 尝试进入文件夹打开方式选择模式
+    /// - Returns: 是否成功进入
+    private func tryEnterFolderOpenMode() -> Bool {
+        guard results.indices.contains(selectedIndex) else { return false }
+        let item = results[selectedIndex]
+
+        // 检测是否为文件夹（非 .app）
+        let isApp = item.path.hasSuffix(".app")
+        guard item.isDirectory && !isApp else { return false }
+
+        // 获取可用的打开方式
+        let openers = IDERecentProjectsService.shared.getAvailableFolderOpeners()
+        guard !openers.isEmpty else { return false }
+
+        // 进入文件夹打开模式
+        isInFolderOpenMode = true
+        currentFolder = item
+        folderOpeners = openers
+
+        // 更新 UI
+        updateFolderModeUI()
+
+        // 显示打开方式列表
+        results = openers.map { opener in
+            SearchResult(
+                name: opener.name,
+                path: opener.path,
+                icon: opener.icon,
+                isDirectory: false
+            )
+        }
+        selectedIndex = 0
+        searchField.stringValue = ""
+        searchField.placeholderString = "选择打开方式..."
+        tableView.reloadData()
+        updateVisibility()
+
+        return true
+    }
+
+    /// 退出文件夹打开模式
+    private func exitFolderOpenMode() {
+        isInFolderOpenMode = false
+        currentFolder = nil
+        folderOpeners = []
+
+        // 恢复 UI
+        restoreNormalModeUI()
+
+        // 恢复搜索状态
+        searchField.stringValue = ""
+        searchField.placeholderString = "LaunchX Search..."
+        resetState()
+    }
+
+    /// 更新文件夹打开模式 UI
+    private func updateFolderModeUI() {
+        guard let folder = currentFolder else { return }
+
+        // 显示文件夹标签
+        ideTagView.isHidden = false
+        ideIconView.image = folder.icon
+        ideNameLabel.stringValue = folder.name
+
+        // 隐藏搜索图标
+        searchIcon.isHidden = true
+
+        // 切换 searchField 的 leading 约束
+        searchFieldLeadingToIcon?.isActive = false
+        searchFieldLeadingToTag?.isActive = true
+    }
+
+    /// 文件夹打开模式下的搜索（过滤打开方式）
+    private func performFolderOpenerSearch(_ query: String) {
+        let filteredOpeners: [IDERecentProjectsService.FolderOpenerApp]
+        if query.isEmpty {
+            filteredOpeners = folderOpeners
+        } else {
+            let lowercasedQuery = query.lowercased()
+            filteredOpeners = folderOpeners.filter { opener in
+                opener.name.lowercased().contains(lowercasedQuery)
+            }
+        }
+
+        results = filteredOpeners.map { opener in
+            SearchResult(
+                name: opener.name,
+                path: opener.path,
+                icon: opener.icon,
+                isDirectory: false
+            )
+        }
+        selectedIndex = results.isEmpty ? 0 : 0
+        tableView.reloadData()
+        updateVisibility()
+    }
+
     /// 滚动表格使选中行尽量保持在可视区域中间
     private func scrollToKeepSelectionCentered() {
         let visibleRect = scrollView.contentView.bounds
@@ -669,6 +794,13 @@ class SearchPanelViewController: NSViewController {
                 IDEProject(name: item.name, path: item.path, ideType: currentIDEType ?? .vscode),
                 withIDEAt: ideApp.path
             )
+            PanelManager.shared.hidePanel()
+            return
+        }
+
+        // 文件夹打开模式：使用选中的应用打开文件夹
+        if isInFolderOpenMode, let folder = currentFolder {
+            IDERecentProjectsService.shared.openFolder(folder.path, withApp: item.path)
             PanelManager.shared.hidePanel()
             return
         }
@@ -847,12 +979,14 @@ class ResultCellView: NSView {
         pathLabel.isHidden = isApp
         pathLabel.stringValue = isApp ? "" : item.path
 
-        // 检测是否为支持的 IDE，显示箭头指示器
+        // 检测是否为支持的 IDE 或文件夹，显示箭头指示器
         let isIDE = IDEType.detect(from: item.path) != nil
-        arrowIndicator.isHidden = !isIDE
+        let isFolder = item.isDirectory && !isApp
+        let showArrow = isIDE || isFolder
+        arrowIndicator.isHidden = !showArrow
 
         // 切换 nameLabel trailing 约束
-        if isIDE {
+        if showArrow {
             nameLabelTrailingToEdge.isActive = false
             nameLabelTrailingToArrow.isActive = true
         } else {

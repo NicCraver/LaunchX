@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 /// IDE 最近项目服务
@@ -6,6 +7,78 @@ final class IDERecentProjectsService {
     static let shared = IDERecentProjectsService()
 
     private init() {}
+
+    // MARK: - Installed IDE Detection
+
+    /// 可用于打开文件夹的应用信息
+    struct FolderOpenerApp {
+        let name: String
+        let path: String
+        let icon: NSImage
+        let ideType: IDEType?  // nil 表示 Finder 等非 IDE 应用
+    }
+
+    /// 获取可用于打开文件夹的应用列表
+    /// - Returns: 应用列表，Finder 在最前，然后是已安装的 IDE
+    func getAvailableFolderOpeners() -> [FolderOpenerApp] {
+        var openers: [FolderOpenerApp] = []
+
+        // 1. Finder 始终在第一位
+        let finderPath = "/System/Library/CoreServices/Finder.app"
+        if FileManager.default.fileExists(atPath: finderPath) {
+            let icon = NSWorkspace.shared.icon(forFile: finderPath)
+            icon.size = NSSize(width: 32, height: 32)
+            openers.append(
+                FolderOpenerApp(name: "Finder", path: finderPath, icon: icon, ideType: nil))
+        }
+
+        // 2. 检测已安装的 IDE
+        let ideApps: [(IDEType, [String])] = [
+            (.vscode, ["/Applications/Visual Studio Code.app"]),
+            (.zed, ["/Applications/Zed.app"]),
+            (
+                .jetbrainsIntelliJ,
+                ["/Applications/IntelliJ IDEA.app", "/Applications/IntelliJ IDEA CE.app"]
+            ),
+            (.jetbrainsPyCharm, ["/Applications/PyCharm.app", "/Applications/PyCharm CE.app"]),
+            (.jetbrainsWebStorm, ["/Applications/WebStorm.app"]),
+            (.jetbrainsGoLand, ["/Applications/GoLand.app"]),
+            (.jetbrainsRider, ["/Applications/Rider.app"]),
+            (.jetbrainsClion, ["/Applications/CLion.app"]),
+        ]
+
+        for (ideType, possiblePaths) in ideApps {
+            for path in possiblePaths {
+                if FileManager.default.fileExists(atPath: path) {
+                    let icon = NSWorkspace.shared.icon(forFile: path)
+                    icon.size = NSSize(width: 32, height: 32)
+                    let name = FileManager.default.displayName(atPath: path)
+                        .replacingOccurrences(of: ".app", with: "")
+                    openers.append(
+                        FolderOpenerApp(name: name, path: path, icon: icon, ideType: ideType))
+                    break  // 每种 IDE 只取第一个找到的
+                }
+            }
+        }
+
+        return openers
+    }
+
+    /// 使用指定应用打开文件夹
+    /// - Parameters:
+    ///   - folderPath: 文件夹路径
+    ///   - appPath: 应用路径
+    func openFolder(_ folderPath: String, withApp appPath: String) {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+        process.arguments = ["-a", appPath, folderPath]
+
+        do {
+            try process.run()
+        } catch {
+            print("Failed to open folder: \(error)")
+        }
+    }
 
     /// 获取指定 IDE 的最近项目
     /// - Parameters:
