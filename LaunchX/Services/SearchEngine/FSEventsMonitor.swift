@@ -31,7 +31,14 @@ final class FSEventsMonitor {
     // Debounce events to avoid flooding
     private var pendingEvents: [String: EventType] = [:]
     private var debounceWorkItem: DispatchWorkItem?
-    private let debounceInterval: TimeInterval = 0.5
+    private let debounceInterval: TimeInterval = 1.0  // 增加到2秒，减少频繁更新
+
+    // 批量事件阈值：当短时间内事件过多时，延长防抖时间
+    private let batchThreshold = 50
+    private let extendedDebounceInterval: TimeInterval = 5.0
+
+    // 事件数量上限：超过此数量时丢弃旧事件，防止内存溢出
+    private let maxPendingEvents = 500
 
     deinit {
         stop()
@@ -140,13 +147,37 @@ final class FSEventsMonitor {
             pendingEvents[path] = eventType
         }
 
+        // 检查事件数量上限
+        if pendingEvents.count > maxPendingEvents {
+            print(
+                "FSEventsMonitor: Too many events (\(pendingEvents.count)), triggering immediate flush"
+            )
+            debounceWorkItem?.cancel()
+            flushPendingEvents()
+            return
+        }
+
         // Debounce: wait for events to settle
+        // 智能防抖：事件过多时延长等待时间
         debounceWorkItem?.cancel()
+
+        let currentDebounceInterval: TimeInterval
+        if pendingEvents.count > batchThreshold {
+            // 大量事件时使用更长的防抖间隔（如 npm install、git 操作）
+            currentDebounceInterval = extendedDebounceInterval
+            print(
+                "FSEventsMonitor: Batch mode - \(pendingEvents.count) events, waiting \(extendedDebounceInterval)s"
+            )
+        } else {
+            currentDebounceInterval = debounceInterval
+        }
+
         debounceWorkItem = DispatchWorkItem { [weak self] in
             self?.flushPendingEvents()
         }
 
-        eventQueue.asyncAfter(deadline: .now() + debounceInterval, execute: debounceWorkItem!)
+        eventQueue.asyncAfter(
+            deadline: .now() + currentDebounceInterval, execute: debounceWorkItem!)
     }
 
     private func flushPendingEvents() {

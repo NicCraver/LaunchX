@@ -75,8 +75,12 @@ final class SearchEngine: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] notification in
-            if let config = notification.object as? SearchConfig {
-                self?.searchConfig = config
+            guard let self = self else { return }
+
+            if let newConfig = notification.object as? SearchConfig {
+                // 更新当前配置
+                self.searchConfig = newConfig
+
                 Task { @MainActor [weak self] in
                     self?.rebuildIndex()
                 }
@@ -220,6 +224,7 @@ final class SearchEngine: ObservableObject {
     }
 
     /// Rebuild index (called when search scope changes)
+    /// 直接使用全量重建，简单可靠
     @MainActor
     func rebuildIndex() {
         indexer.cancel()

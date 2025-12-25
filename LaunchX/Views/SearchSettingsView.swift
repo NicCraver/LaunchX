@@ -424,7 +424,7 @@ class SearchSettingsViewModel: ObservableObject {
                 for appURL in contents {
                     if appURL.pathExtension == "app" {
                         // Filter out apps without custom icons (system services)
-                        if !appHasCustomIcon(at: appURL.path) {
+                        if !(self?.appHasCustomIcon(at: appURL.path) ?? false) {
                             continue
                         }
 
@@ -521,6 +521,29 @@ class SearchSettingsViewModel: ObservableObject {
         return nil
     }
 
+    /// Check if an app has a custom icon defined in Info.plist
+    /// Apps without icons (like system services in /System/Library/CoreServices/) return false
+    private func appHasCustomIcon(at path: String) -> Bool {
+        let infoPlistPath = path + "/Contents/Info.plist"
+        guard let infoPlistData = FileManager.default.contents(atPath: infoPlistPath),
+            let plist = try? PropertyListSerialization.propertyList(
+                from: infoPlistData, format: nil)
+                as? [String: Any]
+        else {
+            return false
+        }
+
+        // Check for CFBundleIconFile or CFBundleIconName
+        if let iconFile = plist["CFBundleIconFile"] as? String, !iconFile.isEmpty {
+            return true
+        }
+        if let iconName = plist["CFBundleIconName"] as? String, !iconName.isEmpty {
+            return true
+        }
+
+        return false
+    }
+
     private func saveConfig() {
         config.documentScopes = documentScopes
         config.appScopes = appScopes
@@ -530,14 +553,14 @@ class SearchSettingsViewModel: ObservableObject {
         config.excludedApps = excludedApps
         config.save()
 
-        // Notify MetadataQueryService to update config without reindexing
+        // Notify SearchEngine to update config without reindexing
         NotificationCenter.default.post(name: .searchConfigDidUpdate, object: config)
     }
 
     /// 保存配置并触发重新索引（仅在搜索范围变化时调用）
     private func saveConfigAndReindex() {
         saveConfig()
-        // Notify MetadataQueryService to reload
+        // Notify SearchEngine to reload
         NotificationCenter.default.post(name: .searchConfigDidChange, object: config)
     }
 
@@ -573,7 +596,7 @@ class SearchSettingsViewModel: ObservableObject {
 
     func rebuildSpotlightIndex() {
         let alert = NSAlert()
-        alert.messageText = "重建 Spotlight 索引"
+        alert.messageText = "重建搜索索引"
         alert.informativeText = "这将重建 LaunchX 的搜索索引。确定继续吗？"
         alert.alertStyle = .warning
         alert.addButton(withTitle: "重建")
@@ -592,21 +615,22 @@ class SearchSettingsViewModel: ObservableObject {
         }
     }
 
+    @MainActor
     func checkIndexStatus() {
-        let service = MetadataQueryService.shared
+        let engine = SearchEngine.shared
         let alert = NSAlert()
-        alert.messageText = "LaunchX 已索引文档数量：\(service.indexedItemCount)"
+        alert.messageText = "LaunchX 已索引文档数量：\(engine.totalCount)"
 
-        var info = "📊 索引用时：\(String(format: "%.3f", service.indexingDuration))s"
+        var info = "📊 索引用时：\(String(format: "%.3f", engine.indexingDuration))s"
 
-        if let lastTime = service.lastIndexTime {
+        if let lastTime = engine.lastIndexTime {
             let formatter = DateFormatter()
             formatter.dateFormat = "yyyy年MM月dd日 HH:mm:ss"
             info += "\n📅 最后更新时间：\(formatter.string(from: lastTime))"
         }
 
-        info += "\n\n📱 应用数量：\(service.appsCount)"
-        info += "\n📄 文件数量：\(service.filesCount)"
+        info += "\n\n📱 应用数量：\(engine.appsCount)"
+        info += "\n📄 文件数量：\(engine.filesCount)"
 
         alert.informativeText = info
         alert.runModal()

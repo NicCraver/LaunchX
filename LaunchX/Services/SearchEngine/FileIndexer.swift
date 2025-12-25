@@ -17,6 +17,39 @@ final class FileIndexer {
     private var isScanning = false
     private var shouldCancel = false
 
+    // MARK: - Path Deduplication
+
+    /// 对路径进行去重：移除被其他路径包含的子路径
+    /// 例如：["/Users/eric", "/Users/eric/dev"] -> ["/Users/eric"]
+    /// 这样可以避免重复扫描，提高性能
+    private func deduplicatePaths(_ paths: [String]) -> [String] {
+        guard paths.count > 1 else { return paths }
+
+        // 按路径长度排序（短的在前），这样父目录会先被处理
+        let sortedPaths = paths.sorted { $0.count < $1.count }
+        var result: [String] = []
+
+        for path in sortedPaths {
+            // 规范化路径（移除尾部斜杠）
+            let normalizedPath = path.hasSuffix("/") ? String(path.dropLast()) : path
+
+            // 检查是否已经被某个已添加的路径包含
+            let isSubpath = result.contains { parentPath in
+                normalizedPath.hasPrefix(parentPath + "/") || normalizedPath == parentPath
+            }
+
+            if !isSubpath {
+                result.append(normalizedPath)
+            }
+        }
+
+        if result.count != paths.count {
+            print("FileIndexer: Deduplicated paths from \(paths.count) to \(result.count)")
+        }
+
+        return result
+    }
+
     // MARK: - Localized Name Helper
 
     /// Get localized app name (supports Chinese names like "微信", "企业微信", "活动监视器")
@@ -124,7 +157,11 @@ final class FileIndexer {
 
             let excludedPathsSet = Set(excludedPaths)
 
-            for path in paths {
+            // 对路径进行去重：移除被其他路径包含的子路径
+            // 例如：["/Users/eric", "/Users/eric/dev"] -> ["/Users/eric"]
+            let deduplicatedPaths = self.deduplicatePaths(paths)
+
+            for path in deduplicatedPaths {
                 if self.shouldCancel { break }
 
                 let url = URL(fileURLWithPath: path)
@@ -383,5 +420,30 @@ final class FileIndexer {
             modifiedDate: resourceValues?.contentModificationDate,
             fileSize: 0
         )
+    }
+
+    // MARK: - Helper Functions
+
+    /// Check if an app has a custom icon defined in Info.plist
+    /// Apps without icons (like system services in /System/Library/CoreServices/) return false
+    private func appHasCustomIcon(at path: String) -> Bool {
+        let infoPlistPath = path + "/Contents/Info.plist"
+        guard let infoPlistData = FileManager.default.contents(atPath: infoPlistPath),
+            let plist = try? PropertyListSerialization.propertyList(
+                from: infoPlistData, format: nil)
+                as? [String: Any]
+        else {
+            return false
+        }
+
+        // Check for CFBundleIconFile or CFBundleIconName
+        if let iconFile = plist["CFBundleIconFile"] as? String, !iconFile.isEmpty {
+            return true
+        }
+        if let iconName = plist["CFBundleIconName"] as? String, !iconName.isEmpty {
+            return true
+        }
+
+        return false
     }
 }

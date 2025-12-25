@@ -135,6 +135,7 @@ final class MemoryIndex {
 
     private var apps: [SearchItem] = []
     private var files: [SearchItem] = []
+    private var directories: [SearchItem] = []  // 单独存储目录，便于搜索
     private var allItems: [String: SearchItem] = [:]  // path -> item for O(1) lookup
 
     private var nameTrie = TrieNode()
@@ -144,18 +145,20 @@ final class MemoryIndex {
     private var aliasMap: [String: String] = [:]  // alias (lowercase) -> path
     private var aliasTrie = TrieNode()
 
-    private let indexQueue = DispatchQueue(label: "com.launchx.memoryindex", qos: .userInteractive)
+    // 串行队列保证线程安全，所有数据访问都通过这个队列
+    private let queue = DispatchQueue(label: "com.launchx.memoryindex", qos: .userInteractive)
 
     // Statistics
     private(set) var appsCount: Int = 0
     private(set) var filesCount: Int = 0
+    private(set) var directoriesCount: Int = 0
     private(set) var totalCount: Int = 0
 
     // MARK: - Building Index
 
     /// Build index from database records
     func build(from records: [FileRecord], completion: (() -> Void)? = nil) {
-        indexQueue.async { [weak self] in
+        queue.async { [weak self] in
             guard let self = self else { return }
 
             let startTime = Date()
@@ -163,6 +166,7 @@ final class MemoryIndex {
             // Clear existing index
             self.apps.removeAll()
             self.files.removeAll()
+            self.directories.removeAll()
             self.allItems.removeAll()
             self.nameTrie = TrieNode()
             self.pinyinTrie = TrieNode()
@@ -170,6 +174,7 @@ final class MemoryIndex {
             // Reserve capacity
             self.apps.reserveCapacity(500)
             self.files.reserveCapacity(records.count)
+            self.directories.reserveCapacity(5000)
             self.allItems.reserveCapacity(records.count)
 
             // Build items
@@ -179,6 +184,8 @@ final class MemoryIndex {
 
                 if item.isApp {
                     self.apps.append(item)
+                } else if item.isDirectory {
+                    self.directories.append(item)
                 } else {
                     self.files.append(item)
                 }
@@ -198,17 +205,21 @@ final class MemoryIndex {
             // Sort apps by name length (shorter = more relevant)
             self.apps.sort { $0.name.count < $1.name.count }
 
+            // Sort directories by modified date (recent first)
+            self.directories.sort { $0.modifiedDate > $1.modifiedDate }
+
             // Sort files by modified date (recent first)
             self.files.sort { $0.modifiedDate > $1.modifiedDate }
 
             // Update statistics
             self.appsCount = self.apps.count
             self.filesCount = self.files.count
+            self.directoriesCount = self.directories.count
             self.totalCount = self.allItems.count
 
             let duration = Date().timeIntervalSince(startTime)
             print(
-                "MemoryIndex: Built index with \(self.totalCount) items in \(String(format: "%.3f", duration))s"
+                "MemoryIndex: Built index with \(self.totalCount) items (\(self.appsCount) apps, \(self.directoriesCount) dirs, \(self.filesCount) files) in \(String(format: "%.3f", duration))s"
             )
 
             DispatchQueue.main.async {
@@ -217,18 +228,28 @@ final class MemoryIndex {
         }
     }
 
-    /// Add a single item to index
+    /// Add a single item to index (用于实时更新)
     func add(_ record: FileRecord) {
-        indexQueue.async { [weak self] in
+        queue.async { [weak self] in
             guard let self = self else { return }
 
             let item = SearchItem(from: record)
+
+            // 检查是否已存在
+            if self.allItems[item.path] != nil {
+                // 已存在则跳过，不需要重复添加
+                return
+            }
+
             self.allItems[item.path] = item
 
             if item.isApp {
                 self.apps.append(item)
                 self.apps.sort { $0.name.count < $1.name.count }
                 self.appsCount = self.apps.count
+            } else if item.isDirectory {
+                self.directories.insert(item, at: 0)  // Insert at beginning (most recent)
+                self.directoriesCount = self.directories.count
             } else {
                 self.files.insert(item, at: 0)  // Insert at beginning (most recent)
                 self.filesCount = self.files.count
@@ -249,16 +270,25 @@ final class MemoryIndex {
 
     /// Remove an item from index
     func remove(path: String) {
-        indexQueue.async { [weak self] in
+        queue.async { [weak self] in
             guard let self = self, let item = self.allItems[path] else { return }
 
             self.allItems.removeValue(forKey: path)
 
             if item.isApp {
-                self.apps.removeAll { $0.path == path }
+                if let index = self.apps.firstIndex(where: { $0.path == path }) {
+                    self.apps.remove(at: index)
+                }
                 self.appsCount = self.apps.count
+            } else if item.isDirectory {
+                if let index = self.directories.firstIndex(where: { $0.path == path }) {
+                    self.directories.remove(at: index)
+                }
+                self.directoriesCount = self.directories.count
             } else {
-                self.files.removeAll { $0.path == path }
+                if let index = self.files.firstIndex(where: { $0.path == path }) {
+                    self.files.remove(at: index)
+                }
                 self.filesCount = self.files.count
             }
 
@@ -272,6 +302,7 @@ final class MemoryIndex {
     // MARK: - Search
 
     /// Synchronous search - must be extremely fast (< 5ms)
+    /// 直接访问数据，不使用队列同步（搜索是只读的，数据一致性由调用方保证）
     func search(
         query: String,
         excludedApps: Set<String> = [],
@@ -286,27 +317,33 @@ final class MemoryIndex {
         let queryIsAscii = query.allSatisfy { $0.isASCII }
 
         var matchedApps: [(item: SearchItem, matchType: SearchItem.MatchType)] = []
+        var matchedDirs: [(item: SearchItem, matchType: SearchItem.MatchType)] = []
         var matchedFiles: [(item: SearchItem, matchType: SearchItem.MatchType)] = []
         var aliasMatched: Set<String> = []  // 记录已通过别名匹配的路径
 
         matchedApps.reserveCapacity(10)
+        matchedDirs.reserveCapacity(10)
         matchedFiles.reserveCapacity(20)
 
         // 0. 先搜索别名（最高优先级）
-        let aliasResults = searchByAlias(lowerQuery)
+        let aliasResults = searchByAliasInternal(lowerQuery)
         for item in aliasResults {
             if excludedApps.contains(item.path) { continue }
             aliasMatched.insert(item.path)
 
             if item.isApp {
                 matchedApps.append((item, .exact))  // 别名匹配视为精确匹配
+            } else if item.isDirectory {
+                matchedDirs.append((item, .exact))
             } else {
                 matchedFiles.append((item, .exact))
             }
         }
 
         // 1. Search Apps (fast, small list)
-        for app in apps {
+        // 复制引用避免并发问题
+        let currentApps = apps
+        for app in currentApps {
             if excludedApps.contains(app.path) { continue }
             if aliasMatched.contains(app.path) { continue }  // 跳过已通过别名匹配的
 
@@ -328,11 +365,46 @@ final class MemoryIndex {
             return lhs.item.name.count < rhs.item.name.count
         }
 
-        // 2. Search Files (limit iterations)
-        let maxFileIterations = min(files.count, 5000)
+        // 2. Search Directories (搜索全部目录，目录数量相对较少)
+        let currentDirs = directories
+        for dir in currentDirs {
+            if aliasMatched.contains(dir.path) { continue }
+
+            // Apply exclusions
+            if excludedPaths.contains(where: { dir.path.hasPrefix($0) }) { continue }
+
+            if !excludedFolderNames.isEmpty {
+                let components = dir.path.components(separatedBy: "/")
+                if !excludedFolderNames.isDisjoint(with: components) { continue }
+            }
+
+            if let matchType = dir.matchesQuery(lowerQuery) {
+                matchedDirs.append((dir, matchType))
+                if matchedDirs.count >= 10 { break }
+                continue
+            }
+
+            if queryIsAscii && dir.matchesPinyin(lowerQuery) {
+                matchedDirs.append((dir, .pinyin))
+                if matchedDirs.count >= 10 { break }
+            }
+        }
+
+        // Sort directories
+        matchedDirs.sort { lhs, rhs in
+            if lhs.matchType != rhs.matchType {
+                return lhs.matchType < rhs.matchType
+            }
+            return lhs.item.modifiedDate > rhs.item.modifiedDate
+        }
+
+        // 3. Search Files (limit iterations)
+        // 复制引用避免并发问题
+        let currentFiles = files
+        let maxFileIterations = min(currentFiles.count, 5000)
 
         for i in 0..<maxFileIterations {
-            let file = files[i]
+            let file = currentFiles[i]
 
             // Apply exclusions
             if excludedPaths.contains(where: { file.path.hasPrefix($0) }) { continue }
@@ -367,11 +439,12 @@ final class MemoryIndex {
             return lhs.item.modifiedDate > rhs.item.modifiedDate
         }
 
-        // Combine results
+        // Combine results: apps -> directories -> files
         let topApps = matchedApps.prefix(10).map { $0.item }
-        let topFiles = matchedFiles.prefix(20).map { $0.item }
+        let topDirs = matchedDirs.prefix(10).map { $0.item }
+        let topFiles = matchedFiles.prefix(10).map { $0.item }
 
-        return Array(topApps) + Array(topFiles)
+        return Array(topApps) + Array(topDirs) + Array(topFiles)
     }
 
     /// Search using Trie for prefix matching (even faster for prefix queries)
@@ -442,7 +515,7 @@ final class MemoryIndex {
     /// 设置别名映射表
     /// - Parameter map: 别名到路径的映射 (alias -> path)
     func setAliasMap(_ map: [String: String]) {
-        indexQueue.async { [weak self] in
+        queue.async { [weak self] in
             guard let self = self else { return }
 
             self.aliasMap = map.reduce(into: [String: String]()) { result, pair in
@@ -466,10 +539,10 @@ final class MemoryIndex {
         }
     }
 
-    /// 通过别名搜索
+    /// 通过别名搜索（内部版本）
     /// - Parameter query: 搜索查询（小写）
     /// - Returns: 匹配的项目列表
-    private func searchByAlias(_ lowerQuery: String) -> [SearchItem] {
+    private func searchByAliasInternal(_ lowerQuery: String) -> [SearchItem] {
         var results: [SearchItem] = []
 
         // 精确匹配
@@ -487,5 +560,13 @@ final class MemoryIndex {
         }
 
         return results
+    }
+
+    /// 通过别名搜索（公开版本）
+    /// - Parameter query: 搜索查询
+    /// - Returns: 匹配的项目列表
+    func searchByAlias(_ query: String) -> [SearchItem] {
+        let lowerQuery = query.lowercased()
+        return searchByAliasInternal(lowerQuery)
     }
 }
