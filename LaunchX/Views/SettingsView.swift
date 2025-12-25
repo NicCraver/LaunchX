@@ -187,74 +187,154 @@ struct GeneralSettingsView: View {
 
 struct HotKeyRecorderView: View {
     @ObservedObject var hotKeyService = HotKeyService.shared
-    @State private var isRecording = false
-    @State private var monitor: Any?
-    @FocusState private var isFocused: Bool
+    @State private var showPopover = false
+    @State private var isHovered = false
+
+    private var hasHotKey: Bool {
+        hotKeyService.currentKeyCode != 0
+    }
 
     var body: some View {
         Button(action: {
-            isRecording.toggle()
+            showPopover = true
         }) {
-            HStack {
-                if isRecording {
-                    Text("Press keys...")
-                        .foregroundColor(.secondary)
+            Group {
+                if hasHotKey {
+                    // 已设置快捷键：显示按键帽样式
+                    HStack(spacing: 2) {
+                        ForEach(
+                            HotKeyService.modifierSymbols(for: hotKeyService.currentModifiers),
+                            id: \.self
+                        ) { symbol in
+                            KeyCapViewSettings(text: symbol)
+                        }
+                        KeyCapViewSettings(
+                            text: HotKeyService.keyString(for: hotKeyService.currentKeyCode))
+                    }
                 } else {
-                    Text(
-                        HotKeyService.displayString(
-                            for: hotKeyService.currentModifiers,
-                            keyCode: hotKeyService.currentKeyCode
-                        )
+                    Text("快捷键")
+                        .foregroundColor(.secondary)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(
+                        (isHovered && !hasHotKey) ? Color.secondary.opacity(0.5) : Color.clear,
+                        lineWidth: 1
                     )
-                    .fontWeight(.medium)
-                }
-
-                if isRecording {
-                    ProgressView()
-                        .scaleEffect(0.5)
-                        .frame(width: 16, height: 16)
-                }
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .frame(minWidth: 140)
+            )
+            .contentShape(Rectangle())
         }
-        .buttonStyle(.bordered)
-        .overlay(
-            RoundedRectangle(cornerRadius: 6)
-                .stroke(isRecording ? Color.blue : Color.clear, lineWidth: 2)
-        )
-        .onChange(of: isRecording) { _, recording in
-            if recording {
-                startRecording()
-            } else {
-                stopRecording()
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            isHovered = hovering
+        }
+        .popover(isPresented: $showPopover) {
+            MainHotKeyRecorderPopover(isPresented: $showPopover)
+        }
+    }
+}
+
+// MARK: - 主快捷键录制弹窗
+
+struct MainHotKeyRecorderPopover: View {
+    @Binding var isPresented: Bool
+    @ObservedObject var hotKeyService = HotKeyService.shared
+    @State private var monitor: Any?
+
+    private var hasHotKey: Bool {
+        hotKeyService.currentKeyCode != 0
+    }
+
+    var body: some View {
+        VStack(spacing: 12) {
+            // 示例提示
+            HStack(spacing: 4) {
+                Text("例子")
+                    .foregroundColor(.secondary)
+                KeyCapViewLarge(text: "⌘")
+                KeyCapViewLarge(text: "⇧")
+                KeyCapViewLarge(text: "SPACE")
             }
+            .padding(.top, 8)
+
+            // 提示文字
+            Text("请输入快捷键...")
+                .foregroundColor(.secondary)
+                .font(.caption)
+
+            // 已设置快捷键时显示当前快捷键和删除按钮
+            if hasHotKey {
+                HStack(spacing: 4) {
+                    ForEach(
+                        HotKeyService.modifierSymbols(for: hotKeyService.currentModifiers),
+                        id: \.self
+                    ) { symbol in
+                        KeyCapViewLarge(text: symbol)
+                    }
+                    KeyCapViewLarge(
+                        text: HotKeyService.keyString(for: hotKeyService.currentKeyCode))
+
+                    // 删除按钮
+                    Button {
+                        hotKeyService.clearHotKey()
+                        isPresented = false
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.white.opacity(0.8))
+                            .font(.system(size: 16))
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color.accentColor)
+                .cornerRadius(8)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 12)
+        .frame(width: 220)
+        .onAppear {
+            startRecording()
+        }
+        .onDisappear {
+            stopRecording()
         }
     }
 
     private func startRecording() {
-        // Monitor local events for key presses
-        monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            // 1. Ignore events that are just modifier keys
-            if event.modifierFlags.intersection(.deviceIndependentFlagsMask).isEmpty {
-                return event
-            }
-
-            // 2. Handle Escape to cancel
+        monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { event in
+            // Escape 取消
             if event.keyCode == kVK_Escape {
-                isRecording = false
+                stopRecording()
+                isPresented = false
                 return nil
             }
 
-            // 3. Capture valid hotkey
+            // Delete 清除快捷键
+            if event.keyCode == kVK_Delete || event.keyCode == kVK_ForwardDelete {
+                hotKeyService.clearHotKey()
+                stopRecording()
+                isPresented = false
+                return nil
+            }
+
+            // 必须有修饰键
             let modifiers = HotKeyService.carbonModifiers(from: event.modifierFlags)
+            guard modifiers != 0 else {
+                return event
+            }
+
             let keyCode = UInt32(event.keyCode)
 
+            // 设置快捷键
             hotKeyService.registerHotKey(keyCode: keyCode, modifiers: modifiers)
-
-            isRecording = false
-            return nil  // Consume event
+            stopRecording()
+            isPresented = false
+            return nil
         }
     }
 
@@ -263,5 +343,20 @@ struct HotKeyRecorderView: View {
             NSEvent.removeMonitor(monitor)
             self.monitor = nil
         }
+    }
+}
+
+// MARK: - 设置页按键帽视图
+
+struct KeyCapViewSettings: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 12, weight: .medium, design: .rounded))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(Color(nsColor: .controlBackgroundColor))
+            .cornerRadius(4)
     }
 }

@@ -131,6 +131,19 @@ class HotKeyService: ObservableObject {
         registerMainHotKey(keyCode: keyCode, modifiers: modifiers)
     }
 
+    /// 清除主快捷键
+    func clearHotKey() {
+        if let ref = mainHotKeyRef {
+            UnregisterEventHotKey(ref)
+            mainHotKeyRef = nil
+        }
+        currentKeyCode = 0
+        currentModifiers = 0
+        UserDefaults.standard.removeObject(forKey: "hotKeyKeyCode")
+        UserDefaults.standard.removeObject(forKey: "hotKeyModifiers")
+        print("HotKeyService: Cleared Main HotKey")
+    }
+
     // MARK: - 自定义快捷键方法
 
     /// 注册自定义快捷键
