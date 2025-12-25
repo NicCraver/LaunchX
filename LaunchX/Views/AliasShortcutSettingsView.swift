@@ -9,6 +9,7 @@ struct AliasShortcutSettingsView: View {
     @StateObject private var viewModel = AliasShortcutViewModel()
     @State private var searchText = ""
     @State private var isDragTargeted = false
+    @FocusState private var focusedField: UUID?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -80,7 +81,8 @@ struct AliasShortcutSettingsView: View {
                                 CustomItemRow(
                                     item: binding(for: item),
                                     viewModel: viewModel,
-                                    isEvenRow: index % 2 == 0
+                                    isEvenRow: index % 2 == 0,
+                                    focusedField: $focusedField
                                 )
                             }
                         }
@@ -111,6 +113,13 @@ struct AliasShortcutSettingsView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(nsColor: .controlBackgroundColor).opacity(0.3))
+        .contentShape(Rectangle())
+        .simultaneousGesture(
+            TapGesture().onEnded {
+                // 点击任何区域时移除焦点
+                focusedField = nil
+            }
+        )
         .onDrop(of: [.fileURL], isTargeted: $isDragTargeted) { providers in
             viewModel.handleDrop(providers)
         }
@@ -221,6 +230,7 @@ struct CustomItemRow: View {
     @Binding var item: CustomItem
     @ObservedObject var viewModel: AliasShortcutViewModel
     let isEvenRow: Bool
+    var focusedField: FocusState<UUID?>.Binding
 
     @State private var aliasText: String = ""
     @State private var showOpenHotKeyPopover = false
@@ -240,18 +250,22 @@ struct CustomItemRow: View {
             }
             .frame(minWidth: 120, maxWidth: .infinity, alignment: .leading)
 
-            // 别名输入
-            TextField("别名", text: $aliasText)
-                .textFieldStyle(.roundedBorder)
-                .frame(width: 60)
-                .onAppear {
-                    aliasText = item.alias ?? ""
-                }
-                .onChange(of: aliasText) { _, newValue in
-                    var updatedItem = item
-                    updatedItem.alias = newValue.isEmpty ? nil : newValue
-                    viewModel.updateItem(updatedItem)
-                }
+            // 别名输入 - 悬浮显示边框样式
+            AliasTextField(
+                text: $aliasText,
+                placeholder: "别名",
+                itemId: item.id,
+                focusedField: focusedField
+            )
+            .frame(width: 80)
+            .onAppear {
+                aliasText = item.alias ?? ""
+            }
+            .onChange(of: aliasText) { _, newValue in
+                var updatedItem = item
+                updatedItem.alias = newValue.isEmpty ? nil : newValue
+                viewModel.updateItem(updatedItem)
+            }
 
             // 打开/执行快捷键
             HotKeyButton(
@@ -264,9 +278,8 @@ struct CustomItemRow: View {
                     hotKey: Binding(
                         get: { item.openHotKey },
                         set: { newValue in
-                            var updatedItem = item
-                            updatedItem.openHotKey = newValue
-                            viewModel.updateItem(updatedItem)
+                            item.openHotKey = newValue
+                            viewModel.updateItem(item)
                         }
                     ),
                     itemId: item.id,
@@ -286,9 +299,8 @@ struct CustomItemRow: View {
                         hotKey: Binding(
                             get: { item.extensionHotKey },
                             set: { newValue in
-                                var updatedItem = item
-                                updatedItem.extensionHotKey = newValue
-                                viewModel.updateItem(updatedItem)
+                                item.extensionHotKey = newValue
+                                viewModel.updateItem(item)
                             }
                         ),
                         itemId: item.id,
@@ -316,31 +328,86 @@ struct CustomItemRow: View {
     }
 }
 
+// MARK: - 别名输入框
+
+struct AliasTextField: View {
+    @Binding var text: String
+    let placeholder: String
+    let itemId: UUID
+    var focusedField: FocusState<UUID?>.Binding
+
+    @State private var isHovered = false
+
+    private var isFocused: Bool {
+        focusedField.wrappedValue == itemId
+    }
+
+    var body: some View {
+        TextField(placeholder, text: $text)
+            .textFieldStyle(.plain)
+            .focused(focusedField, equals: itemId)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 4)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(
+                        (isHovered || isFocused) ? Color.secondary.opacity(0.5) : Color.clear,
+                        lineWidth: 1
+                    )
+            )
+            .onHover { hovering in
+                isHovered = hovering
+            }
+    }
+}
+
 // MARK: - 快捷键按钮
 
 struct HotKeyButton: View {
     let hotKey: HotKeyConfig?
     let onTap: () -> Void
 
+    @State private var isHovered = false
+
+    // 固定宽度：5个按键帽的最大宽度
+    private let fixedWidth: CGFloat = 100
+
     var body: some View {
         Button(action: onTap) {
-            if let hotKey = hotKey {
-                HStack(spacing: 2) {
-                    // 显示修饰键符号
-                    ForEach(
-                        HotKeyService.modifierSymbols(for: hotKey.modifiers), id: \.self
-                    ) { symbol in
-                        KeyCapView(text: symbol)
+            Group {
+                if let hotKey = hotKey {
+                    // 已设置快捷键：显示按键帽样式
+                    HStack(spacing: 2) {
+                        ForEach(
+                            HotKeyService.modifierSymbols(for: hotKey.modifiers), id: \.self
+                        ) { symbol in
+                            KeyCapView(text: symbol)
+                        }
+                        KeyCapView(text: HotKeyService.keyString(for: hotKey.keyCode))
                     }
-                    // 显示按键
-                    KeyCapView(text: HotKeyService.keyString(for: hotKey.keyCode))
+                } else {
+                    // 未设置：只显示文字
+                    Text("快捷键")
+                        .foregroundColor(.secondary)
                 }
-            } else {
-                Text("快捷键")
-                    .foregroundColor(.secondary)
             }
+            .frame(width: fixedWidth)
+            .padding(.vertical, 4)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(
+                        // 只有未设置快捷键时悬浮才显示边框
+                        (isHovered && hotKey == nil)
+                            ? Color.secondary.opacity(0.5) : Color.clear,
+                        lineWidth: 1
+                    )
+            )
+            .contentShape(Rectangle())
         }
-        .buttonStyle(.bordered)
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            isHovered = hovering
+        }
     }
 }
 

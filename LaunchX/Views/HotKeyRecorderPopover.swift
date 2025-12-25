@@ -8,9 +8,6 @@ struct HotKeyRecorderPopover: View {
     let itemId: UUID
     @Binding var isPresented: Bool
 
-    @State private var isRecording = true
-    @State private var tempKeyCode: UInt32 = 0
-    @State private var tempModifiers: UInt32 = 0
     @State private var conflictMessage: String?
     @State private var monitor: Any?
 
@@ -37,59 +34,35 @@ struct HotKeyRecorderPopover: View {
                     .font(.caption)
             }
 
-            // 当前录制的快捷键或已设置的快捷键
-            if tempModifiers != 0 || hotKey != nil {
+            // 已设置快捷键时显示当前快捷键和删除按钮
+            if let currentHotKey = hotKey {
                 HStack(spacing: 4) {
-                    // 显示当前按键组合
-                    let displayModifiers =
-                        tempModifiers != 0 ? tempModifiers : (hotKey?.modifiers ?? 0)
-                    let displayKeyCode = tempKeyCode != 0 ? tempKeyCode : (hotKey?.keyCode ?? 0)
-
                     ForEach(
-                        HotKeyService.modifierSymbols(for: displayModifiers), id: \.self
+                        HotKeyService.modifierSymbols(for: currentHotKey.modifiers), id: \.self
                     ) { symbol in
                         KeyCapViewLarge(text: symbol)
                     }
-
-                    if displayKeyCode != 0 {
-                        KeyCapViewLarge(text: HotKeyService.keyString(for: displayKeyCode))
-                    }
+                    KeyCapViewLarge(text: HotKeyService.keyString(for: currentHotKey.keyCode))
 
                     // 删除按钮
-                    Button(action: clearHotKey) {
+                    Button {
+                        hotKey = nil
+                        isPresented = false
+                    } label: {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundColor(.white.opacity(0.8))
+                            .font(.system(size: 16))
                     }
                     .buttonStyle(.plain)
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
-                .background(
-                    conflictMessage != nil
-                        ? Color.red.opacity(0.8)
-                        : Color.accentColor
-                )
+                .background(Color.accentColor)
                 .cornerRadius(8)
             }
-
-            // 操作按钮
-            HStack(spacing: 12) {
-                Button("取消") {
-                    stopRecording()
-                    isPresented = false
-                }
-                .buttonStyle(.bordered)
-
-                if hotKey != nil {
-                    Button("清除") {
-                        clearHotKey()
-                    }
-                    .buttonStyle(.bordered)
-                }
-            }
-            .padding(.bottom, 8)
         }
         .padding(.horizontal, 16)
+        .padding(.bottom, 12)
         .frame(width: 220)
         .onAppear {
             startRecording()
@@ -102,25 +75,21 @@ struct HotKeyRecorderPopover: View {
     // MARK: - 录制逻辑
 
     private func startRecording() {
-        isRecording = true
-        tempKeyCode = 0
-        tempModifiers = 0
         conflictMessage = nil
 
         // 监控本地按键事件
-        monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .flagsChanged]) {
-            [self] event in
-
-            if event.type == .flagsChanged {
-                // 只更新修饰键状态
-                tempModifiers = HotKeyService.carbonModifiers(from: event.modifierFlags)
-                return event
-            }
-
-            // keyDown 事件
+        monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { event in
 
             // Escape 取消录制
             if event.keyCode == kVK_Escape {
+                stopRecording()
+                isPresented = false
+                return nil
+            }
+
+            // Delete 或 Backspace 清除快捷键
+            if event.keyCode == kVK_Delete || event.keyCode == kVK_ForwardDelete {
+                hotKey = nil
                 stopRecording()
                 isPresented = false
                 return nil
@@ -141,12 +110,10 @@ struct HotKeyRecorderPopover: View {
                 excludingItemId: itemId
             ) {
                 conflictMessage = conflict
-                tempKeyCode = keyCode
-                tempModifiers = modifiers
                 return nil
             }
 
-            // 设置快捷键
+            // 设置快捷键，成功后自动关闭弹窗
             hotKey = HotKeyConfig(keyCode: keyCode, modifiers: modifiers)
             conflictMessage = nil
             stopRecording()
@@ -156,18 +123,10 @@ struct HotKeyRecorderPopover: View {
     }
 
     private func stopRecording() {
-        isRecording = false
         if let monitor = monitor {
             NSEvent.removeMonitor(monitor)
             self.monitor = nil
         }
-    }
-
-    private func clearHotKey() {
-        hotKey = nil
-        tempKeyCode = 0
-        tempModifiers = 0
-        conflictMessage = nil
     }
 }
 
@@ -195,7 +154,7 @@ struct KeyCapViewLarge: View {
     }
     .popover(isPresented: .constant(true)) {
         HotKeyRecorderPopover(
-            hotKey: .constant(nil),
+            hotKey: .constant(HotKeyConfig(keyCode: 37, modifiers: 256)),
             itemId: UUID(),
             isPresented: .constant(true)
         )
