@@ -191,7 +191,7 @@ struct HotKeyRecorderView: View {
     @State private var isHovered = false
 
     private var hasHotKey: Bool {
-        hotKeyService.currentKeyCode != 0
+        hotKeyService.currentKeyCode != 0 || hotKeyService.useDoubleTapModifier
     }
 
     var body: some View {
@@ -202,14 +202,21 @@ struct HotKeyRecorderView: View {
                 if hasHotKey {
                     // 已设置快捷键：显示按键帽样式
                     HStack(spacing: 2) {
-                        ForEach(
-                            HotKeyService.modifierSymbols(for: hotKeyService.currentModifiers),
-                            id: \.self
-                        ) { symbol in
-                            KeyCapViewSettings(text: symbol)
+                        if hotKeyService.useDoubleTapModifier {
+                            // 显示双击修饰键
+                            KeyCapViewSettings(text: hotKeyService.doubleTapModifier.symbol)
+                            KeyCapViewSettings(text: hotKeyService.doubleTapModifier.symbol)
+                        } else {
+                            // 显示传统快捷键
+                            ForEach(
+                                HotKeyService.modifierSymbols(for: hotKeyService.currentModifiers),
+                                id: \.self
+                            ) { symbol in
+                                KeyCapViewSettings(text: symbol)
+                            }
+                            KeyCapViewSettings(
+                                text: HotKeyService.keyString(for: hotKeyService.currentKeyCode))
                         }
-                        KeyCapViewSettings(
-                            text: HotKeyService.keyString(for: hotKeyService.currentKeyCode))
                     }
                 } else {
                     Text("快捷键")
@@ -242,10 +249,17 @@ struct HotKeyRecorderView: View {
 struct MainHotKeyRecorderPopover: View {
     @Binding var isPresented: Bool
     @ObservedObject var hotKeyService = HotKeyService.shared
-    @State private var monitor: Any?
+    @State private var keyDownMonitor: Any?
+    @State private var flagsMonitor: Any?
+
+    // 双击修饰键检测
+    @State private var lastModifierPressTime: Date?
+    @State private var lastPressedModifier: DoubleTapModifier?
+    @State private var previousFlags: NSEvent.ModifierFlags = []
+    private let doubleTapInterval: TimeInterval = 0.3
 
     private var hasHotKey: Bool {
-        hotKeyService.currentKeyCode != 0
+        hotKeyService.currentKeyCode != 0 || hotKeyService.useDoubleTapModifier
     }
 
     var body: some View {
@@ -257,25 +271,36 @@ struct MainHotKeyRecorderPopover: View {
                 KeyCapViewLarge(text: "⌘")
                 KeyCapViewLarge(text: "⇧")
                 KeyCapViewLarge(text: "SPACE")
+                Text("或")
+                    .foregroundColor(.secondary)
+                KeyCapViewLarge(text: "⌘")
+                KeyCapViewLarge(text: "⌘")
             }
             .padding(.top, 8)
 
             // 提示文字
-            Text("请输入快捷键...")
+            Text("请输入快捷键或连续按两次修饰键...")
                 .foregroundColor(.secondary)
                 .font(.caption)
 
             // 已设置快捷键时显示当前快捷键和删除按钮
             if hasHotKey {
                 HStack(spacing: 4) {
-                    ForEach(
-                        HotKeyService.modifierSymbols(for: hotKeyService.currentModifiers),
-                        id: \.self
-                    ) { symbol in
-                        KeyCapViewLarge(text: symbol)
+                    if hotKeyService.useDoubleTapModifier {
+                        // 显示双击修饰键
+                        KeyCapViewLarge(text: hotKeyService.doubleTapModifier.symbol)
+                        KeyCapViewLarge(text: hotKeyService.doubleTapModifier.symbol)
+                    } else {
+                        // 显示传统快捷键
+                        ForEach(
+                            HotKeyService.modifierSymbols(for: hotKeyService.currentModifiers),
+                            id: \.self
+                        ) { symbol in
+                            KeyCapViewLarge(text: symbol)
+                        }
+                        KeyCapViewLarge(
+                            text: HotKeyService.keyString(for: hotKeyService.currentKeyCode))
                     }
-                    KeyCapViewLarge(
-                        text: HotKeyService.keyString(for: hotKeyService.currentKeyCode))
 
                     // 删除按钮
                     Button {
@@ -306,7 +331,13 @@ struct MainHotKeyRecorderPopover: View {
     }
 
     private func startRecording() {
-        monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { event in
+        // 重置双击检测状态
+        lastModifierPressTime = nil
+        lastPressedModifier = nil
+        previousFlags = []
+
+        // 监听按键事件（传统快捷键）
+        keyDownMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { event in
             // Escape 取消
             if event.keyCode == kVK_Escape {
                 stopRecording()
@@ -330,18 +361,76 @@ struct MainHotKeyRecorderPopover: View {
 
             let keyCode = UInt32(event.keyCode)
 
-            // 设置快捷键
+            // 设置传统快捷键
             hotKeyService.registerHotKey(keyCode: keyCode, modifiers: modifiers)
             stopRecording()
             isPresented = false
             return nil
         }
+
+        // 监听修饰键事件（双击修饰键）
+        flagsMonitor = NSEvent.addLocalMonitorForEvents(matching: [.flagsChanged]) { event in
+            handleFlagsChanged(event)
+            return event
+        }
+    }
+
+    private func handleFlagsChanged(_ event: NSEvent) {
+        let currentFlags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+
+        // 检测每个修饰键
+        for modifier in DoubleTapModifier.allCases {
+            let targetFlag = modifier.flag
+            let wasPressed =
+                !previousFlags.contains(targetFlag) && currentFlags.contains(targetFlag)
+            let onlyTargetPressed =
+                currentFlags.subtracting([.capsLock, .numericPad, .function]) == targetFlag
+
+            if wasPressed && onlyTargetPressed {
+                let now = Date()
+
+                if let lastTime = lastModifierPressTime,
+                    let lastModifier = lastPressedModifier,
+                    lastModifier == modifier,
+                    now.timeIntervalSince(lastTime) < doubleTapInterval
+                {
+                    // 双击检测成功，设置双击修饰键
+                    hotKeyService.enableDoubleTapModifier(modifier)
+                    stopRecording()
+                    isPresented = false
+                    return
+                } else {
+                    // 记录第一次按下
+                    lastModifierPressTime = now
+                    lastPressedModifier = modifier
+                }
+            }
+        }
+
+        // 如果同时按下多个修饰键，重置状态
+        let modifierCount = [
+            currentFlags.contains(.command),
+            currentFlags.contains(.option),
+            currentFlags.contains(.control),
+            currentFlags.contains(.shift),
+        ].filter { $0 }.count
+
+        if modifierCount > 1 {
+            lastModifierPressTime = nil
+            lastPressedModifier = nil
+        }
+
+        previousFlags = currentFlags
     }
 
     private func stopRecording() {
-        if let monitor = monitor {
+        if let monitor = keyDownMonitor {
             NSEvent.removeMonitor(monitor)
-            self.monitor = nil
+            self.keyDownMonitor = nil
+        }
+        if let monitor = flagsMonitor {
+            NSEvent.removeMonitor(monitor)
+            self.flagsMonitor = nil
         }
     }
 }

@@ -9,6 +9,41 @@ private func globalHotKeyHandler(
     return HotKeyService.shared.handleEvent(event)
 }
 
+/// 双击修饰键类型
+enum DoubleTapModifier: String, Codable, CaseIterable {
+    case command = "command"
+    case option = "option"
+    case control = "control"
+    case shift = "shift"
+
+    var displayName: String {
+        switch self {
+        case .command: return "⌘ Command"
+        case .option: return "⌥ Option"
+        case .control: return "⌃ Control"
+        case .shift: return "⇧ Shift"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .command: return "⌘"
+        case .option: return "⌥"
+        case .control: return "⌃"
+        case .shift: return "⇧"
+        }
+    }
+
+    var flag: NSEvent.ModifierFlags {
+        switch self {
+        case .command: return .command
+        case .option: return .option
+        case .control: return .control
+        case .shift: return .shift
+        }
+    }
+}
+
 class HotKeyService: ObservableObject {
     static let shared = HotKeyService()
 
@@ -25,6 +60,21 @@ class HotKeyService: ObservableObject {
     /// 主快捷键的修饰键
     @Published var currentModifiers: UInt32 = UInt32(optionKey)
     @Published var isEnabled: Bool = true
+
+    // MARK: - 双击修饰键支持
+
+    /// 是否使用双击修饰键模式
+    @Published var useDoubleTapModifier: Bool = false
+    /// 当前设置的双击修饰键
+    @Published var doubleTapModifier: DoubleTapModifier = .command
+
+    /// 双击检测相关
+    private var lastModifierPressTime: Date?
+    private var lastPressedModifier: DoubleTapModifier?
+    private var globalFlagsMonitor: Any?
+    private var localFlagsMonitor: Any?
+    private let doubleTapInterval: TimeInterval = 0.3  // 双击间隔阈值
+    private var previousFlags: NSEvent.ModifierFlags = []
 
     // MARK: - 自定义快捷键
 
@@ -82,19 +132,42 @@ class HotKeyService: ObservableObject {
             return
         }
 
-        // Load saved key or use default (Option + Space)
-        let savedKeyCode = UserDefaults.standard.object(forKey: "hotKeyKeyCode") as? Int
-        let savedModifiers = UserDefaults.standard.object(forKey: "hotKeyModifiers") as? Int
+        // Load saved configuration
+        loadHotKeySettings()
+    }
 
-        if let key = savedKeyCode, let mods = savedModifiers {
-            registerMainHotKey(keyCode: UInt32(key), modifiers: UInt32(mods))
+    /// 加载保存的快捷键设置
+    private func loadHotKeySettings() {
+        // 检查是否使用双击修饰键模式
+        let savedUseDoubleTap = UserDefaults.standard.bool(forKey: "hotKeyUseDoubleTap")
+
+        if savedUseDoubleTap {
+            // 加载双击修饰键设置
+            if let savedModifier = UserDefaults.standard.string(forKey: "hotKeyDoubleTapModifier"),
+                let modifier = DoubleTapModifier(rawValue: savedModifier)
+            {
+                enableDoubleTapModifier(modifier)
+            } else {
+                enableDoubleTapModifier(.command)
+            }
         } else {
-            registerMainHotKey(keyCode: UInt32(kVK_Space), modifiers: UInt32(optionKey))
+            // 加载传统快捷键设置
+            let savedKeyCode = UserDefaults.standard.object(forKey: "hotKeyKeyCode") as? Int
+            let savedModifiers = UserDefaults.standard.object(forKey: "hotKeyModifiers") as? Int
+
+            if let key = savedKeyCode, let mods = savedModifiers {
+                registerMainHotKey(keyCode: UInt32(key), modifiers: UInt32(mods))
+            } else {
+                registerMainHotKey(keyCode: UInt32(kVK_Space), modifiers: UInt32(optionKey))
+            }
         }
     }
 
     /// 注册主快捷键（打开搜索面板）
     func registerMainHotKey(keyCode: UInt32, modifiers: UInt32) {
+        // 先禁用双击修饰键模式
+        disableDoubleTapModifier()
+
         // Unregister existing if any
         if let ref = mainHotKeyRef {
             UnregisterEventHotKey(ref)
@@ -103,10 +176,12 @@ class HotKeyService: ObservableObject {
 
         self.currentKeyCode = keyCode
         self.currentModifiers = modifiers
+        self.useDoubleTapModifier = false
 
         // Save persistence
         UserDefaults.standard.set(Int(keyCode), forKey: "hotKeyKeyCode")
         UserDefaults.standard.set(Int(modifiers), forKey: "hotKeyModifiers")
+        UserDefaults.standard.set(false, forKey: "hotKeyUseDoubleTap")
 
         let hotKeyID = EventHotKeyID(signature: hotKeySignature, id: mainHotKeyId)
 
@@ -133,15 +208,145 @@ class HotKeyService: ObservableObject {
 
     /// 清除主快捷键
     func clearHotKey() {
+        // 清除传统快捷键
         if let ref = mainHotKeyRef {
             UnregisterEventHotKey(ref)
             mainHotKeyRef = nil
         }
+
+        // 清除双击修饰键监听
+        disableDoubleTapModifier()
+
         currentKeyCode = 0
         currentModifiers = 0
+        useDoubleTapModifier = false
+
         UserDefaults.standard.removeObject(forKey: "hotKeyKeyCode")
         UserDefaults.standard.removeObject(forKey: "hotKeyModifiers")
+        UserDefaults.standard.removeObject(forKey: "hotKeyUseDoubleTap")
+        UserDefaults.standard.removeObject(forKey: "hotKeyDoubleTapModifier")
         print("HotKeyService: Cleared Main HotKey")
+    }
+
+    // MARK: - 双击修饰键方法
+
+    /// 启用双击修饰键模式
+    func enableDoubleTapModifier(_ modifier: DoubleTapModifier) {
+        // 先清除传统快捷键
+        if let ref = mainHotKeyRef {
+            UnregisterEventHotKey(ref)
+            mainHotKeyRef = nil
+        }
+
+        self.useDoubleTapModifier = true
+        self.doubleTapModifier = modifier
+        self.currentKeyCode = 0
+        self.currentModifiers = 0
+
+        // 保存设置
+        UserDefaults.standard.set(true, forKey: "hotKeyUseDoubleTap")
+        UserDefaults.standard.set(modifier.rawValue, forKey: "hotKeyDoubleTapModifier")
+
+        // 启动监听
+        startDoubleTapMonitoring()
+
+        print("HotKeyService: Enabled Double-Tap \(modifier.displayName) mode")
+    }
+
+    /// 禁用双击修饰键模式
+    private func disableDoubleTapModifier() {
+        stopDoubleTapMonitoring()
+        lastModifierPressTime = nil
+        lastPressedModifier = nil
+        previousFlags = []
+    }
+
+    /// 开始监听双击修饰键
+    private func startDoubleTapMonitoring() {
+        stopDoubleTapMonitoring()
+
+        // 全局监听（其他应用激活时）
+        globalFlagsMonitor = NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged) {
+            [weak self] event in
+            self?.handleFlagsChanged(event)
+        }
+
+        // 本地监听（本应用激活时）
+        localFlagsMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) {
+            [weak self] event in
+            self?.handleFlagsChanged(event)
+            return event
+        }
+    }
+
+    /// 停止监听双击修饰键
+    private func stopDoubleTapMonitoring() {
+        if let monitor = globalFlagsMonitor {
+            NSEvent.removeMonitor(monitor)
+            globalFlagsMonitor = nil
+        }
+        if let monitor = localFlagsMonitor {
+            NSEvent.removeMonitor(monitor)
+            localFlagsMonitor = nil
+        }
+    }
+
+    /// 处理修饰键变化事件
+    private func handleFlagsChanged(_ event: NSEvent) {
+        let currentFlags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        let targetFlag = doubleTapModifier.flag
+
+        // 检测目标修饰键是否刚被按下（从无到有）
+        let wasPressed = !previousFlags.contains(targetFlag) && currentFlags.contains(targetFlag)
+        // 检测目标修饰键是否刚被释放（从有到无）
+        let wasReleased = previousFlags.contains(targetFlag) && !currentFlags.contains(targetFlag)
+
+        // 确保只有目标修饰键被按下，没有其他修饰键
+        let onlyTargetPressed =
+            currentFlags.subtracting([.capsLock, .numericPad, .function]) == targetFlag
+
+        if wasPressed && onlyTargetPressed {
+            let now = Date()
+
+            if let lastTime = lastModifierPressTime,
+                let lastModifier = lastPressedModifier,
+                lastModifier == doubleTapModifier,
+                now.timeIntervalSince(lastTime) < doubleTapInterval
+            {
+                // 双击检测成功
+                lastModifierPressTime = nil
+                lastPressedModifier = nil
+
+                DispatchQueue.main.async { [weak self] in
+                    self?.onHotKeyPressed?()
+                }
+            } else {
+                // 记录第一次按下
+                lastModifierPressTime = now
+                lastPressedModifier = doubleTapModifier
+            }
+        } else if wasReleased {
+            // 释放时不做特殊处理，保留上次按下时间用于双击检测
+        } else if !currentFlags.intersection([.command, .option, .control, .shift]).isEmpty
+            && currentFlags.intersection([.command, .option, .control, .shift]) != targetFlag
+        {
+            // 如果按下了其他修饰键，重置状态
+            lastModifierPressTime = nil
+            lastPressedModifier = nil
+        }
+
+        previousFlags = currentFlags
+    }
+
+    /// 获取当前快捷键的显示字符串
+    var currentHotKeyDisplayString: String {
+        if useDoubleTapModifier {
+            return "\(doubleTapModifier.symbol) \(doubleTapModifier.symbol)"
+        } else if currentKeyCode != 0 {
+            return HotKeyService.displayString(for: currentModifiers, keyCode: currentKeyCode)
+        } else {
+            return ""
+        }
     }
 
     // MARK: - 自定义快捷键方法
