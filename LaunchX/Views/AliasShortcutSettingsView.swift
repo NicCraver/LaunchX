@@ -283,6 +283,7 @@ struct CustomItemRow: View {
                         }
                     ),
                     itemId: item.id,
+                    isExtensionHotKey: false,
                     isPresented: $showOpenHotKeyPopover
                 )
             }
@@ -304,6 +305,7 @@ struct CustomItemRow: View {
                             }
                         ),
                         itemId: item.id,
+                        isExtensionHotKey: true,
                         isPresented: $showExtensionHotKeyPopover
                     )
                 }

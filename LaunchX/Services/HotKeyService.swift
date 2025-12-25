@@ -524,7 +524,7 @@ class HotKeyService: ObservableObject {
     /// - Returns: 冲突的描述，nil 表示无冲突
     func checkConflict(
         keyCode: UInt32, modifiers: UInt32, excludingItemId: UUID? = nil,
-        excludingMainHotKey: Bool = false
+        excludingIsExtension: Bool? = nil, excludingMainHotKey: Bool = false
     ) -> String? {
         // 检查与主快捷键的冲突（除非排除）
         if !excludingMainHotKey && keyCode == currentKeyCode && modifiers == currentModifiers
@@ -540,8 +540,11 @@ class HotKeyService: ObservableObject {
                     let itemId = action.0
                     let isExtension = action.1
 
-                    // 如果是同一个项目，跳过
-                    if let excludeId = excludingItemId, itemId == excludeId {
+                    // 如果是同一个项目的同类型快捷键，跳过
+                    if let excludeId = excludingItemId,
+                        let excludeIsExt = excludingIsExtension,
+                        itemId == excludeId && isExtension == excludeIsExt
+                    {
                         continue
                     }
 

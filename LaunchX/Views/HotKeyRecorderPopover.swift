@@ -6,6 +6,7 @@ import SwiftUI
 struct HotKeyRecorderPopover: View {
     @Binding var hotKey: HotKeyConfig?
     let itemId: UUID
+    let isExtensionHotKey: Bool  // 是否为"进入扩展"快捷键
     @Binding var isPresented: Bool
 
     @State private var conflictMessage: String?
@@ -27,7 +28,7 @@ struct HotKeyRecorderPopover: View {
             if let conflict = conflictMessage {
                 Text("快捷键已被「\(conflict)」使用")
                     .foregroundColor(.red)
-                    .font(.caption)
+                    .font(.system(size: 13))
             } else {
                 Text("请输入快捷键...")
                     .foregroundColor(.secondary)
@@ -107,11 +108,12 @@ struct HotKeyRecorderPopover: View {
 
             let keyCode = UInt32(event.keyCode)
 
-            // 检查冲突
+            // 检查冲突（排除同一项目的同类型快捷键）
             if let conflict = HotKeyService.shared.checkConflict(
                 keyCode: keyCode,
                 modifiers: modifiers,
-                excludingItemId: itemId
+                excludingItemId: itemId,
+                excludingIsExtension: isExtensionHotKey
             ) {
                 conflictMessage = conflict
                 return nil
@@ -160,6 +162,7 @@ struct KeyCapViewLarge: View {
         HotKeyRecorderPopover(
             hotKey: .constant(HotKeyConfig(keyCode: 37, modifiers: 256)),
             itemId: UUID(),
+            isExtensionHotKey: false,
             isPresented: .constant(true)
         )
     }

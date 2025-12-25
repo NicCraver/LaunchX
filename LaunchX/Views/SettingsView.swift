@@ -285,7 +285,7 @@ struct MainHotKeyRecorderPopover: View {
             if let conflict = conflictMessage {
                 Text("快捷键已被「\(conflict)」使用")
                     .foregroundColor(.red)
-                    .font(.caption)
+                    .font(.system(size: 13))
             } else {
                 Text("请输入快捷键或连续按两次修饰键...")
                     .foregroundColor(.secondary)
