@@ -462,31 +462,19 @@ class HotKeyService: ObservableObject {
             print("HotKeyService: Resumed main hotkey")
         }
 
-        // 恢复所有自定义快捷键
-        let config = CustomItemsConfig.load()
-        for item in config.customItems {
-            if let openKey = item.openHotKey {
-                registerCustomHotKey(
-                    keyCode: openKey.keyCode,
-                    modifiers: openKey.modifiers,
-                    itemId: item.id,
-                    isExtension: false
-                )
-            }
-            if let extKey = item.extensionHotKey {
-                registerCustomHotKey(
-                    keyCode: extKey.keyCode,
-                    modifiers: extKey.modifiers,
-                    itemId: item.id,
-                    isExtension: true
-                )
-            }
+        // 优先使用新的 ToolsConfig，如果没有数据则回退到 CustomItemsConfig
+        let toolsConfig = ToolsConfig.load()
+        if !toolsConfig.tools.isEmpty {
+            reloadToolHotKeys(from: toolsConfig)
+        } else {
+            let config = CustomItemsConfig.load()
+            reloadCustomHotKeys(from: config)
         }
 
         print("HotKeyService: All hotkeys resumed")
     }
 
-    /// 从配置重新加载所有自定义快捷键
+    /// 从配置重新加载所有自定义快捷键（旧版本，兼容 CustomItemsConfig）
     func reloadCustomHotKeys(from config: CustomItemsConfig) {
         // 先注销所有现有的自定义快捷键
         unregisterAllCustomHotKeys()
@@ -511,7 +499,40 @@ class HotKeyService: ObservableObject {
             }
         }
 
-        print("HotKeyService: Reloaded \(customHotKeyRefs.count) custom hotkeys")
+        print(
+            "HotKeyService: Reloaded \(customHotKeyRefs.count) custom hotkeys from CustomItemsConfig"
+        )
+    }
+
+    /// 从 ToolsConfig 重新加载所有工具快捷键
+    func reloadToolHotKeys(from config: ToolsConfig) {
+        // 先注销所有现有的自定义快捷键
+        unregisterAllCustomHotKeys()
+
+        // 只为已启用的工具注册快捷键
+        for tool in config.enabledTools {
+            // 注册主快捷键
+            if let hotKey = tool.hotKey {
+                registerCustomHotKey(
+                    keyCode: hotKey.keyCode,
+                    modifiers: hotKey.modifiers,
+                    itemId: tool.id,
+                    isExtension: false
+                )
+            }
+
+            // 注册扩展快捷键（仅 IDE 应用）
+            if tool.isIDE, let extKey = tool.extensionHotKey {
+                registerCustomHotKey(
+                    keyCode: extKey.keyCode,
+                    modifiers: extKey.modifiers,
+                    itemId: tool.id,
+                    isExtension: true
+                )
+            }
+        }
+
+        print("HotKeyService: Reloaded \(customHotKeyRefs.count) tool hotkeys from ToolsConfig")
     }
 
     // MARK: - 冲突检测
@@ -533,7 +554,7 @@ class HotKeyService: ObservableObject {
             return "启动快捷键"
         }
 
-        // 检查与自定义快捷键的冲突
+        // 检查与已注册的自定义快捷键的冲突
         for (hotKeyId, config) in customHotKeyConfigs {
             if config.keyCode == keyCode && config.modifiers == modifiers {
                 if let action = customHotKeyActions[hotKeyId] {
@@ -548,7 +569,13 @@ class HotKeyService: ObservableObject {
                         continue
                     }
 
-                    // 从配置中获取项目名称
+                    // 优先从 ToolsConfig 获取名称，回退到 CustomItemsConfig
+                    let toolsConfig = ToolsConfig.load()
+                    if let tool = toolsConfig.tool(byId: itemId) {
+                        let suffix = isExtension ? " (进入扩展)" : " (打开)"
+                        return tool.name + suffix
+                    }
+
                     let itemsConfig = CustomItemsConfig.load()
                     if let item = itemsConfig.item(byId: itemId) {
                         let suffix = isExtension ? " (进入扩展)" : " (打开)"

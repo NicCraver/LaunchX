@@ -48,6 +48,7 @@ final class SearchEngine: ObservableObject {
     private var configObserver: NSObjectProtocol?
     private var configChangeObserver: NSObjectProtocol?
     private var customItemsConfigObserver: NSObjectProtocol?
+    private var toolsConfigObserver: NSObjectProtocol?
 
     // MARK: - Initialization
 
@@ -90,8 +91,18 @@ final class SearchEngine: ObservableObject {
 
     /// 监听自定义项目配置变化（别名更新）
     private func setupCustomItemsConfigObserver() {
+        // 监听旧的 CustomItemsConfig 变化（向后兼容）
         customItemsConfigObserver = NotificationCenter.default.addObserver(
             forName: .customItemsConfigDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.loadAliasMap()
+        }
+
+        // 监听新的 ToolsConfig 变化
+        toolsConfigObserver = NotificationCenter.default.addObserver(
+            forName: .toolsConfigDidChange,
             object: nil,
             queue: .main
         ) { [weak self] _ in
@@ -104,10 +115,20 @@ final class SearchEngine: ObservableObject {
 
     /// 加载别名映射到内存索引
     private func loadAliasMap() {
+        // 优先使用新的 ToolsConfig
+        let toolsConfig = ToolsConfig.load()
+        if !toolsConfig.tools.isEmpty {
+            let aliasMap = toolsConfig.aliasMap()
+            memoryIndex.setAliasMap(aliasMap)
+            print("SearchEngine: Loaded \(aliasMap.count) aliases from ToolsConfig")
+            return
+        }
+
+        // 回退到旧的 CustomItemsConfig
         let customConfig = CustomItemsConfig.load()
         let aliasMap = customConfig.aliasMap()
         memoryIndex.setAliasMap(aliasMap)
-        print("SearchEngine: Loaded \(aliasMap.count) aliases")
+        print("SearchEngine: Loaded \(aliasMap.count) aliases from CustomItemsConfig")
     }
 
     // MARK: - Startup

@@ -15,14 +15,9 @@ struct SettingsView: View {
                     Label("搜索", systemImage: "magnifyingglass")
                 }
 
-            AliasShortcutSettingsView()
+            ToolsSettingsView()
                 .tabItem {
-                    Label("别名与快捷键", systemImage: "command.square")
-                }
-
-            Text("Extensions")
-                .tabItem {
-                    Label("扩展", systemImage: "puzzlepiece")
+                    Label("工具管理", systemImage: "wrench.and.screwdriver")
                 }
         }
         .frame(width: 700, height: 520)
