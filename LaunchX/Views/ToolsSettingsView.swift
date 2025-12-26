@@ -3,6 +3,19 @@ import Combine
 import SwiftUI
 import UniformTypeIdentifiers
 
+// MARK: - 网页直达编辑模式
+enum WebLinkEditMode: Identifiable {
+    case add
+    case edit(ToolItem)
+
+    var id: String {
+        switch self {
+        case .add: return "add"
+        case .edit(let tool): return tool.id.uuidString
+        }
+    }
+}
+
 // MARK: - 工具管理设置视图
 
 struct ToolsSettingsView: View {
@@ -10,8 +23,7 @@ struct ToolsSettingsView: View {
     @State private var searchText = ""
     @State private var isDragTargeted = false
     @FocusState private var focusedField: UUID?
-    @State private var showAddWebLinkSheet = false
-    @State private var editingWebLink: ToolItem? = nil
+    @State private var webLinkEditMode: WebLinkEditMode? = nil
 
     var body: some View {
         VStack(spacing: 0) {
@@ -93,8 +105,7 @@ struct ToolsSettingsView: View {
                             count: viewModel.webLinkTools.count,
                             isExpanded: $viewModel.webLinkExpanded,
                             onAdd: {
-                                editingWebLink = nil
-                                showAddWebLinkSheet = true
+                                webLinkEditMode = .add
                             }
                         )
 
@@ -117,8 +128,7 @@ struct ToolsSettingsView: View {
                                         isEvenRow: index % 2 == 0,
                                         focusedField: $focusedField,
                                         onEdit: {
-                                            editingWebLink = tool
-                                            showAddWebLinkSheet = true
+                                            webLinkEditMode = .edit(tool)
                                         }
                                     )
                                 }
@@ -188,18 +198,31 @@ struct ToolsSettingsView: View {
                 .stroke(isDragTargeted ? Color.accentColor : Color.clear, lineWidth: 2)
                 .padding(4)
         )
-        .sheet(isPresented: $showAddWebLinkSheet) {
-            WebLinkEditorSheet(
-                isPresented: $showAddWebLinkSheet,
-                existingTool: editingWebLink,
-                onSave: { tool in
-                    if editingWebLink != nil {
-                        viewModel.updateTool(tool)
-                    } else {
+        .sheet(item: $webLinkEditMode) { mode in
+            switch mode {
+            case .add:
+                WebLinkEditorSheet(
+                    isPresented: Binding(
+                        get: { webLinkEditMode != nil },
+                        set: { if !$0 { webLinkEditMode = nil } }
+                    ),
+                    existingTool: nil,
+                    onSave: { tool in
                         viewModel.addTool(tool)
                     }
-                }
-            )
+                )
+            case .edit(let tool):
+                WebLinkEditorSheet(
+                    isPresented: Binding(
+                        get: { webLinkEditMode != nil },
+                        set: { if !$0 { webLinkEditMode = nil } }
+                    ),
+                    existingTool: tool,
+                    onSave: { updatedTool in
+                        viewModel.updateTool(updatedTool)
+                    }
+                )
+            }
         }
     }
 
@@ -228,8 +251,7 @@ struct ToolsSettingsView: View {
                 .buttonStyle(.borderedProminent)
 
                 Button("添加网页") {
-                    editingWebLink = nil
-                    showAddWebLinkSheet = true
+                    webLinkEditMode = .add
                 }
                 .buttonStyle(.bordered)
             }
@@ -712,7 +734,8 @@ struct WebLinkEditorSheet: View {
             image.size = NSSize(width: 48, height: 48)
             return image
         }
-        let defaultIcon = NSImage(systemSymbolName: "globe", accessibilityDescription: nil) ?? NSImage()
+        let defaultIcon =
+            NSImage(systemSymbolName: "globe", accessibilityDescription: nil) ?? NSImage()
         defaultIcon.size = NSSize(width: 48, height: 48)
         return defaultIcon
     }
@@ -748,7 +771,8 @@ struct WebLinkEditorSheet: View {
                                     Image(systemName: "pencil.circle.fill")
                                         .font(.system(size: 20))
                                         .foregroundColor(.accentColor)
-                                        .background(Circle().fill(Color.white).frame(width: 16, height: 16))
+                                        .background(
+                                            Circle().fill(Color.white).frame(width: 16, height: 16))
                                 }
                             }
                             .frame(width: 80, height: 80)
@@ -908,16 +932,18 @@ struct WebLinkEditorSheet: View {
         let newImage = NSImage(size: newSize)
         newImage.lockFocus()
         NSGraphicsContext.current?.imageInterpolation = .high
-        image.draw(in: NSRect(origin: .zero, size: newSize),
-                   from: NSRect(origin: .zero, size: originalSize),
-                   operation: .copy,
-                   fraction: 1.0)
+        image.draw(
+            in: NSRect(origin: .zero, size: newSize),
+            from: NSRect(origin: .zero, size: originalSize),
+            operation: .copy,
+            fraction: 1.0)
         newImage.unlockFocus()
 
         // 转换为 PNG 数据
         guard let tiffData = newImage.tiffRepresentation,
-              let bitmap = NSBitmapImageRep(data: tiffData),
-              let pngData = bitmap.representation(using: .png, properties: [:]) else {
+            let bitmap = NSBitmapImageRep(data: tiffData),
+            let pngData = bitmap.representation(using: .png, properties: [:])
+        else {
             return nil
         }
 

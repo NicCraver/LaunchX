@@ -7,13 +7,20 @@ struct SearchResult: Identifiable, Hashable {
     let path: String
     let icon: NSImage
     let isDirectory: Bool
+    let displayAlias: String?  // 用于显示的别名
+    let isWebLink: Bool  // 是否为网页直达
 
-    init(id: UUID = UUID(), name: String, path: String, icon: NSImage, isDirectory: Bool) {
+    init(
+        id: UUID = UUID(), name: String, path: String, icon: NSImage, isDirectory: Bool,
+        displayAlias: String? = nil, isWebLink: Bool = false
+    ) {
         self.id = id
         self.name = name
         self.path = path
         self.icon = icon
         self.isDirectory = isDirectory
+        self.displayAlias = displayAlias
+        self.isWebLink = isWebLink
     }
 
     static func == (lhs: SearchResult, rhs: SearchResult) -> Bool {

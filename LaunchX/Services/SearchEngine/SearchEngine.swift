@@ -132,7 +132,9 @@ final class SearchEngine: ObservableObject {
                         let info = MemoryIndex.AliasToolInfo(
                             name: tool.name,
                             path: path,
-                            isWebLink: false
+                            isWebLink: false,
+                            iconData: nil,
+                            alias: tool.alias
                         )
                         if hasAlias {
                             aliasTools[tool.alias!] = info
@@ -144,7 +146,9 @@ final class SearchEngine: ObservableObject {
                         let info = MemoryIndex.AliasToolInfo(
                             name: tool.name,
                             path: url,
-                            isWebLink: true
+                            isWebLink: true,
+                            iconData: tool.iconData,
+                            alias: tool.alias
                         )
                         if hasAlias {
                             aliasTools[tool.alias!] = info
@@ -157,7 +161,9 @@ final class SearchEngine: ObservableObject {
                         let info = MemoryIndex.AliasToolInfo(
                             name: tool.name,
                             path: identifier,
-                            isWebLink: false
+                            isWebLink: false,
+                            iconData: nil,
+                            alias: tool.alias
                         )
                         if hasAlias {
                             aliasTools[tool.alias!] = info
@@ -169,7 +175,9 @@ final class SearchEngine: ObservableObject {
                         let info = MemoryIndex.AliasToolInfo(
                             name: tool.name,
                             path: command,
-                            isWebLink: false
+                            isWebLink: false,
+                            iconData: nil,
+                            alias: tool.alias
                         )
                         if hasAlias {
                             aliasTools[tool.alias!] = info

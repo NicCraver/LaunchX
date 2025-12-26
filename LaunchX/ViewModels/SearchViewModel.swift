@@ -56,8 +56,17 @@ class SearchViewModel: ObservableObject {
         guard results.indices.contains(selectedIndex) else { return }
         let item = results[selectedIndex]
 
-        let url = URL(fileURLWithPath: item.path)
-        NSWorkspace.shared.open(url)
+        // 根据类型选择打开方式
+        if item.isWebLink {
+            // 网页直达：path 存储的是 URL
+            if let url = URL(string: item.path) {
+                NSWorkspace.shared.open(url)
+            }
+        } else {
+            // 普通文件/应用：path 存储的是文件路径
+            let url = URL(fileURLWithPath: item.path)
+            NSWorkspace.shared.open(url)
+        }
 
         // Clear state BEFORE hiding panel to avoid SwiftUI updates on hidden window
         searchText = ""

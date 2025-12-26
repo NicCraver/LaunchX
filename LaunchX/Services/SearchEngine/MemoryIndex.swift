@@ -22,6 +22,7 @@ final class MemoryIndex {
         let lowerFileName: String
         let isApp: Bool
         let isDirectory: Bool
+        let isWebLink: Bool  // 是否为网页直达
         let modifiedDate: Date
         let pinyinFull: String?
         let pinyinAcronym: String?
@@ -46,6 +47,7 @@ final class MemoryIndex {
             self.lowerFileName = (record.path as NSString).lastPathComponent.lowercased()
             self.isApp = record.isApp
             self.isDirectory = record.isDirectory
+            self.isWebLink = false  // 文件系统项目不是网页直达
             self.modifiedDate = record.modifiedDate ?? Date.distantPast
             self.pinyinFull = record.pinyinFull
             self.pinyinAcronym = record.pinyinAcronym
@@ -55,25 +57,36 @@ final class MemoryIndex {
         }
 
         /// 用于创建网页直达等非文件系统项目
-        init(name: String, path: String, isWebLink: Bool) {
+        init(
+            name: String, path: String, isWebLink: Bool, iconData: Data? = nil, alias: String? = nil
+        ) {
             self.name = name
             self.lowerName = name.lowercased()
             self.path = path
             self.lowerFileName = name.lowercased()
             self.isApp = false
             self.isDirectory = false
+            self.isWebLink = isWebLink  // 存储网页直达标记
             self.modifiedDate = Date()
             self.pinyinFull = nil
             self.pinyinAcronym = nil
             self.wordAcronym = SearchItem.generateWordAcronym(from: name)
+            self._displayAlias = alias
 
-            // 为网页直达设置特殊图标
-            if isWebLink {
+            // 设置图标：优先使用自定义图标
+            if let data = iconData, let customIcon = NSImage(data: data) {
+                customIcon.size = NSSize(width: 32, height: 32)
+                self._icon = customIcon
+            } else if isWebLink {
                 self._icon = NSImage(
                     systemSymbolName: "globe", accessibilityDescription: "Web Link")
                 self._icon?.size = NSSize(width: 32, height: 32)
             }
         }
+
+        // 存储别名（用于显示）
+        private var _displayAlias: String?
+        var displayAlias: String? { _displayAlias }
 
         /// Generate acronym from first letter of each word
         /// "Visual Studio Code" -> "vsc", "Activity Monitor" -> "am"
@@ -147,7 +160,9 @@ final class MemoryIndex {
                 name: name,
                 path: path,
                 icon: icon,
-                isDirectory: isDirectory
+                isDirectory: isDirectory,
+                displayAlias: displayAlias,
+                isWebLink: path.hasPrefix("http://") || path.hasPrefix("https://")
             )
         }
     }
@@ -390,8 +405,16 @@ final class MemoryIndex {
             }
         }
 
-        // Sort apps
-        matchedApps.sort { lhs, rhs in
+        // Sort apps (工具类优先，然后按匹配类型，最后按名称长度)
+        matchedApps.sort {
+            (
+                lhs: (item: SearchItem, matchType: SearchItem.MatchType),
+                rhs: (item: SearchItem, matchType: SearchItem.MatchType)
+            ) in
+            // 工具类（网页直达等）优先排在最前面
+            if lhs.item.isWebLink != rhs.item.isWebLink {
+                return lhs.item.isWebLink
+            }
             if lhs.matchType != rhs.matchType {
                 return lhs.matchType < rhs.matchType
             }
@@ -601,6 +624,18 @@ final class MemoryIndex {
         let name: String
         let path: String  // 对于网页是 URL，对于应用是路径
         let isWebLink: Bool
+        let iconData: Data?  // 自定义图标数据
+        let alias: String?  // 别名（用于显示）
+
+        init(
+            name: String, path: String, isWebLink: Bool, iconData: Data? = nil, alias: String? = nil
+        ) {
+            self.name = name
+            self.path = path
+            self.isWebLink = isWebLink
+            self.iconData = iconData
+            self.alias = alias
+        }
     }
 
     /// 别名工具映射（alias -> AliasToolInfo）
@@ -649,7 +684,9 @@ final class MemoryIndex {
                 let item = SearchItem(
                     name: toolInfo.name,
                     path: toolInfo.path,
-                    isWebLink: toolInfo.isWebLink
+                    isWebLink: toolInfo.isWebLink,
+                    iconData: toolInfo.iconData,
+                    alias: toolInfo.alias
                 )
                 self.tools.append(item)
                 addedPaths.insert(toolInfo.path)
@@ -681,7 +718,9 @@ final class MemoryIndex {
                 let item = SearchItem(
                     name: toolInfo.name,
                     path: toolInfo.path,
-                    isWebLink: toolInfo.isWebLink
+                    isWebLink: toolInfo.isWebLink,
+                    iconData: toolInfo.iconData,
+                    alias: toolInfo.alias
                 )
                 self.tools.append(item)
                 addedPaths.insert(toolInfo.path)
@@ -705,7 +744,9 @@ final class MemoryIndex {
                 let item = SearchItem(
                     name: toolInfo.name,
                     path: toolInfo.path,
-                    isWebLink: toolInfo.isWebLink
+                    isWebLink: toolInfo.isWebLink,
+                    iconData: toolInfo.iconData,
+                    alias: toolInfo.alias
                 )
                 insertIntoTrie(aliasTrie, key: alias, item: item)
             }
@@ -727,7 +768,9 @@ final class MemoryIndex {
                 let item = SearchItem(
                     name: toolInfo.name,
                     path: toolInfo.path,
-                    isWebLink: toolInfo.isWebLink
+                    isWebLink: toolInfo.isWebLink,
+                    iconData: toolInfo.iconData,
+                    alias: toolInfo.alias
                 )
                 results.append(item)
             }

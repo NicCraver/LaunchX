@@ -932,6 +932,15 @@ class SearchPanelViewController: NSViewController {
             return
         }
 
+        // 网页直达：path 存储的是 URL
+        if item.isWebLink {
+            if let url = URL(string: item.path) {
+                NSWorkspace.shared.open(url)
+            }
+            PanelManager.shared.hidePanel()
+            return
+        }
+
         // 普通模式：使用默认应用打开
         let url = URL(fileURLWithPath: item.path)
         NSWorkspace.shared.open(url)
@@ -1107,12 +1116,20 @@ class ResultCellView: NSView {
 
     func configure(with item: SearchResult, isSelected: Bool, hideArrow: Bool = false) {
         iconView.image = item.icon
-        nameLabel.stringValue = item.name
 
-        // App 只显示名称（垂直居中、字体大），文件和文件夹显示路径
+        // 显示名称，如果有别名则添加别名标签
+        if let alias = item.displayAlias, !alias.isEmpty {
+            nameLabel.stringValue = "\(item.name) [\(alias)]"
+        } else {
+            nameLabel.stringValue = item.name
+        }
+
+        // App 和网页直达只显示名称（垂直居中、字体大），文件和文件夹显示路径
         let isApp = item.path.hasSuffix(".app")
-        pathLabel.isHidden = isApp
-        pathLabel.stringValue = isApp ? "" : item.path
+        let isWebLink = item.isWebLink
+        let showPathLabel = !isApp && !isWebLink
+        pathLabel.isHidden = !showPathLabel
+        pathLabel.stringValue = showPathLabel ? item.path : ""
 
         // 检测是否为支持的 IDE 或文件夹，显示箭头指示器
         // hideArrow 为 true 时强制隐藏（如文件夹打开模式下）
@@ -1130,8 +1147,8 @@ class ResultCellView: NSView {
             nameLabelTrailingToEdge.isActive = true
         }
 
-        // 切换布局：App 垂直居中，其他顶部对齐
-        if isApp {
+        // 切换布局：App 和网页直达垂直居中，其他顶部对齐
+        if isApp || isWebLink {
             nameLabel.font = .systemFont(ofSize: 14, weight: .medium)
             nameLabelTopConstraint.isActive = false
             nameLabelCenterYConstraint.isActive = true
