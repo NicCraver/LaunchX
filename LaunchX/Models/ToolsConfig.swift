@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 /// 工具配置管理
@@ -36,13 +37,21 @@ struct ToolsConfig: Codable {
 
     private static let configKey = "ToolsConfig"
     private static let migrationKey = "ToolsConfigMigrated"
+    private static let defaultWebLinksAddedKey = "DefaultWebLinksAdded"
 
     /// 从 UserDefaults 加载配置（含自动迁移）
     static func load() -> ToolsConfig {
         // 1. 尝试加载新格式
         if let data = UserDefaults.standard.data(forKey: configKey),
-            let config = try? JSONDecoder().decode(ToolsConfig.self, from: data)
+            var config = try? JSONDecoder().decode(ToolsConfig.self, from: data)
         {
+            // 检查是否需要添加默认网页直达
+            if !UserDefaults.standard.bool(forKey: defaultWebLinksAddedKey) {
+                config.addDefaultWebLinksIfNeeded()
+                // 先设置标记，避免循环
+                UserDefaults.standard.set(true, forKey: defaultWebLinksAddedKey)
+                config.save()
+            }
             return config
         }
 
@@ -50,16 +59,46 @@ struct ToolsConfig: Codable {
         if !UserDefaults.standard.bool(forKey: migrationKey),
             let migrated = migrateFromCustomItemsConfig()
         {
-            migrated.save()
+            var config = migrated
+            // 迁移后也添加默认网页直达
+            config.addDefaultWebLinksIfNeeded()
+            // 先设置标记，避免循环
             UserDefaults.standard.set(true, forKey: migrationKey)
-            return migrated
+            UserDefaults.standard.set(true, forKey: defaultWebLinksAddedKey)
+            config.save()
+            return config
         }
 
         // 3. 返回带有默认网页直达的配置
         var config = ToolsConfig()
         config.tools = defaultWebLinks()
+        // 先设置标记，避免循环
+        UserDefaults.standard.set(true, forKey: defaultWebLinksAddedKey)
         config.save()
         return config
+    }
+
+    /// 添加默认网页直达（如果尚未添加）
+    private mutating func addDefaultWebLinksIfNeeded() {
+        let defaults = ToolsConfig.defaultWebLinks()
+        let existingUrls = Set(tools.compactMap { $0.url })
+
+        for webLink in defaults {
+            // 只添加 URL 不存在的
+            if let url = webLink.url, !existingUrls.contains(url) {
+                tools.append(webLink)
+            }
+        }
+    }
+
+    /// 从 Asset Catalog 加载图标数据
+    private static func loadIconData(named name: String) -> Data? {
+        guard let image = NSImage(named: name) else { return nil }
+        guard let tiffData = image.tiffRepresentation,
+            let bitmap = NSBitmapImageRep(data: tiffData),
+            let pngData = bitmap.representation(using: .png, properties: [:])
+        else { return nil }
+        return pngData
     }
 
     /// 默认网页直达列表
@@ -69,60 +108,70 @@ struct ToolsConfig: Codable {
                 name: "Google",
                 url: "https://www.google.com/search?q={query}",
                 alias: "go",
+                iconData: loadIconData(named: "WebLink_google"),
                 showInSearchPanel: true
             ),
             ToolItem.webLink(
                 name: "Bing",
                 url: "https://cn.bing.com/search?q={query}&search=&form=QBLH",
                 alias: "bi",
+                iconData: loadIconData(named: "WebLink_bing"),
                 showInSearchPanel: true
             ),
             ToolItem.webLink(
                 name: "GitHub",
                 url: "https://www.github.com/search?q={query}",
                 alias: "gh",
+                iconData: loadIconData(named: "WebLink_github"),
                 showInSearchPanel: true
             ),
             ToolItem.webLink(
                 name: "DeepSeek",
                 url: "https://chat.deepseek.com/",
                 alias: "deep",
+                iconData: loadIconData(named: "WebLink_deepseek"),
                 showInSearchPanel: false
             ),
             ToolItem.webLink(
                 name: "哔哩哔哩",
                 url: "https://search.bilibili.com/all?keyword={query}",
                 alias: "bl",
+                iconData: loadIconData(named: "WebLink_bilibili"),
                 showInSearchPanel: true
             ),
             ToolItem.webLink(
                 name: "YouTube",
                 url: "https://www.youtube.com/results?search_query={query}",
                 alias: "yt",
+                iconData: loadIconData(named: "WebLink_youtube"),
                 showInSearchPanel: true
             ),
             ToolItem.webLink(
                 name: "Twitter",
                 url: "https://twitter.com/search?q={query}",
                 alias: "tt",
+                iconData: loadIconData(named: "WebLink_twitter"),
                 showInSearchPanel: false
             ),
             ToolItem.webLink(
                 name: "微博",
                 url: "https://s.weibo.com/weibo/{query}",
                 alias: "wb",
+                iconData: loadIconData(named: "WebLink_weibo"),
                 showInSearchPanel: false
             ),
             ToolItem.webLink(
                 name: "V2EX",
-                url: "https://www.sov2ex.com/?q={query}",
+                url: "https://www.v2ex.com/?q={query}",
                 alias: "v2",
+                iconData: loadIconData(named: "WebLink_v2ex"),
                 showInSearchPanel: false
             ),
             ToolItem.webLink(
                 name: "天眼查",
                 url: "https://www.tianyancha.com/search?key={query}",
                 alias: "tyc",
+                iconData: loadIconData(named: "WebLink_tianyancha"),
                 showInSearchPanel: false
             ),
         ]
