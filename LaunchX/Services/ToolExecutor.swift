@@ -69,8 +69,25 @@ class ToolExecutor {
             normalizedURL = "https://" + normalizedURL
         }
 
-        guard let url = URL(string: normalizedURL) else {
-            print("[ToolExecutor] Invalid URL: \(normalizedURL)")
+        // 处理 {query} 占位符
+        var finalUrl = normalizedURL
+        if tool.supportsQueryExtension {
+            // 如果 URL 包含 {query}，通过快捷键直接打开时：
+            // 1. 优先使用默认 URL
+            // 2. 否则去掉 {query} 占位符
+            if let defaultUrl = tool.defaultUrl, !defaultUrl.isEmpty {
+                finalUrl = defaultUrl
+                // 确保默认 URL 也有协议前缀
+                if !finalUrl.hasPrefix("http://") && !finalUrl.hasPrefix("https://") {
+                    finalUrl = "https://" + finalUrl
+                }
+            } else {
+                finalUrl = normalizedURL.replacingOccurrences(of: "{query}", with: "")
+            }
+        }
+
+        guard let url = URL(string: finalUrl) else {
+            print("[ToolExecutor] Invalid URL: \(finalUrl)")
             return
         }
 
