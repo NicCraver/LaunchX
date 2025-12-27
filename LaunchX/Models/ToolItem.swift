@@ -62,6 +62,7 @@ struct ToolItem: Codable, Identifiable, Equatable, Hashable {
     var url: String?
     var defaultUrl: String?  // 默认 URL（用户未输入 query 时使用）
     var iconData: Data?  // 自定义图标数据（PNG 格式）
+    var showInSearchPanel: Bool?  // 是否在搜索面板中默认显示（仅支持 query 的网页直达有效）
 
     // Utility 特有属性 (预留)
     var extensionIdentifier: String?
@@ -84,6 +85,7 @@ struct ToolItem: Codable, Identifiable, Equatable, Hashable {
         url: String? = nil,
         defaultUrl: String? = nil,
         iconData: Data? = nil,
+        showInSearchPanel: Bool? = nil,
         extensionIdentifier: String? = nil,
         command: String? = nil
     ) {
@@ -98,6 +100,7 @@ struct ToolItem: Codable, Identifiable, Equatable, Hashable {
         self.url = url
         self.defaultUrl = defaultUrl
         self.iconData = iconData
+        self.showInSearchPanel = showInSearchPanel
         self.extensionIdentifier = extensionIdentifier
         self.command = command
     }
@@ -120,7 +123,7 @@ struct ToolItem: Codable, Identifiable, Equatable, Hashable {
     /// 从网页 URL 创建
     static func webLink(
         name: String, url: String, defaultUrl: String? = nil, alias: String? = nil,
-        iconData: Data? = nil
+        iconData: Data? = nil, showInSearchPanel: Bool? = nil
     )
         -> ToolItem
     {
@@ -130,7 +133,8 @@ struct ToolItem: Codable, Identifiable, Equatable, Hashable {
             alias: alias,
             url: url,
             defaultUrl: defaultUrl,
-            iconData: iconData
+            iconData: iconData,
+            showInSearchPanel: showInSearchPanel
         )
     }
 

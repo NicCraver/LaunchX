@@ -724,6 +724,7 @@ struct WebLinkEditorSheet: View {
     @State private var url: String = ""
     @State private var defaultUrl: String = ""  // 默认 URL（用户未输入 query 时使用）
     @State private var alias: String = ""
+    @State private var showInSearchPanel: Bool = false  // 是否在搜索面板中显示
     @State private var urlError: String?
     @State private var iconData: Data?
     @State private var iconError: String?
@@ -866,6 +867,17 @@ struct WebLinkEditorSheet: View {
                     if supportsQuery {
                         TextField("未输入关键词时跳转到此 URL（可选）", text: $defaultUrl)
                             .textFieldStyle(.roundedBorder)
+
+                        // 显示在搜索面板开关
+                        HStack {
+                            Toggle(isOn: $showInSearchPanel) {
+                                Text("显示在搜索面板")
+                            }
+                            .toggleStyle(.switch)
+
+                            Spacer()
+                        }
+                        .help("开启后，搜索时会在结果中显示此网页直达，可直接用搜索内容作为关键词")
                     }
 
                     // 别名
@@ -911,6 +923,7 @@ struct WebLinkEditorSheet: View {
                 defaultUrl = tool.defaultUrl ?? ""
                 alias = tool.alias ?? ""
                 iconData = tool.iconData
+                showInSearchPanel = tool.showInSearchPanel ?? false
             }
         }
     }
@@ -1121,12 +1134,15 @@ struct WebLinkEditorSheet: View {
             tool.defaultUrl = normalizedDefaultUrl
             tool.alias = alias.isEmpty ? nil : alias
             tool.iconData = iconData
+            // 只有支持 query 的才保存 showInSearchPanel
+            tool.showInSearchPanel = supportsQuery ? showInSearchPanel : nil
         } else {
             tool = ToolItem.webLink(
                 name: name,
                 url: normalizedURL,
                 alias: alias.isEmpty ? nil : alias,
-                iconData: iconData
+                iconData: iconData,
+                showInSearchPanel: supportsQuery ? showInSearchPanel : nil
             )
             tool.defaultUrl = normalizedDefaultUrl
         }

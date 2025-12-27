@@ -126,6 +126,19 @@ class SearchPanelViewController: NSViewController {
             name: .enterWebLinkQueryModeDirectly,
             object: nil
         )
+
+        // 监听工具配置变化，刷新默认搜索缓存
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleToolsConfigDidChange),
+            name: .toolsConfigDidChange,
+            object: nil
+        )
+    }
+
+    /// 处理工具配置变化
+    @objc private func handleToolsConfigDidChange() {
+        refreshDefaultSearchWebLinksCache()
     }
 
     /// 处理直接进入 IDE 模式的通知
@@ -464,6 +477,24 @@ class SearchPanelViewController: NSViewController {
 
     // MARK: - Search
 
+    /// 缓存的默认搜索网页直达列表
+    private var cachedDefaultSearchWebLinks: [SearchResult]?
+
+    /// 获取默认搜索网页直达（带缓存）
+    private func getDefaultSearchWebLinks() -> [SearchResult] {
+        if let cached = cachedDefaultSearchWebLinks {
+            return cached
+        }
+        let links = searchEngine.getDefaultSearchWebLinks()
+        cachedDefaultSearchWebLinks = links
+        return links
+    }
+
+    /// 刷新默认搜索网页直达缓存
+    private func refreshDefaultSearchWebLinksCache() {
+        cachedDefaultSearchWebLinks = nil
+    }
+
     private func performSearch(_ query: String) {
         guard !query.isEmpty else {
             selectedIndex = 0
@@ -486,7 +517,20 @@ class SearchPanelViewController: NSViewController {
 
         isShowingRecents = false
         let searchResults = searchEngine.searchSync(text: query)
-        results = searchResults
+        let defaultSearchLinks = getDefaultSearchWebLinks()
+
+        // 过滤掉已经在搜索结果中的默认搜索（避免重复显示）
+        let existingPaths = Set(searchResults.map { $0.path })
+        let filteredDefaultLinks = defaultSearchLinks.filter { !existingPaths.contains($0.path) }
+
+        if searchResults.isEmpty {
+            // 没有搜索结果时，默认搜索显示在最上面
+            results = filteredDefaultLinks
+        } else {
+            // 有搜索结果时，默认搜索显示在最后面
+            results = searchResults + filteredDefaultLinks
+        }
+
         selectedIndex = results.isEmpty ? 0 : 0
         tableView.reloadData()
         updateVisibility()
@@ -1105,11 +1149,20 @@ class SearchPanelViewController: NSViewController {
 
             // 如果支持 query 扩展，需要处理 {query} 占位符
             if item.supportsQueryExtension {
-                if let defaultUrl = item.defaultUrl, !defaultUrl.isEmpty {
-                    // 有默认 URL，直接跳转到默认 URL
+                // 获取当前搜索框中的文本作为查询
+                let currentQuery = searchField.stringValue.trimmingCharacters(in: .whitespaces)
+
+                if !currentQuery.isEmpty {
+                    // 有搜索文本，用它替换 {query} 占位符
+                    let encodedQuery =
+                        currentQuery.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)
+                        ?? currentQuery
+                    finalUrl = item.path.replacingOccurrences(of: "{query}", with: encodedQuery)
+                } else if let defaultUrl = item.defaultUrl, !defaultUrl.isEmpty {
+                    // 没有搜索文本但有默认 URL，直接跳转到默认 URL
                     finalUrl = defaultUrl
                 } else {
-                    // 没有默认 URL，去掉 {query} 占位符
+                    // 没有搜索文本也没有默认 URL，去掉 {query} 占位符
                     finalUrl = item.path.replacingOccurrences(of: "{query}", with: "")
                 }
             }

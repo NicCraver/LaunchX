@@ -450,4 +450,48 @@ final class SearchEngine: ObservableObject {
 
         return items.map { $0.toSearchResult() }
     }
+
+    // MARK: - 默认搜索网页直达
+
+    /// 获取设置为默认显示在搜索面板的网页直达列表
+    /// 仅返回已启用、支持 query 扩展且设置了 showInSearchPanel 的网页直达
+    func getDefaultSearchWebLinks() -> [SearchResult] {
+        let toolsConfig = ToolsConfig.load()
+        var results: [SearchResult] = []
+
+        for tool in toolsConfig.enabledTools {
+            // 只处理网页直达
+            guard tool.type == .webLink,
+                let url = tool.url,
+                tool.supportsQueryExtension,
+                tool.showInSearchPanel == true
+            else { continue }
+
+            // 创建图标
+            var icon: NSImage
+            if let iconData = tool.iconData, let customIcon = NSImage(data: iconData) {
+                customIcon.size = NSSize(width: 32, height: 32)
+                icon = customIcon
+            } else {
+                icon =
+                    NSImage(systemSymbolName: "globe", accessibilityDescription: "Web Link")
+                    ?? NSImage()
+                icon.size = NSSize(width: 32, height: 32)
+            }
+
+            let result = SearchResult(
+                name: tool.name,
+                path: url,
+                icon: icon,
+                isDirectory: false,
+                displayAlias: tool.alias,
+                isWebLink: true,
+                supportsQueryExtension: true,
+                defaultUrl: tool.defaultUrl
+            )
+            results.append(result)
+        }
+
+        return results
+    }
 }

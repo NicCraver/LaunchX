@@ -55,8 +55,77 @@ struct ToolsConfig: Codable {
             return migrated
         }
 
-        // 3. 返回空配置
-        return ToolsConfig()
+        // 3. 返回带有默认网页直达的配置
+        var config = ToolsConfig()
+        config.tools = defaultWebLinks()
+        config.save()
+        return config
+    }
+
+    /// 默认网页直达列表
+    private static func defaultWebLinks() -> [ToolItem] {
+        return [
+            ToolItem.webLink(
+                name: "Google",
+                url: "https://www.google.com/search?q={query}",
+                alias: "go",
+                showInSearchPanel: true
+            ),
+            ToolItem.webLink(
+                name: "Bing",
+                url: "https://cn.bing.com/search?q={query}&search=&form=QBLH",
+                alias: "bi",
+                showInSearchPanel: true
+            ),
+            ToolItem.webLink(
+                name: "GitHub",
+                url: "https://www.github.com/search?q={query}",
+                alias: "gh",
+                showInSearchPanel: true
+            ),
+            ToolItem.webLink(
+                name: "DeepSeek",
+                url: "https://chat.deepseek.com/",
+                alias: "deep",
+                showInSearchPanel: false
+            ),
+            ToolItem.webLink(
+                name: "哔哩哔哩",
+                url: "https://search.bilibili.com/all?keyword={query}",
+                alias: "bl",
+                showInSearchPanel: true
+            ),
+            ToolItem.webLink(
+                name: "YouTube",
+                url: "https://www.youtube.com/results?search_query={query}",
+                alias: "yt",
+                showInSearchPanel: true
+            ),
+            ToolItem.webLink(
+                name: "Twitter",
+                url: "https://twitter.com/search?q={query}",
+                alias: "tt",
+                showInSearchPanel: false
+            ),
+            ToolItem.webLink(
+                name: "微博",
+                url: "https://s.weibo.com/weibo/{query}",
+                alias: "wb",
+                showInSearchPanel: false
+            ),
+            ToolItem.webLink(
+                name: "V2EX",
+                url: "https://www.sov2ex.com/?q={query}",
+                alias: "v2",
+                showInSearchPanel: false
+            ),
+            ToolItem.webLink(
+                name: "天眼查",
+                url: "https://www.tianyancha.com/search?key={query}",
+                alias: "tyc",
+                showInSearchPanel: false
+            ),
+        ]
     }
 
     /// 保存配置到 UserDefaults
