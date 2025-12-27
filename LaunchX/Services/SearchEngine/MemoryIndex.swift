@@ -23,6 +23,8 @@ final class MemoryIndex {
         let isApp: Bool
         let isDirectory: Bool
         let isWebLink: Bool  // 是否为网页直达
+        let supportsQuery: Bool  // 是否支持 query 扩展
+        let defaultUrl: String?  // 默认 URL
         let modifiedDate: Date
         let pinyinFull: String?
         let pinyinAcronym: String?
@@ -48,6 +50,8 @@ final class MemoryIndex {
             self.isApp = record.isApp
             self.isDirectory = record.isDirectory
             self.isWebLink = false  // 文件系统项目不是网页直达
+            self.supportsQuery = false
+            self.defaultUrl = nil
             self.modifiedDate = record.modifiedDate ?? Date.distantPast
             self.pinyinFull = record.pinyinFull
             self.pinyinAcronym = record.pinyinAcronym
@@ -58,7 +62,9 @@ final class MemoryIndex {
 
         /// 用于创建网页直达等非文件系统项目
         init(
-            name: String, path: String, isWebLink: Bool, iconData: Data? = nil, alias: String? = nil
+            name: String, path: String, isWebLink: Bool, iconData: Data? = nil,
+            alias: String? = nil,
+            supportsQuery: Bool = false, defaultUrl: String? = nil
         ) {
             self.name = name
             self.lowerName = name.lowercased()
@@ -67,6 +73,8 @@ final class MemoryIndex {
             self.isApp = false
             self.isDirectory = false
             self.isWebLink = isWebLink  // 存储网页直达标记
+            self.supportsQuery = supportsQuery
+            self.defaultUrl = defaultUrl
             self.modifiedDate = Date()
             self.pinyinFull = nil
             self.pinyinAcronym = nil
@@ -162,7 +170,9 @@ final class MemoryIndex {
                 icon: icon,
                 isDirectory: isDirectory,
                 displayAlias: displayAlias,
-                isWebLink: path.hasPrefix("http://") || path.hasPrefix("https://")
+                isWebLink: isWebLink,
+                supportsQueryExtension: supportsQuery,
+                defaultUrl: defaultUrl
             )
         }
     }
@@ -628,15 +638,21 @@ final class MemoryIndex {
         let isWebLink: Bool
         let iconData: Data?  // 自定义图标数据
         let alias: String?  // 别名（用于显示）
+        let supportsQuery: Bool  // 是否支持 query 扩展
+        let defaultUrl: String?  // 默认 URL
 
         init(
-            name: String, path: String, isWebLink: Bool, iconData: Data? = nil, alias: String? = nil
+            name: String, path: String, isWebLink: Bool, iconData: Data? = nil,
+            alias: String? = nil,
+            supportsQuery: Bool = false, defaultUrl: String? = nil
         ) {
             self.name = name
             self.path = path
             self.isWebLink = isWebLink
             self.iconData = iconData
             self.alias = alias
+            self.supportsQuery = supportsQuery
+            self.defaultUrl = defaultUrl
         }
     }
 
@@ -688,7 +704,9 @@ final class MemoryIndex {
                     path: toolInfo.path,
                     isWebLink: toolInfo.isWebLink,
                     iconData: toolInfo.iconData,
-                    alias: toolInfo.alias
+                    alias: toolInfo.alias,
+                    supportsQuery: toolInfo.supportsQuery,
+                    defaultUrl: toolInfo.defaultUrl
                 )
                 self.tools.append(item)
                 addedPaths.insert(toolInfo.path)
@@ -722,7 +740,9 @@ final class MemoryIndex {
                     path: toolInfo.path,
                     isWebLink: toolInfo.isWebLink,
                     iconData: toolInfo.iconData,
-                    alias: toolInfo.alias
+                    alias: toolInfo.alias,
+                    supportsQuery: toolInfo.supportsQuery,
+                    defaultUrl: toolInfo.defaultUrl
                 )
                 self.tools.append(item)
                 addedPaths.insert(toolInfo.path)
@@ -748,7 +768,9 @@ final class MemoryIndex {
                     path: toolInfo.path,
                     isWebLink: toolInfo.isWebLink,
                     iconData: toolInfo.iconData,
-                    alias: toolInfo.alias
+                    alias: toolInfo.alias,
+                    supportsQuery: toolInfo.supportsQuery,
+                    defaultUrl: toolInfo.defaultUrl
                 )
                 insertIntoTrie(aliasTrie, key: alias, item: item)
             }
@@ -772,7 +794,9 @@ final class MemoryIndex {
                     path: toolInfo.path,
                     isWebLink: toolInfo.isWebLink,
                     iconData: toolInfo.iconData,
-                    alias: toolInfo.alias
+                    alias: toolInfo.alias,
+                    supportsQuery: toolInfo.supportsQuery,
+                    defaultUrl: toolInfo.defaultUrl
                 )
                 results.append(item)
             }

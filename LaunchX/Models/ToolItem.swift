@@ -60,6 +60,7 @@ struct ToolItem: Codable, Identifiable, Equatable, Hashable {
 
     // WebLink 特有属性
     var url: String?
+    var defaultUrl: String?  // 默认 URL（用户未输入 query 时使用）
     var iconData: Data?  // 自定义图标数据（PNG 格式）
 
     // Utility 特有属性 (预留)
@@ -81,6 +82,7 @@ struct ToolItem: Codable, Identifiable, Equatable, Hashable {
         path: String? = nil,
         extensionHotKey: HotKeyConfig? = nil,
         url: String? = nil,
+        defaultUrl: String? = nil,
         iconData: Data? = nil,
         extensionIdentifier: String? = nil,
         command: String? = nil
@@ -94,6 +96,7 @@ struct ToolItem: Codable, Identifiable, Equatable, Hashable {
         self.path = path
         self.extensionHotKey = extensionHotKey
         self.url = url
+        self.defaultUrl = defaultUrl
         self.iconData = iconData
         self.extensionIdentifier = extensionIdentifier
         self.command = command
@@ -115,7 +118,10 @@ struct ToolItem: Codable, Identifiable, Equatable, Hashable {
     }
 
     /// 从网页 URL 创建
-    static func webLink(name: String, url: String, alias: String? = nil, iconData: Data? = nil)
+    static func webLink(
+        name: String, url: String, defaultUrl: String? = nil, alias: String? = nil,
+        iconData: Data? = nil
+    )
         -> ToolItem
     {
         ToolItem(
@@ -123,6 +129,7 @@ struct ToolItem: Codable, Identifiable, Equatable, Hashable {
             name: name,
             alias: alias,
             url: url,
+            defaultUrl: defaultUrl,
             iconData: iconData
         )
     }
@@ -176,6 +183,12 @@ struct ToolItem: Codable, Identifiable, Equatable, Hashable {
         var isDir: ObjCBool = false
         return FileManager.default.fileExists(atPath: path, isDirectory: &isDir) && isDir.boolValue
             && !path.hasSuffix(".app")
+    }
+
+    /// 是否支持 Query 扩展（URL 中包含 {query} 占位符）
+    var supportsQueryExtension: Bool {
+        guard type == .webLink, let url = url else { return false }
+        return url.contains("{query}")
     }
 
     /// 获取图标

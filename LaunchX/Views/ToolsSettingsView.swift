@@ -722,6 +722,7 @@ struct WebLinkEditorSheet: View {
 
     @State private var name: String = ""
     @State private var url: String = ""
+    @State private var defaultUrl: String = ""  // 默认 URL（用户未输入 query 时使用）
     @State private var alias: String = ""
     @State private var urlError: String?
     @State private var iconData: Data?
@@ -733,6 +734,11 @@ struct WebLinkEditorSheet: View {
 
     private var isValid: Bool {
         !name.isEmpty && !url.isEmpty && isValidURL(url)
+    }
+
+    /// URL 是否包含 {query} 占位符
+    private var supportsQuery: Bool {
+        url.contains("{query}")
     }
 
     /// 当前显示的图标
@@ -820,10 +826,10 @@ struct WebLinkEditorSheet: View {
 
                     // URL
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("URL")
+                        Text("URL（支持 {query} 占位符）")
                             .font(.caption)
                             .foregroundColor(.secondary)
-                        TextField("https://github.com", text: $url)
+                        TextField("https://github.com/search?q={query}", text: $url)
                             .textFieldStyle(.roundedBorder)
                             .onChange(of: url) { _, newValue in
                                 validateURL(newValue)
@@ -833,6 +839,12 @@ struct WebLinkEditorSheet: View {
                                 .font(.caption)
                                 .foregroundColor(.red)
                         }
+                    }
+
+                    // 默认 URL（仅当主 URL 包含 {query} 时显示）
+                    if supportsQuery {
+                        TextField("未输入关键词时跳转到此 URL（可选）", text: $defaultUrl)
+                            .textFieldStyle(.roundedBorder)
                     }
 
                     // 别名
@@ -875,6 +887,7 @@ struct WebLinkEditorSheet: View {
             if let tool = existingTool {
                 name = tool.name
                 url = tool.url ?? ""
+                defaultUrl = tool.defaultUrl ?? ""
                 alias = tool.alias ?? ""
                 iconData = tool.iconData
             }
@@ -993,11 +1006,22 @@ struct WebLinkEditorSheet: View {
             normalizedURL = "https://" + normalizedURL
         }
 
+        // 处理默认 URL
+        var normalizedDefaultUrl: String? = nil
+        if supportsQuery && !defaultUrl.isEmpty {
+            var tempUrl = defaultUrl
+            if !tempUrl.hasPrefix("http://") && !tempUrl.hasPrefix("https://") {
+                tempUrl = "https://" + tempUrl
+            }
+            normalizedDefaultUrl = tempUrl
+        }
+
         var tool: ToolItem
         if let existing = existingTool {
             tool = existing
             tool.name = name
             tool.url = normalizedURL
+            tool.defaultUrl = normalizedDefaultUrl
             tool.alias = alias.isEmpty ? nil : alias
             tool.iconData = iconData
         } else {
@@ -1007,6 +1031,7 @@ struct WebLinkEditorSheet: View {
                 alias: alias.isEmpty ? nil : alias,
                 iconData: iconData
             )
+            tool.defaultUrl = normalizedDefaultUrl
         }
 
         onSave(tool)

@@ -35,6 +35,10 @@ class SearchPanelViewController: NSViewController {
     private var currentFolder: SearchResult? = nil
     private var folderOpeners: [IDERecentProjectsService.FolderOpenerApp] = []
 
+    // 网页直达 Query 模式状态
+    private var isInWebLinkQueryMode: Bool = false
+    private var currentWebLinkResult: SearchResult? = nil
+
     // MARK: - Constants
     private let rowHeight: CGFloat = 44
     private let headerHeight: CGFloat = 80
@@ -496,20 +500,24 @@ class SearchPanelViewController: NSViewController {
         }
 
         switch Int(event.keyCode) {
-        case 51:  // Delete - IDE 项目模式或文件夹打开模式下，输入框为空时退出
+        case 51:  // Delete - IDE 项目模式、文件夹打开模式或网页直达 Query 模式下，输入框为空时退出
             if isComposing { return event }
-            if (isInIDEProjectMode || isInFolderOpenMode) && searchField.stringValue.isEmpty {
+            if (isInIDEProjectMode || isInFolderOpenMode || isInWebLinkQueryMode)
+                && searchField.stringValue.isEmpty
+            {
                 if isInIDEProjectMode {
                     exitIDEProjectMode()
-                } else {
+                } else if isInFolderOpenMode {
                     exitFolderOpenMode()
+                } else {
+                    exitWebLinkQueryMode()
                 }
                 return nil
             }
             return event
-        case 48:  // Tab - 进入 IDE 项目模式或文件夹打开模式
+        case 48:  // Tab - 进入 IDE 项目模式、文件夹打开模式或网页直达 Query 模式
             if isComposing { return event }
-            if !isInIDEProjectMode && !isInFolderOpenMode {
+            if !isInIDEProjectMode && !isInFolderOpenMode && !isInWebLinkQueryMode {
                 // 检查当前选中项是否有扩展功能
                 guard results.indices.contains(selectedIndex) else {
                     // 没有选中任何项目，忽略 Tab 键
@@ -538,6 +546,13 @@ class SearchPanelViewController: NSViewController {
                         if tryEnterFolderOpenMode() {
                             return nil
                         }
+                    }
+                }
+
+                // 检查是否为网页直达且支持 query 扩展
+                if item.isWebLink && item.supportsQueryExtension {
+                    if tryEnterWebLinkQueryMode(for: item) {
+                        return nil
                     }
                 }
 
@@ -793,6 +808,87 @@ class SearchPanelViewController: NSViewController {
         updateVisibility()
     }
 
+    // MARK: - 网页直达 Query 模式
+
+    /// 尝试进入网页直达 Query 模式
+    private func tryEnterWebLinkQueryMode(for item: SearchResult) -> Bool {
+        guard item.supportsQueryExtension else { return false }
+
+        isInWebLinkQueryMode = true
+        currentWebLinkResult = item
+
+        // 复用 IDE 模式的 UI
+        updateWebLinkQueryModeUI()
+
+        // 清空搜索框
+        searchField.stringValue = ""
+        setPlaceholder("请输入关键词搜索...")
+
+        // 清空结果列表（query 模式下不显示搜索结果）
+        results = []
+        tableView.reloadData()
+        updateVisibility()
+
+        return true
+    }
+
+    /// 退出网页直达 Query 模式
+    private func exitWebLinkQueryMode() {
+        isInWebLinkQueryMode = false
+        currentWebLinkResult = nil
+
+        // 恢复 UI
+        restoreNormalModeUI()
+
+        // 恢复搜索状态
+        searchField.stringValue = ""
+        setPlaceholder("搜索应用或文档...")
+        resetState()
+    }
+
+    /// 更新网页直达 Query 模式 UI
+    private func updateWebLinkQueryModeUI() {
+        guard let webLink = currentWebLinkResult else { return }
+
+        // 复用 ideTagView 显示网页直达信息
+        ideTagView.isHidden = false
+        ideIconView.image = webLink.icon
+        ideNameLabel.stringValue = webLink.name
+
+        // 切换 searchField 的 leading 约束
+        searchFieldLeadingToIcon?.isActive = false
+        searchFieldLeadingToTag?.isActive = true
+    }
+
+    /// 网页直达 Query 模式下打开 URL
+    private func openWebLinkWithQuery(webLink: SearchResult) {
+        let query = searchField.stringValue.trimmingCharacters(in: .whitespaces)
+        var finalUrl: String?
+
+        if query.isEmpty {
+            // 用户没有输入
+            if let defaultUrl = webLink.defaultUrl, !defaultUrl.isEmpty {
+                // 优先使用默认 URL
+                finalUrl = defaultUrl
+            } else {
+                // 没有设置默认 URL，去掉 {query} 占位符
+                finalUrl = webLink.path.replacingOccurrences(of: "{query}", with: "")
+            }
+        } else {
+            // 替换 {query} 占位符
+            let encodedQuery =
+                query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query
+            finalUrl = webLink.path.replacingOccurrences(of: "{query}", with: encodedQuery)
+        }
+
+        if let urlString = finalUrl, let url = URL(string: urlString) {
+            NSWorkspace.shared.open(url)
+        }
+
+        exitWebLinkQueryMode()
+        PanelManager.shared.hidePanel()
+    }
+
     /// 滚动表格使选中行尽量保持在可视区域中间
     private func scrollToKeepSelectionCentered() {
         let visibleRect = scrollView.contentView.bounds
@@ -822,8 +918,8 @@ class SearchPanelViewController: NSViewController {
 
     /// 加载最近使用的应用
     private func loadRecentApps() {
-        // 如果已经在 IDE 项目模式或文件夹打开模式，不加载最近应用
-        if isInIDEProjectMode || isInFolderOpenMode {
+        // 如果已经在 IDE 项目模式、文件夹打开模式或网页直达 Query 模式，不加载最近应用
+        if isInIDEProjectMode || isInFolderOpenMode || isInWebLinkQueryMode {
             return
         }
 
@@ -868,7 +964,10 @@ class SearchPanelViewController: NSViewController {
 
             DispatchQueue.main.async {
                 // 再次检查是否在特殊模式，避免覆盖 IDE 项目列表
-                guard self?.isInIDEProjectMode != true && self?.isInFolderOpenMode != true else {
+                guard
+                    self?.isInIDEProjectMode != true && self?.isInFolderOpenMode != true
+                        && self?.isInWebLinkQueryMode != true
+                else {
                     return
                 }
 
@@ -912,6 +1011,13 @@ class SearchPanelViewController: NSViewController {
     }
 
     private func openSelected() {
+        // 网页直达 Query 模式：替换 {query} 占位符后打开
+        // 注意：Tab 模式下 results 为空，需要优先处理
+        if isInWebLinkQueryMode, let webLink = currentWebLinkResult {
+            openWebLinkWithQuery(webLink: webLink)
+            return
+        }
+
         guard results.indices.contains(selectedIndex) else { return }
         let item = results[selectedIndex]
 
@@ -932,9 +1038,22 @@ class SearchPanelViewController: NSViewController {
             return
         }
 
-        // 网页直达：path 存储的是 URL
+        // 网页直达：处理 {query} 占位符
         if item.isWebLink {
-            if let url = URL(string: item.path) {
+            var finalUrl = item.path
+
+            // 如果支持 query 扩展，需要处理 {query} 占位符
+            if item.supportsQueryExtension {
+                if let defaultUrl = item.defaultUrl, !defaultUrl.isEmpty {
+                    // 有默认 URL，直接跳转到默认 URL
+                    finalUrl = defaultUrl
+                } else {
+                    // 没有默认 URL，去掉 {query} 占位符
+                    finalUrl = item.path.replacingOccurrences(of: "{query}", with: "")
+                }
+            }
+
+            if let url = URL(string: finalUrl) {
                 NSWorkspace.shared.open(url)
             }
             PanelManager.shared.hidePanel()
@@ -969,6 +1088,11 @@ extension SearchPanelViewController: NSTextFieldDelegate {
         // 文件夹打开模式：搜索打开方式
         if isInFolderOpenMode {
             performFolderOpenerSearch(query)
+            return
+        }
+
+        // 网页直达 Query 模式：不进行搜索，只等待用户输入
+        if isInWebLinkQueryMode {
             return
         }
 
@@ -1164,11 +1288,12 @@ class ResultCellView: NSView {
         pathLabel.isHidden = !showPathLabel
         pathLabel.stringValue = showPathLabel ? item.path : ""
 
-        // 检测是否为支持的 IDE 或文件夹，显示箭头指示器
+        // 检测是否为支持的 IDE、文件夹或网页直达 Query 扩展，显示箭头指示器
         // hideArrow 为 true 时强制隐藏（如文件夹打开模式下）
         let isIDE = IDEType.detect(from: item.path) != nil
         let isFolder = item.isDirectory && !isApp
-        let showArrow = !hideArrow && (isIDE || isFolder)
+        let isQueryWebLink = item.isWebLink && item.supportsQueryExtension
+        let showArrow = !hideArrow && (isIDE || isFolder || isQueryWebLink)
         arrowIndicator.isHidden = !showArrow
 
         // 切换 nameLabel trailing 约束
