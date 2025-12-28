@@ -1395,19 +1395,20 @@ class ResultCellView: NSView {
             aliasBadgeView.isHidden = true
         }
 
-        // App 和网页直达只显示名称（垂直居中、字体大），文件和文件夹显示路径
+        // App、网页直达、实用工具只显示名称（垂直居中、字体大），文件和文件夹显示路径
         let isApp = item.path.hasSuffix(".app")
         let isWebLink = item.isWebLink
-        let showPathLabel = !isApp && !isWebLink
+        let isUtility = item.isUtility
+        let showPathLabel = !isApp && !isWebLink && !isUtility
         pathLabel.isHidden = !showPathLabel
         pathLabel.stringValue = showPathLabel ? item.path : ""
 
-        // 检测是否为支持的 IDE、文件夹或网页直达 Query 扩展，显示箭头指示器
+        // 检测是否为支持的 IDE、文件夹、网页直达 Query 扩展或实用工具，显示箭头指示器
         // hideArrow 为 true 时强制隐藏（如文件夹打开模式下）
         let isIDE = IDEType.detect(from: item.path) != nil
         let isFolder = item.isDirectory && !isApp
         let isQueryWebLink = item.isWebLink && item.supportsQueryExtension
-        let showArrow = !hideArrow && (isIDE || isFolder || isQueryWebLink)
+        let showArrow = !hideArrow && (isIDE || isFolder || isQueryWebLink || isUtility)
         arrowIndicator.isHidden = !showArrow
 
         // 切换 nameLabel trailing 约束
@@ -1419,8 +1420,8 @@ class ResultCellView: NSView {
             nameLabelTrailingToEdge.isActive = true
         }
 
-        // 切换布局：App 和网页直达垂直居中，其他顶部对齐
-        if isApp || isWebLink {
+        // 切换布局：App、网页直达、实用工具垂直居中，其他顶部对齐
+        if isApp || isWebLink || isUtility {
             nameLabel.font = .systemFont(ofSize: 14, weight: .medium)
             nameLabelTopConstraint.isActive = false
             nameLabelCenterYConstraint.isActive = true

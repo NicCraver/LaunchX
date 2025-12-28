@@ -23,6 +23,7 @@ final class MemoryIndex {
         let isApp: Bool
         let isDirectory: Bool
         let isWebLink: Bool  // 是否为网页直达
+        let isUtility: Bool  // 是否为实用工具
         let supportsQuery: Bool  // 是否支持 query 扩展
         let defaultUrl: String?  // 默认 URL
         let modifiedDate: Date
@@ -50,6 +51,7 @@ final class MemoryIndex {
             self.isApp = record.isApp
             self.isDirectory = record.isDirectory
             self.isWebLink = false  // 文件系统项目不是网页直达
+            self.isUtility = false  // 文件系统项目不是实用工具
             self.supportsQuery = false
             self.defaultUrl = nil
             self.modifiedDate = record.modifiedDate ?? Date.distantPast
@@ -60,10 +62,10 @@ final class MemoryIndex {
             self.wordAcronym = SearchItem.generateWordAcronym(from: record.name)
         }
 
-        /// 用于创建网页直达等非文件系统项目
+        /// 用于创建网页直达、实用工具等非文件系统项目
         init(
-            name: String, path: String, isWebLink: Bool, iconData: Data? = nil,
-            alias: String? = nil,
+            name: String, path: String, isWebLink: Bool, isUtility: Bool = false,
+            iconData: Data? = nil, alias: String? = nil,
             supportsQuery: Bool = false, defaultUrl: String? = nil
         ) {
             self.name = name
@@ -72,7 +74,8 @@ final class MemoryIndex {
             self.lowerFileName = name.lowercased()
             self.isApp = false
             self.isDirectory = false
-            self.isWebLink = isWebLink  // 存储网页直达标记
+            self.isWebLink = isWebLink
+            self.isUtility = isUtility
             self.supportsQuery = supportsQuery
             self.defaultUrl = defaultUrl
             self.modifiedDate = Date()
@@ -88,6 +91,10 @@ final class MemoryIndex {
             } else if isWebLink {
                 self._icon = NSImage(
                     systemSymbolName: "globe", accessibilityDescription: "Web Link")
+                self._icon?.size = NSSize(width: 32, height: 32)
+            } else if isUtility {
+                self._icon = NSImage(
+                    systemSymbolName: "wrench.and.screwdriver", accessibilityDescription: "Utility")
                 self._icon?.size = NSSize(width: 32, height: 32)
             }
         }
@@ -171,6 +178,7 @@ final class MemoryIndex {
                 isDirectory: isDirectory,
                 displayAlias: displayAlias,
                 isWebLink: isWebLink,
+                isUtility: isUtility,
                 supportsQueryExtension: supportsQuery,
                 defaultUrl: defaultUrl
             )
@@ -379,8 +387,8 @@ final class MemoryIndex {
             if excludedApps.contains(item.path) { continue }
             aliasMatched.insert(item.path)
 
-            // 工具类（网页直达等）和应用都放入 matchedApps，以便优先显示
-            if item.isApp || item.isWebLink {
+            // 工具类（网页直达、实用工具）和应用都放入 matchedApps，以便优先显示
+            if item.isApp || item.isWebLink || item.isUtility {
                 matchedApps.append((item, .exact))  // 别名匹配视为精确匹配
             } else if item.isDirectory {
                 matchedDirs.append((item, .exact))
@@ -406,7 +414,7 @@ final class MemoryIndex {
             }
         }
 
-        // 1.5 Search Tools (网页直达等非文件系统项目，通过名称搜索)
+        // 1.5 Search Tools (网页直达、实用工具等非文件系统项目，通过名称搜索)
         let currentTools = tools
         for tool in currentTools {
             if aliasMatched.contains(tool.path) { continue }  // 跳过已通过别名匹配的
@@ -414,6 +422,12 @@ final class MemoryIndex {
             if let matchType = tool.matchesQuery(lowerQuery) {
                 // 工具项目放在应用列表中，优先级较高
                 matchedApps.append((tool, matchType))
+                continue
+            }
+
+            // 也检查拼音匹配
+            if queryIsAscii && tool.matchesPinyin(lowerQuery) {
+                matchedApps.append((tool, .pinyin))
             }
         }
 
@@ -423,9 +437,11 @@ final class MemoryIndex {
                 lhs: (item: SearchItem, matchType: SearchItem.MatchType),
                 rhs: (item: SearchItem, matchType: SearchItem.MatchType)
             ) in
-            // 工具类（网页直达等）优先排在最前面
-            if lhs.item.isWebLink != rhs.item.isWebLink {
-                return lhs.item.isWebLink
+            // 工具类（网页直达、实用工具）优先排在最前面
+            let lhsIsTool = lhs.item.isWebLink || lhs.item.isUtility
+            let rhsIsTool = rhs.item.isWebLink || rhs.item.isUtility
+            if lhsIsTool != rhsIsTool {
+                return lhsIsTool
             }
             if lhs.matchType != rhs.matchType {
                 return lhs.matchType < rhs.matchType
@@ -636,19 +652,21 @@ final class MemoryIndex {
         let name: String
         let path: String  // 对于网页是 URL，对于应用是路径
         let isWebLink: Bool
+        let isUtility: Bool  // 是否为实用工具
         let iconData: Data?  // 自定义图标数据
         let alias: String?  // 别名（用于显示）
         let supportsQuery: Bool  // 是否支持 query 扩展
         let defaultUrl: String?  // 默认 URL
 
         init(
-            name: String, path: String, isWebLink: Bool, iconData: Data? = nil,
-            alias: String? = nil,
+            name: String, path: String, isWebLink: Bool, isUtility: Bool = false,
+            iconData: Data? = nil, alias: String? = nil,
             supportsQuery: Bool = false, defaultUrl: String? = nil
         ) {
             self.name = name
             self.path = path
             self.isWebLink = isWebLink
+            self.isUtility = isUtility
             self.iconData = iconData
             self.alias = alias
             self.supportsQuery = supportsQuery
@@ -703,6 +721,7 @@ final class MemoryIndex {
                     name: toolInfo.name,
                     path: toolInfo.path,
                     isWebLink: toolInfo.isWebLink,
+                    isUtility: toolInfo.isUtility,
                     iconData: toolInfo.iconData,
                     alias: toolInfo.alias,
                     supportsQuery: toolInfo.supportsQuery,
@@ -739,6 +758,7 @@ final class MemoryIndex {
                     name: toolInfo.name,
                     path: toolInfo.path,
                     isWebLink: toolInfo.isWebLink,
+                    isUtility: toolInfo.isUtility,
                     iconData: toolInfo.iconData,
                     alias: toolInfo.alias,
                     supportsQuery: toolInfo.supportsQuery,
@@ -767,6 +787,7 @@ final class MemoryIndex {
                     name: toolInfo.name,
                     path: toolInfo.path,
                     isWebLink: toolInfo.isWebLink,
+                    isUtility: toolInfo.isUtility,
                     iconData: toolInfo.iconData,
                     alias: toolInfo.alias,
                     supportsQuery: toolInfo.supportsQuery,
@@ -793,6 +814,7 @@ final class MemoryIndex {
                     name: toolInfo.name,
                     path: toolInfo.path,
                     isWebLink: toolInfo.isWebLink,
+                    isUtility: toolInfo.isUtility,
                     iconData: toolInfo.iconData,
                     alias: toolInfo.alias,
                     supportsQuery: toolInfo.supportsQuery,

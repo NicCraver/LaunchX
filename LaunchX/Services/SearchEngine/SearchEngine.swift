@@ -133,6 +133,7 @@ final class SearchEngine: ObservableObject {
                             name: tool.name,
                             path: path,
                             isWebLink: false,
+                            isUtility: false,
                             iconData: nil,
                             alias: tool.alias,
                             supportsQuery: false,
@@ -149,6 +150,7 @@ final class SearchEngine: ObservableObject {
                             name: tool.name,
                             path: url,
                             isWebLink: true,
+                            isUtility: false,
                             iconData: tool.iconData,
                             alias: tool.alias,
                             supportsQuery: tool.supportsQueryExtension,
@@ -166,9 +168,10 @@ final class SearchEngine: ObservableObject {
                             name: tool.name,
                             path: identifier,
                             isWebLink: false,
-                            iconData: nil,
+                            isUtility: true,
+                            iconData: tool.iconData,
                             alias: tool.alias,
-                            supportsQuery: false,
+                            supportsQuery: true,
                             defaultUrl: nil
                         )
                         if hasAlias {
@@ -182,6 +185,7 @@ final class SearchEngine: ObservableObject {
                             name: tool.name,
                             path: command,
                             isWebLink: false,
+                            isUtility: false,
                             iconData: nil,
                             alias: tool.alias,
                             supportsQuery: false,

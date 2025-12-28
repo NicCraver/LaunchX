@@ -539,8 +539,9 @@ class HotKeyService: ObservableObject {
                 )
             }
 
-            // 注册扩展快捷键（IDE 应用或支持 query 的网页直达）
-            if tool.isIDE || tool.supportsQueryExtension, let extKey = tool.extensionHotKey {
+            // 注册扩展快捷键（IDE、网页直达 Query、实用工具）
+            // ⚠️ 重要：修改快捷键相关功能时，必须确保所有支持扩展的工具类型都被注册！
+            if tool.supportsExtension, let extKey = tool.extensionHotKey {
                 registerCustomHotKey(
                     keyCode: extKey.keyCode,
                     modifiers: extKey.modifiers,
@@ -591,8 +592,9 @@ class HotKeyService: ObservableObject {
                 return tool.name + " (打开)"
             }
 
-            // 检查扩展快捷键（仅 IDE）
-            if tool.isIDE, let extKey = tool.extensionHotKey,
+            // 检查扩展快捷键（IDE、网页直达 Query、实用工具）
+            // ⚠️ 重要：修改快捷键相关功能时，必须确保所有支持扩展的工具类型都被检测！
+            if tool.supportsExtension, let extKey = tool.extensionHotKey,
                 extKey.keyCode == keyCode && extKey.modifiers == modifiers
             {
                 // 如果是同一个项目的同类型快捷键，跳过
