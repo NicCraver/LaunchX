@@ -38,6 +38,7 @@ struct ToolsConfig: Codable {
     private static let configKey = "ToolsConfig"
     private static let migrationKey = "ToolsConfigMigrated"
     private static let defaultWebLinksAddedKey = "DefaultWebLinksAdded"
+    private static let defaultUtilitiesAddedKey = "DefaultUtilitiesAdded"
 
     /// 从 UserDefaults 加载配置（含自动迁移）
     static func load() -> ToolsConfig {
@@ -45,11 +46,23 @@ struct ToolsConfig: Codable {
         if let data = UserDefaults.standard.data(forKey: configKey),
             var config = try? JSONDecoder().decode(ToolsConfig.self, from: data)
         {
+            var needsSave = false
+
             // 检查是否需要添加默认网页直达
             if !UserDefaults.standard.bool(forKey: defaultWebLinksAddedKey) {
                 config.addDefaultWebLinksIfNeeded()
-                // 先设置标记，避免循环
                 UserDefaults.standard.set(true, forKey: defaultWebLinksAddedKey)
+                needsSave = true
+            }
+
+            // 检查是否需要添加默认实用工具
+            if !UserDefaults.standard.bool(forKey: defaultUtilitiesAddedKey) {
+                config.addDefaultUtilitiesIfNeeded()
+                UserDefaults.standard.set(true, forKey: defaultUtilitiesAddedKey)
+                needsSave = true
+            }
+
+            if needsSave {
                 config.save()
             }
             return config
@@ -60,20 +73,23 @@ struct ToolsConfig: Codable {
             let migrated = migrateFromCustomItemsConfig()
         {
             var config = migrated
-            // 迁移后也添加默认网页直达
+            // 迁移后也添加默认内容
             config.addDefaultWebLinksIfNeeded()
+            config.addDefaultUtilitiesIfNeeded()
             // 先设置标记，避免循环
             UserDefaults.standard.set(true, forKey: migrationKey)
             UserDefaults.standard.set(true, forKey: defaultWebLinksAddedKey)
+            UserDefaults.standard.set(true, forKey: defaultUtilitiesAddedKey)
             config.save()
             return config
         }
 
-        // 3. 返回带有默认网页直达的配置
+        // 3. 返回带有默认内容的配置
         var config = ToolsConfig()
-        config.tools = defaultWebLinks()
+        config.tools = defaultWebLinks() + defaultUtilities()
         // 先设置标记，避免循环
         UserDefaults.standard.set(true, forKey: defaultWebLinksAddedKey)
+        UserDefaults.standard.set(true, forKey: defaultUtilitiesAddedKey)
         config.save()
         return config
     }
@@ -89,6 +105,57 @@ struct ToolsConfig: Codable {
                 tools.append(webLink)
             }
         }
+    }
+
+    /// 添加默认实用工具（如果尚未添加）
+    private mutating func addDefaultUtilitiesIfNeeded() {
+        let defaults = ToolsConfig.defaultUtilities()
+        let existingIdentifiers = Set(tools.compactMap { $0.extensionIdentifier })
+
+        for utility in defaults {
+            // 只添加 identifier 不存在的
+            if let identifier = utility.extensionIdentifier,
+                !existingIdentifiers.contains(identifier)
+            {
+                tools.append(utility)
+            }
+        }
+    }
+
+    /// 默认实用工具列表
+    private static func defaultUtilities() -> [ToolItem] {
+        return [
+            ToolItem.utility(
+                name: "退出应用与进程",
+                identifier: "kill",
+                alias: "kill",
+                iconData: loadIconData(named: "Utility_kill")
+            ),
+            ToolItem.utility(
+                name: "IP 查询",
+                identifier: "ip",
+                alias: "ip",
+                iconData: loadIconData(named: "Utility_ip")
+            ),
+            ToolItem.utility(
+                name: "UUID 生成器",
+                identifier: "uuid",
+                alias: "uuid",
+                iconData: loadIconData(named: "Utility_uuid")
+            ),
+            ToolItem.utility(
+                name: "URL 编码 & 解码",
+                identifier: "url",
+                alias: "url",
+                iconData: loadIconData(named: "Utility_url")
+            ),
+            ToolItem.utility(
+                name: "Base64 编码 & 解码",
+                identifier: "base64",
+                alias: "b64",
+                iconData: loadIconData(named: "Utility_base64")
+            ),
+        ]
     }
 
     /// 从 Asset Catalog 加载图标数据

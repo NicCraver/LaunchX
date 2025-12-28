@@ -53,10 +53,11 @@ struct ToolItem: Codable, Identifiable, Equatable, Hashable {
     var alias: String?
     var hotKey: HotKeyConfig?
     var isEnabled: Bool
+    var isBuiltIn: Bool  // 是否为内置工具（不能删除）
 
     // App 特有属性
     var path: String?
-    var extensionHotKey: HotKeyConfig?  // IDE 进入扩展快捷键
+    var extensionHotKey: HotKeyConfig?  // IDE/实用工具 进入扩展快捷键
 
     // WebLink 特有属性
     var url: String?
@@ -64,8 +65,8 @@ struct ToolItem: Codable, Identifiable, Equatable, Hashable {
     var iconData: Data?  // 自定义图标数据（PNG 格式）
     var showInSearchPanel: Bool?  // 是否在搜索面板中默认显示（仅支持 query 的网页直达有效）
 
-    // Utility 特有属性 (预留)
-    var extensionIdentifier: String?
+    // Utility 特有属性
+    var extensionIdentifier: String?  // 实用工具标识符
 
     // SystemCommand 特有属性 (预留)
     var command: String?
@@ -80,6 +81,7 @@ struct ToolItem: Codable, Identifiable, Equatable, Hashable {
         alias: String? = nil,
         hotKey: HotKeyConfig? = nil,
         isEnabled: Bool = true,
+        isBuiltIn: Bool = false,
         path: String? = nil,
         extensionHotKey: HotKeyConfig? = nil,
         url: String? = nil,
@@ -95,6 +97,7 @@ struct ToolItem: Codable, Identifiable, Equatable, Hashable {
         self.alias = alias
         self.hotKey = hotKey
         self.isEnabled = isEnabled
+        self.isBuiltIn = isBuiltIn
         self.path = path
         self.extensionHotKey = extensionHotKey
         self.url = url
@@ -148,6 +151,24 @@ struct ToolItem: Codable, Identifiable, Equatable, Hashable {
         )
     }
 
+    /// 创建内置实用工具
+    static func utility(
+        name: String,
+        identifier: String,
+        alias: String? = nil,
+        iconData: Data? = nil
+    ) -> ToolItem {
+        ToolItem(
+            type: .utility,
+            name: name,
+            alias: alias,
+            isEnabled: true,
+            isBuiltIn: true,
+            iconData: iconData,
+            extensionIdentifier: identifier
+        )
+    }
+
     /// 从 CustomItem 迁移创建
     static func fromCustomItem(_ item: CustomItem) -> ToolItem {
         ToolItem(
@@ -195,6 +216,14 @@ struct ToolItem: Codable, Identifiable, Equatable, Hashable {
         return url.contains("{query}")
     }
 
+    /// 是否支持扩展模式（IDE、网页直达 query、实用工具）
+    var supportsExtension: Bool {
+        if type == .utility { return true }
+        if isIDE { return true }
+        if supportsQueryExtension { return true }
+        return false
+    }
+
     /// 获取图标
     var icon: NSImage {
         switch type {
@@ -217,7 +246,18 @@ struct ToolItem: Codable, Identifiable, Equatable, Hashable {
             icon.size = NSSize(width: 32, height: 32)
             return icon
 
-        case .utility, .systemCommand:
+        case .utility:
+            // 优先使用自定义图标
+            if let data = iconData, let customIcon = NSImage(data: data) {
+                customIcon.size = NSSize(width: 32, height: 32)
+                return customIcon
+            }
+            // 使用默认图标
+            let icon = type.defaultIcon
+            icon.size = NSSize(width: 32, height: 32)
+            return icon
+
+        case .systemCommand:
             let icon = type.defaultIcon
             icon.size = NSSize(width: 32, height: 32)
             return icon

@@ -376,6 +376,21 @@ struct ToolItemRow: View {
     @State private var showHotKeyPopover = false
     @State private var showExtensionHotKeyPopover = false
 
+    /// 是否显示打开快捷键（实用工具不显示）
+    private var showOpenHotKey: Bool {
+        tool.type != .utility
+    }
+
+    /// 是否显示进入扩展快捷键
+    private var showExtensionHotKey: Bool {
+        tool.type == .utility || tool.isIDE || tool.supportsQueryExtension
+    }
+
+    /// 是否可以删除（内置工具不能删除）
+    private var canDelete: Bool {
+        !tool.isBuiltIn
+    }
+
     var body: some View {
         HStack(spacing: 12) {
             // 图标和名称
@@ -410,53 +425,65 @@ struct ToolItemRow: View {
             }
             .frame(minWidth: 180, maxWidth: .infinity, alignment: .leading)
 
-            // 别名输入
-            ToolAliasTextField(
-                text: $aliasText,
-                placeholder: "别名",
-                toolId: tool.id,
-                focusedField: focusedField
-            )
-            .frame(width: 70)
-            .onAppear {
-                aliasText = tool.alias ?? ""
-            }
-            .onChange(of: tool.alias) { _, newValue in
-                // 当 tool.alias 被外部更新时（如编辑弹窗），同步更新本地状态
-                let newAlias = newValue ?? ""
-                if aliasText != newAlias {
-                    aliasText = newAlias
+            // 别名输入（内置工具只读）
+            if tool.isBuiltIn {
+                Text(tool.alias ?? "-")
+                    .foregroundColor(.secondary)
+                    .frame(width: 70, alignment: .leading)
+            } else {
+                ToolAliasTextField(
+                    text: $aliasText,
+                    placeholder: "别名",
+                    toolId: tool.id,
+                    focusedField: focusedField
+                )
+                .frame(width: 70)
+                .onAppear {
+                    aliasText = tool.alias ?? ""
+                }
+                .onChange(of: tool.alias) { _, newValue in
+                    // 当 tool.alias 被外部更新时（如编辑弹窗），同步更新本地状态
+                    let newAlias = newValue ?? ""
+                    if aliasText != newAlias {
+                        aliasText = newAlias
+                    }
+                }
+                .onChange(of: aliasText) { _, newValue in
+                    var updatedTool = tool
+                    updatedTool.alias = newValue.isEmpty ? nil : newValue
+                    viewModel.updateTool(updatedTool)
                 }
             }
-            .onChange(of: aliasText) { _, newValue in
-                var updatedTool = tool
-                updatedTool.alias = newValue.isEmpty ? nil : newValue
-                viewModel.updateTool(updatedTool)
-            }
 
-            // 快捷键
-            ToolHotKeyButton(
-                hotKey: tool.hotKey,
-                onTap: { showHotKeyPopover = true }
-            )
-            .frame(width: 90)
-            .popover(isPresented: $showHotKeyPopover) {
-                ToolHotKeyRecorderPopover(
-                    hotKey: Binding(
-                        get: { tool.hotKey },
-                        set: { newValue in
-                            tool.hotKey = newValue
-                            viewModel.updateTool(tool)
-                        }
-                    ),
-                    toolId: tool.id,
-                    isExtensionHotKey: false,
-                    isPresented: $showHotKeyPopover
+            // 打开快捷键（实用工具不显示）
+            if showOpenHotKey {
+                ToolHotKeyButton(
+                    hotKey: tool.hotKey,
+                    onTap: { showHotKeyPopover = true }
                 )
+                .frame(width: 90)
+                .popover(isPresented: $showHotKeyPopover) {
+                    ToolHotKeyRecorderPopover(
+                        hotKey: Binding(
+                            get: { tool.hotKey },
+                            set: { newValue in
+                                tool.hotKey = newValue
+                                viewModel.updateTool(tool)
+                            }
+                        ),
+                        toolId: tool.id,
+                        isExtensionHotKey: false,
+                        isPresented: $showHotKeyPopover
+                    )
+                }
+            } else {
+                Text("-")
+                    .foregroundColor(.secondary)
+                    .frame(width: 90)
             }
 
-            // 进入扩展快捷键（IDE 或支持 query 的网页直达显示）
-            if tool.isIDE || tool.supportsQueryExtension {
+            // 进入扩展快捷键
+            if showExtensionHotKey {
                 ToolHotKeyButton(
                     hotKey: tool.extensionHotKey,
                     onTap: { showExtensionHotKeyPopover = true }
@@ -498,13 +525,18 @@ struct ToolItemRow: View {
             .scaleEffect(0.7)
             .frame(width: 44)
 
-            // 删除按钮
-            Button(action: { viewModel.deleteTool(tool) }) {
-                Image(systemName: "trash")
-                    .foregroundColor(.secondary)
+            // 删除按钮（内置工具不显示）
+            if canDelete {
+                Button(action: { viewModel.deleteTool(tool) }) {
+                    Image(systemName: "trash")
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.borderless)
+                .frame(width: 30)
+            } else {
+                Spacer()
+                    .frame(width: 30)
             }
-            .buttonStyle(.borderless)
-            .frame(width: 30)
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 16)
