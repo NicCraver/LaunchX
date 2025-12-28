@@ -145,6 +145,23 @@ class PanelManager: NSObject, NSWindowDelegate {
         showPanel()
     }
 
+    /// 显示面板并直接进入实用工具模式
+    func showPanelInUtilityMode(tool: ToolItem) {
+        guard isSetup else { return }
+
+        // 发送通知让 SearchPanelViewController 进入实用工具模式
+        NotificationCenter.default.post(
+            name: .enterUtilityModeDirectly,
+            object: nil,
+            userInfo: ["tool": tool]
+        )
+
+        // 只有面板未显示时才调用 showPanel()，避免重复触发 onWillShow
+        if !panel.isVisible {
+            showPanel()
+        }
+    }
+
     // MARK: - NSWindowDelegate
 
     func windowDidResignKey(_ notification: Notification) {

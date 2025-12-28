@@ -102,7 +102,7 @@ class ToolExecutor {
         NSWorkspace.shared.open(url)
     }
 
-    // MARK: - 实用工具执行（预留）
+    // MARK: - 实用工具执行
 
     private func executeUtility(_ tool: ToolItem) {
         guard let identifier = tool.extensionIdentifier else {
@@ -111,8 +111,8 @@ class ToolExecutor {
         }
 
         print("[ToolExecutor] Executing utility: \(identifier)")
-        // TODO: 实现实用工具执行逻辑
-        // 可能需要根据 identifier 调用不同的扩展处理器
+        // 进入实用工具扩展模式
+        PanelManager.shared.showPanelInUtilityMode(tool: tool)
     }
 
     // MARK: - 系统命令执行（预留）

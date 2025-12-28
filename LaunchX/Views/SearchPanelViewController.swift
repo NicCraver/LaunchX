@@ -39,6 +39,14 @@ class SearchPanelViewController: NSViewController {
     private var isInWebLinkQueryMode: Bool = false
     private var currentWebLinkResult: SearchResult? = nil
 
+    // 实用工具模式状态
+    private var isInUtilityMode: Bool = false
+    private var currentUtilityIdentifier: String? = nil
+    private var currentUtilityResult: SearchResult? = nil
+
+    // IP 查询结果
+    private var ipQueryResults: [(label: String, ip: String)] = []
+
     // MARK: - Constants
     private let rowHeight: CGFloat = 44
     private let headerHeight: CGFloat = 80
@@ -124,6 +132,14 @@ class SearchPanelViewController: NSViewController {
             self,
             selector: #selector(handleEnterWebLinkQueryModeDirectly(_:)),
             name: .enterWebLinkQueryModeDirectly,
+            object: nil
+        )
+
+        // 监听直接进入实用工具模式的通知（由快捷键触发）
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleEnterUtilityModeDirectly(_:)),
+            name: .enterUtilityModeDirectly,
             object: nil
         )
 
@@ -249,6 +265,81 @@ class SearchPanelViewController: NSViewController {
         updateVisibility()
 
         print("SearchPanelViewController: WebLink query mode setup complete")
+    }
+
+    /// 处理直接进入实用工具模式的通知
+    @objc private func handleEnterUtilityModeDirectly(_ notification: Notification) {
+        print("SearchPanelViewController: handleEnterUtilityModeDirectly called")
+
+        guard let userInfo = notification.userInfo,
+            let tool = userInfo["tool"] as? ToolItem
+        else {
+            print("SearchPanelViewController: Invalid notification userInfo for Utility mode")
+            return
+        }
+
+        // 如果已经在同一个实用工具的扩展模式中，忽略重复触发
+        if isInUtilityMode && currentUtilityIdentifier == tool.extensionIdentifier {
+            print(
+                "SearchPanelViewController: Already in utility mode for \(tool.extensionIdentifier ?? "nil"), ignoring"
+            )
+            return
+        }
+
+        print(
+            "SearchPanelViewController: Utility tool=\(tool.name), identifier=\(tool.extensionIdentifier ?? "nil")"
+        )
+
+        // 创建一个 SearchResult 来表示实用工具
+        var icon: NSImage
+        if let iconData = tool.iconData, let customIcon = NSImage(data: iconData) {
+            customIcon.size = NSSize(width: 32, height: 32)
+            icon = customIcon
+        } else {
+            icon =
+                NSImage(
+                    systemSymbolName: "wrench.and.screwdriver", accessibilityDescription: "Utility")
+                ?? NSImage()
+            icon.size = NSSize(width: 32, height: 32)
+        }
+
+        let utilityResult = SearchResult(
+            name: tool.name,
+            path: tool.extensionIdentifier ?? "",
+            icon: icon,
+            isDirectory: false,
+            isUtility: true
+        )
+
+        // 进入实用工具模式
+        isInUtilityMode = true
+        currentUtilityIdentifier = tool.extensionIdentifier
+        currentUtilityResult = utilityResult
+
+        // 更新 UI
+        updateUtilityModeUI()
+
+        // 根据不同的实用工具类型执行相应操作
+        switch tool.extensionIdentifier {
+        case "ip":
+            loadIPAddresses()
+        case "uuid":
+            // TODO: UUID 生成器
+            break
+        case "url":
+            // TODO: URL 编码解码
+            break
+        case "base64":
+            // TODO: Base64 编码解码
+            break
+        case "kill":
+            // TODO: 退出应用与进程
+            break
+        default:
+            break
+        }
+
+        print("SearchPanelViewController: Utility mode setup complete")
     }
 
     // MARK: - Setup
@@ -457,6 +548,25 @@ class SearchPanelViewController: NSViewController {
             setPlaceholder("搜索应用或文档...")
         }
 
+        // 如果在网页直达 Query 模式，先恢复普通模式 UI
+        if isInWebLinkQueryMode {
+            isInWebLinkQueryMode = false
+            currentWebLinkResult = nil
+            restoreNormalModeUI()
+            setPlaceholder("搜索应用或文档...")
+        }
+
+        // 如果在实用工具模式，先恢复普通模式 UI
+        if isInUtilityMode {
+            isInUtilityMode = false
+            currentUtilityIdentifier = nil
+            currentUtilityResult = nil
+            ipQueryResults = []
+            restoreNormalModeUI()
+            searchField.isHidden = false
+            setPlaceholder("搜索应用或文档...")
+        }
+
         searchField.stringValue = ""
         selectedIndex = 0
 
@@ -605,17 +715,19 @@ class SearchPanelViewController: NSViewController {
         }
 
         switch Int(event.keyCode) {
-        case 51:  // Delete - IDE 项目模式、文件夹打开模式或网页直达 Query 模式下，输入框为空时退出
+        case 51:  // Delete - IDE 项目模式、文件夹打开模式、网页直达 Query 模式或实用工具模式下，输入框为空时退出
             if isComposing { return event }
-            if (isInIDEProjectMode || isInFolderOpenMode || isInWebLinkQueryMode)
+            if (isInIDEProjectMode || isInFolderOpenMode || isInWebLinkQueryMode || isInUtilityMode)
                 && searchField.stringValue.isEmpty
             {
                 if isInIDEProjectMode {
                     exitIDEProjectMode()
                 } else if isInFolderOpenMode {
                     exitFolderOpenMode()
-                } else {
+                } else if isInWebLinkQueryMode {
                     exitWebLinkQueryMode()
+                } else if isInUtilityMode {
+                    exitUtilityMode()
                 }
                 return nil
             }
@@ -661,6 +773,13 @@ class SearchPanelViewController: NSViewController {
                     }
                 }
 
+                // 检查是否为实用工具
+                if item.isUtility {
+                    if tryEnterUtilityMode(for: item) {
+                        return nil
+                    }
+                }
+
                 // 当前选中项没有扩展功能，忽略 Tab 键（阻止焦点切换）
                 return nil
             }
@@ -683,6 +802,14 @@ class SearchPanelViewController: NSViewController {
             }
             if isInFolderOpenMode {
                 exitFolderOpenMode()
+                return nil
+            }
+            if isInWebLinkQueryMode {
+                exitWebLinkQueryMode()
+                return nil
+            }
+            if isInUtilityMode {
+                exitUtilityMode()
                 return nil
             }
             PanelManager.shared.hidePanel()
@@ -994,6 +1121,299 @@ class SearchPanelViewController: NSViewController {
         PanelManager.shared.hidePanel()
     }
 
+    // MARK: - 实用工具模式
+
+    /// 尝试进入实用工具模式
+    private func tryEnterUtilityMode(for item: SearchResult) -> Bool {
+        guard item.isUtility else { return false }
+
+        isInUtilityMode = true
+        currentUtilityIdentifier = item.path  // path 存储的是 extensionIdentifier
+        currentUtilityResult = item
+
+        // 更新 UI
+        updateUtilityModeUI()
+
+        // 根据不同的实用工具类型执行相应操作
+        switch item.path {
+        case "ip":
+            loadIPAddresses()
+        case "uuid":
+            // TODO: UUID 生成器
+            break
+        case "url":
+            // TODO: URL 编码解码
+            break
+        case "base64":
+            // TODO: Base64 编码解码
+            break
+        case "kill":
+            // TODO: 退出应用与进程
+            break
+        default:
+            break
+        }
+
+        return true
+    }
+
+    /// 退出实用工具模式
+    private func exitUtilityMode() {
+        isInUtilityMode = false
+        currentUtilityIdentifier = nil
+        currentUtilityResult = nil
+        ipQueryResults = []
+
+        // 恢复 UI
+        restoreNormalModeUI()
+        searchField.isHidden = false  // 恢复搜索框显示
+
+        // 恢复搜索状态
+        searchField.stringValue = ""
+        setPlaceholder("搜索应用或文档...")
+        resetState()
+    }
+
+    /// 更新实用工具模式 UI
+    private func updateUtilityModeUI() {
+        guard let utility = currentUtilityResult else { return }
+
+        // 复用 ideTagView 显示实用工具信息
+        ideTagView.isHidden = false
+        ideIconView.image = utility.icon
+        ideNameLabel.stringValue = utility.name
+
+        // 切换 searchField 的 leading 约束
+        searchFieldLeadingToIcon?.isActive = false
+        searchFieldLeadingToTag?.isActive = true
+
+        // 隐藏搜索框（IP 查询不需要输入）
+        searchField.isHidden = true
+    }
+
+    /// 加载 IP 地址
+    private func loadIPAddresses() {
+        // 设置 placeholder 提示用户操作
+        searchField.stringValue = ""
+
+        ipQueryResults = [
+            (label: "本地 IP", ip: "加载中..."),
+            (label: "公网 IP", ip: "加载中..."),
+        ]
+        reloadIPResults()
+
+        // 获取本地 IP
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let localIP = self?.getLocalIPAddress() ?? "获取失败"
+            DispatchQueue.main.async {
+                guard let self = self, self.isInUtilityMode, self.currentUtilityIdentifier == "ip"
+                else { return }
+                if self.ipQueryResults.count > 0 {
+                    self.ipQueryResults[0] = (label: "本地 IP", ip: localIP)
+                    self.reloadIPResults()
+                }
+            }
+        }
+
+        // 获取公网 IP
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let publicIP = self?.getPublicIPAddress() ?? "获取失败"
+            DispatchQueue.main.async {
+                guard let self = self, self.isInUtilityMode, self.currentUtilityIdentifier == "ip"
+                else { return }
+                if self.ipQueryResults.count > 1 {
+                    self.ipQueryResults[1] = (label: "公网 IP", ip: publicIP)
+                    self.reloadIPResults()
+                }
+            }
+        }
+    }
+
+    /// 刷新 IP 结果显示
+    private func reloadIPResults() {
+        // 保存当前选中索引
+        let currentSelection = selectedIndex
+
+        // 将 IP 结果转换为 SearchResult 显示
+        results = ipQueryResults.enumerated().map { index, item in
+            let icon: NSImage
+            // 根据原始标签判断图标类型（去除 "✓ 已复制" 后缀）
+            let isLocalIP = item.label.hasPrefix("本地")
+            if isLocalIP {
+                icon =
+                    NSImage(systemSymbolName: "network", accessibilityDescription: nil) ?? NSImage()
+            } else {
+                icon =
+                    NSImage(systemSymbolName: "globe", accessibilityDescription: nil) ?? NSImage()
+            }
+            icon.size = NSSize(width: 32, height: 32)
+
+            return SearchResult(
+                name: item.ip,
+                path: item.label,
+                icon: icon,
+                isDirectory: false,
+                displayAlias: item.label
+            )
+        }
+
+        // 恢复选中索引
+        if results.indices.contains(currentSelection) {
+            selectedIndex = currentSelection
+        } else {
+            selectedIndex = 0
+        }
+
+        tableView.reloadData()
+
+        // 确保选中行视觉更新
+        if results.indices.contains(selectedIndex) {
+            tableView.selectRowIndexes(
+                IndexSet(integer: selectedIndex), byExtendingSelection: false)
+        }
+
+        updateVisibility()
+    }
+
+    /// 获取本地 IP 地址
+    private func getLocalIPAddress() -> String? {
+        var address: String?
+        var ifaddr: UnsafeMutablePointer<ifaddrs>?
+
+        guard getifaddrs(&ifaddr) == 0, let firstAddr = ifaddr else {
+            return nil
+        }
+
+        defer { freeifaddrs(ifaddr) }
+
+        for ptr in sequence(first: firstAddr, next: { $0.pointee.ifa_next }) {
+            let interface = ptr.pointee
+            let addrFamily = interface.ifa_addr.pointee.sa_family
+
+            // 只处理 IPv4
+            if addrFamily == UInt8(AF_INET) {
+                let name = String(cString: interface.ifa_name)
+                // 排除 loopback 接口
+                if name == "en0" || name == "en1" || name.hasPrefix("en") {
+                    var hostname = [CChar](repeating: 0, count: Int(NI_MAXHOST))
+                    getnameinfo(
+                        interface.ifa_addr,
+                        socklen_t(interface.ifa_addr.pointee.sa_len),
+                        &hostname,
+                        socklen_t(hostname.count),
+                        nil,
+                        0,
+                        NI_NUMERICHOST
+                    )
+                    address = String(cString: hostname)
+                    if address != nil && !address!.isEmpty {
+                        break
+                    }
+                }
+            }
+        }
+
+        return address
+    }
+
+    /// 获取公网 IP 地址
+    private func getPublicIPAddress() -> String? {
+        // 优先使用国内 IP 查询服务，避免代理影响
+        let services = [
+            "https://myip.ipip.net/ip",
+            "https://ip.3322.net",
+            "https://www.taobao.com/help/getip.php",
+            "https://api.ipify.org",
+        ]
+
+        for urlString in services {
+            guard let url = URL(string: urlString) else { continue }
+
+            let semaphore = DispatchSemaphore(value: 0)
+            var result: String?
+
+            var request = URLRequest(url: url)
+            request.timeoutInterval = 3
+
+            let task = URLSession.shared.dataTask(with: request) { data, response, error in
+                defer { semaphore.signal() }
+                guard error == nil,
+                    let httpResponse = response as? HTTPURLResponse,
+                    httpResponse.statusCode == 200,
+                    let data = data,
+                    let content = String(data: data, encoding: .utf8)
+                else { return }
+
+                // 解析不同服务的响应格式
+                if urlString.contains("taobao") {
+                    // 淘宝格式: ipCallback({ip:"x.x.x.x"})
+                    if let range = content.range(of: "\"([0-9.]+)\"", options: .regularExpression) {
+                        let ipWithQuotes = String(content[range])
+                        result = ipWithQuotes.replacingOccurrences(of: "\"", with: "")
+                    }
+                } else {
+                    // 其他服务直接返回 IP 或简单文本
+                    let ip = content.trimmingCharacters(in: .whitespacesAndNewlines)
+                    // 验证是否是有效的 IP 地址格式
+                    let ipPattern = "^[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}$"
+                    if ip.range(of: ipPattern, options: .regularExpression) != nil {
+                        result = ip
+                    }
+                }
+            }
+            task.resume()
+
+            // 等待最多 3 秒
+            _ = semaphore.wait(timeout: .now() + 3)
+
+            if let ip = result, !ip.isEmpty {
+                return ip
+            }
+        }
+
+        return nil
+    }
+
+    /// 处理实用工具模式下的回车操作
+    private func handleUtilityAction() {
+        guard let identifier = currentUtilityIdentifier else { return }
+
+        switch identifier {
+        case "ip":
+            // 复制选中的 IP 地址
+            let currentIndex = selectedIndex  // 捕获当前索引
+            guard ipQueryResults.indices.contains(currentIndex) else { return }
+            let ip = ipQueryResults[currentIndex].ip
+            if ip != "加载中..." && ip != "获取失败" {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(ip, forType: .string)
+
+                // 获取原始标签（不含 "✓ 已复制"）
+                let originalLabel =
+                    ipQueryResults[currentIndex].label.hasPrefix("本地") ? "本地 IP" : "公网 IP"
+
+                // 显示复制成功提示
+                ipQueryResults[currentIndex] = (label: "\(originalLabel) ✓ 已复制", ip: ip)
+                reloadIPResults()
+
+                // 1秒后恢复原标签
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
+                    guard let self = self,
+                        self.isInUtilityMode,
+                        self.currentUtilityIdentifier == "ip"
+                    else { return }
+                    // 使用捕获的索引而非当前选中索引
+                    if self.ipQueryResults.indices.contains(currentIndex) {
+                        self.ipQueryResults[currentIndex] = (label: originalLabel, ip: ip)
+                        self.reloadIPResults()
+                    }
+                }
+            }
+        default:
+            break
+        }
+    }
+
     /// 滚动表格使选中行尽量保持在可视区域中间
     private func scrollToKeepSelectionCentered() {
         let visibleRect = scrollView.contentView.bounds
@@ -1023,8 +1443,8 @@ class SearchPanelViewController: NSViewController {
 
     /// 加载最近使用的应用
     private func loadRecentApps() {
-        // 如果已经在 IDE 项目模式、文件夹打开模式或网页直达 Query 模式，不加载最近应用
-        if isInIDEProjectMode || isInFolderOpenMode || isInWebLinkQueryMode {
+        // 如果已经在扩展模式中，不加载最近应用
+        if isInIDEProjectMode || isInFolderOpenMode || isInWebLinkQueryMode || isInUtilityMode {
             return
         }
 
@@ -1123,6 +1543,12 @@ class SearchPanelViewController: NSViewController {
             return
         }
 
+        // 实用工具模式：执行对应操作
+        if isInUtilityMode {
+            handleUtilityAction()
+            return
+        }
+
         guard results.indices.contains(selectedIndex) else { return }
         let item = results[selectedIndex]
 
@@ -1207,6 +1633,11 @@ extension SearchPanelViewController: NSTextFieldDelegate {
 
         // 网页直达 Query 模式：不进行搜索，只等待用户输入
         if isInWebLinkQueryMode {
+            return
+        }
+
+        // 实用工具模式：不进行搜索
+        if isInUtilityMode {
             return
         }
 

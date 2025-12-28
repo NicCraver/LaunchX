@@ -144,4 +144,5 @@ extension Notification.Name {
     /// 直接进入 IDE 模式通知（用于快捷键触发）
     static let enterIDEModeDirectly = Notification.Name("enterIDEModeDirectly")
     static let enterWebLinkQueryModeDirectly = Notification.Name("enterWebLinkQueryModeDirectly")
+    static let enterUtilityModeDirectly = Notification.Name("enterUtilityModeDirectly")
 }
