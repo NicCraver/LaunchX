@@ -69,6 +69,18 @@ class SearchPanelViewController: NSViewController {
     private let uuidResultView = NSScrollView()  // UUID 结果滚动视图
     private let uuidResultTextView = NSTextView()  // UUID 结果文本
 
+    // URL 编码解码 UI 组件
+    private let urlCoderView = NSView()  // URL 编码解码容器
+    private let decodedURLLabel = NSTextField(labelWithString: "解码的 URL")
+    private let decodedURLScrollView = NSScrollView()  // 解码 URL 滚动视图
+    private let decodedURLTextView = NSTextView()  // 解码 URL 文本视图
+    private let decodedURLCopyButton = NSButton()
+    private let encodedURLLabel = NSTextField(labelWithString: "编码的 URL")
+    private let encodedURLScrollView = NSScrollView()  // 编码 URL 滚动视图
+    private let encodedURLTextView = NSTextView()  // 编码 URL 文本视图
+    private let encodedURLCopyButton = NSButton()
+    private var urlCoderDebounceWorkItem: DispatchWorkItem?  // URL 编码解码防抖
+
     // MARK: - Constants
     private let rowHeight: CGFloat = 44
     private let headerHeight: CGFloat = 80
@@ -348,8 +360,7 @@ class SearchPanelViewController: NSViewController {
         case "uuid":
             loadUUIDGenerator()
         case "url":
-            // TODO: URL 编码解码
-            break
+            loadURLCoder()
         case "base64":
             // TODO: Base64 编码解码
             break
@@ -491,6 +502,9 @@ class SearchPanelViewController: NSViewController {
 
         // UUID 生成器 UI 设置
         setupUUIDGeneratorUI()
+
+        // URL 编码解码 UI 设置
+        setupURLCoderUI()
     }
 
     /// 设置 UUID 生成器 UI
@@ -584,6 +598,179 @@ class SearchPanelViewController: NSViewController {
             uuidResultView.topAnchor.constraint(equalTo: resultLabel.bottomAnchor, constant: 8),
             uuidResultView.bottomAnchor.constraint(equalTo: uuidOptionsView.bottomAnchor),
         ])
+    }
+
+    /// 设置 URL 编码解码 UI
+    private func setupURLCoderUI() {
+        // URL 编码解码容器
+        urlCoderView.translatesAutoresizingMaskIntoConstraints = false
+        urlCoderView.isHidden = true
+        view.addSubview(urlCoderView)
+
+        // 解码的 URL 标签
+        decodedURLLabel.font = .systemFont(ofSize: 12, weight: .medium)
+        decodedURLLabel.textColor = .secondaryLabelColor
+        decodedURLLabel.translatesAutoresizingMaskIntoConstraints = false
+        urlCoderView.addSubview(decodedURLLabel)
+
+        // 解码的 URL 复制按钮
+        decodedURLCopyButton.image = NSImage(
+            systemSymbolName: "doc.on.doc", accessibilityDescription: "复制")
+        decodedURLCopyButton.bezelStyle = .inline
+        decodedURLCopyButton.isBordered = false
+        decodedURLCopyButton.target = self
+        decodedURLCopyButton.action = #selector(copyDecodedURL)
+        decodedURLCopyButton.translatesAutoresizingMaskIntoConstraints = false
+        urlCoderView.addSubview(decodedURLCopyButton)
+
+        // 解码的 URL 输入框背景
+        let decodedFieldBg = NSView()
+        decodedFieldBg.wantsLayer = true
+        decodedFieldBg.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.2).cgColor
+        decodedFieldBg.layer?.cornerRadius = 6
+        decodedFieldBg.translatesAutoresizingMaskIntoConstraints = false
+        urlCoderView.addSubview(decodedFieldBg)
+
+        // 解码的 URL 滚动视图
+        decodedURLScrollView.hasVerticalScroller = true
+        decodedURLScrollView.hasHorizontalScroller = false
+        decodedURLScrollView.autohidesScrollers = true
+        decodedURLScrollView.borderType = .noBorder
+        decodedURLScrollView.drawsBackground = false
+        decodedURLScrollView.translatesAutoresizingMaskIntoConstraints = false
+        urlCoderView.addSubview(decodedURLScrollView)
+
+        // 解码的 URL 文本视图
+        decodedURLTextView.isEditable = true
+        decodedURLTextView.isSelectable = true
+        decodedURLTextView.isRichText = false
+        decodedURLTextView.font = .systemFont(ofSize: 13)
+        decodedURLTextView.drawsBackground = false
+        decodedURLTextView.textColor = .labelColor
+        decodedURLTextView.textContainerInset = NSSize(width: 4, height: 4)
+        decodedURLTextView.delegate = self
+        decodedURLTextView.autoresizingMask = [.width]
+        decodedURLScrollView.documentView = decodedURLTextView
+
+        // 编码的 URL 标签
+        encodedURLLabel.font = .systemFont(ofSize: 12, weight: .medium)
+        encodedURLLabel.textColor = .secondaryLabelColor
+        encodedURLLabel.translatesAutoresizingMaskIntoConstraints = false
+        urlCoderView.addSubview(encodedURLLabel)
+
+        // 编码的 URL 复制按钮
+        encodedURLCopyButton.image = NSImage(
+            systemSymbolName: "doc.on.doc", accessibilityDescription: "复制")
+        encodedURLCopyButton.bezelStyle = .inline
+        encodedURLCopyButton.isBordered = false
+        encodedURLCopyButton.target = self
+        encodedURLCopyButton.action = #selector(copyEncodedURL)
+        encodedURLCopyButton.translatesAutoresizingMaskIntoConstraints = false
+        urlCoderView.addSubview(encodedURLCopyButton)
+
+        // 编码的 URL 输入框背景
+        let encodedFieldBg = NSView()
+        encodedFieldBg.wantsLayer = true
+        encodedFieldBg.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.2).cgColor
+        encodedFieldBg.layer?.cornerRadius = 6
+        encodedFieldBg.translatesAutoresizingMaskIntoConstraints = false
+        urlCoderView.addSubview(encodedFieldBg)
+
+        // 编码的 URL 滚动视图
+        encodedURLScrollView.hasVerticalScroller = true
+        encodedURLScrollView.hasHorizontalScroller = false
+        encodedURLScrollView.autohidesScrollers = true
+        encodedURLScrollView.borderType = .noBorder
+        encodedURLScrollView.drawsBackground = false
+        encodedURLScrollView.translatesAutoresizingMaskIntoConstraints = false
+        urlCoderView.addSubview(encodedURLScrollView)
+
+        // 编码的 URL 文本视图
+        encodedURLTextView.isEditable = true
+        encodedURLTextView.isSelectable = true
+        encodedURLTextView.isRichText = false
+        encodedURLTextView.font = .systemFont(ofSize: 13)
+        encodedURLTextView.drawsBackground = false
+        encodedURLTextView.textColor = .labelColor
+        encodedURLTextView.textContainerInset = NSSize(width: 4, height: 4)
+        encodedURLTextView.delegate = self
+        encodedURLTextView.autoresizingMask = [.width]
+        encodedURLScrollView.documentView = encodedURLTextView
+
+        // URL 编码解码约束
+        NSLayoutConstraint.activate([
+            urlCoderView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+            urlCoderView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            urlCoderView.topAnchor.constraint(equalTo: divider.bottomAnchor, constant: 12),
+            urlCoderView.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -12),
+
+            // 解码的 URL 标签
+            decodedURLLabel.leadingAnchor.constraint(equalTo: urlCoderView.leadingAnchor),
+            decodedURLLabel.topAnchor.constraint(equalTo: urlCoderView.topAnchor),
+
+            // 解码的 URL 复制按钮
+            decodedURLCopyButton.trailingAnchor.constraint(equalTo: urlCoderView.trailingAnchor),
+            decodedURLCopyButton.centerYAnchor.constraint(equalTo: decodedURLLabel.centerYAnchor),
+            decodedURLCopyButton.widthAnchor.constraint(equalToConstant: 20),
+            decodedURLCopyButton.heightAnchor.constraint(equalToConstant: 20),
+
+            // 解码的 URL 输入框背景
+            decodedFieldBg.leadingAnchor.constraint(equalTo: urlCoderView.leadingAnchor),
+            decodedFieldBg.trailingAnchor.constraint(equalTo: urlCoderView.trailingAnchor),
+            decodedFieldBg.topAnchor.constraint(equalTo: decodedURLLabel.bottomAnchor, constant: 6),
+            decodedFieldBg.heightAnchor.constraint(equalToConstant: 150),
+
+            // 解码的 URL 滚动视图
+            decodedURLScrollView.leadingAnchor.constraint(
+                equalTo: decodedFieldBg.leadingAnchor, constant: 4),
+            decodedURLScrollView.trailingAnchor.constraint(
+                equalTo: decodedFieldBg.trailingAnchor, constant: -4),
+            decodedURLScrollView.topAnchor.constraint(
+                equalTo: decodedFieldBg.topAnchor, constant: 4),
+            decodedURLScrollView.bottomAnchor.constraint(
+                equalTo: decodedFieldBg.bottomAnchor, constant: -4),
+
+            // 编码的 URL 标签
+            encodedURLLabel.leadingAnchor.constraint(equalTo: urlCoderView.leadingAnchor),
+            encodedURLLabel.topAnchor.constraint(
+                equalTo: decodedFieldBg.bottomAnchor, constant: 12),
+
+            // 编码的 URL 复制按钮
+            encodedURLCopyButton.trailingAnchor.constraint(equalTo: urlCoderView.trailingAnchor),
+            encodedURLCopyButton.centerYAnchor.constraint(equalTo: encodedURLLabel.centerYAnchor),
+            encodedURLCopyButton.widthAnchor.constraint(equalToConstant: 20),
+            encodedURLCopyButton.heightAnchor.constraint(equalToConstant: 20),
+
+            // 编码的 URL 输入框背景
+            encodedFieldBg.leadingAnchor.constraint(equalTo: urlCoderView.leadingAnchor),
+            encodedFieldBg.trailingAnchor.constraint(equalTo: urlCoderView.trailingAnchor),
+            encodedFieldBg.topAnchor.constraint(equalTo: encodedURLLabel.bottomAnchor, constant: 6),
+            encodedFieldBg.heightAnchor.constraint(equalToConstant: 150),
+
+            // 编码的 URL 滚动视图
+            encodedURLScrollView.leadingAnchor.constraint(
+                equalTo: encodedFieldBg.leadingAnchor, constant: 4),
+            encodedURLScrollView.trailingAnchor.constraint(
+                equalTo: encodedFieldBg.trailingAnchor, constant: -4),
+            encodedURLScrollView.topAnchor.constraint(
+                equalTo: encodedFieldBg.topAnchor, constant: 4),
+            encodedURLScrollView.bottomAnchor.constraint(
+                equalTo: encodedFieldBg.bottomAnchor, constant: -4),
+        ])
+    }
+
+    @objc private func copyDecodedURL() {
+        let text = decodedURLTextView.string
+        guard !text.isEmpty else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+    }
+
+    @objc private func copyEncodedURL() {
+        let text = encodedURLTextView.string
+        guard !text.isEmpty else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
     }
 
     @objc private func uuidOptionChanged() {
@@ -699,6 +886,10 @@ class SearchPanelViewController: NSViewController {
             // 清理 UUID 模式数据
             generatedUUIDs = []
             uuidOptionsView.isHidden = true
+            // 清理 URL 编码解码模式数据
+            urlCoderView.isHidden = true
+            decodedURLTextView.string = ""
+            encodedURLTextView.string = ""
             restoreNormalModeUI()
             searchField.isHidden = false
             setPlaceholder("搜索应用或文档...")
@@ -795,16 +986,18 @@ class SearchPanelViewController: NSViewController {
         let defaultWindowMode =
             UserDefaults.standard.string(forKey: "defaultWindowMode") ?? "full"
 
-        // UUID 模式使用独立视图，隐藏 scrollView
+        // UUID 模式和 URL 模式使用独立视图，隐藏 scrollView
         let isUUIDMode = isInUtilityMode && currentUtilityIdentifier == "uuid"
+        let isURLMode = isInUtilityMode && currentUtilityIdentifier == "url"
+        let isIndependentViewMode = isUUIDMode || isURLMode
 
-        divider.isHidden = !hasQuery && !isShowingRecents && !isUUIDMode
-        scrollView.isHidden = !hasResults || isUUIDMode
-        noResultsLabel.isHidden = !hasQuery || hasResults || isUUIDMode
+        divider.isHidden = !hasQuery && !isShowingRecents && !isIndependentViewMode
+        scrollView.isHidden = !hasResults || isIndependentViewMode
+        noResultsLabel.isHidden = !hasQuery || hasResults || isIndependentViewMode
 
         // Update window height
-        if defaultWindowMode == "full" || isUUIDMode {
-            // Full 模式或 UUID 模式：始终展开
+        if defaultWindowMode == "full" || isIndependentViewMode {
+            // Full 模式或独立视图模式：始终展开
             updateWindowHeight(expanded: true)
         } else {
             // Simple 模式：有搜索内容且有结果时展开
@@ -857,6 +1050,10 @@ class SearchPanelViewController: NSViewController {
         switch Int(event.keyCode) {
         case 51:  // Delete - IDE 项目模式、文件夹打开模式、网页直达 Query 模式或实用工具模式下，输入框为空时退出
             if isComposing { return event }
+            // URL 模式使用独立文本框，delete 键由文本框处理，不退出
+            if isInUtilityMode && currentUtilityIdentifier == "url" {
+                return event
+            }
             if (isInIDEProjectMode || isInFolderOpenMode || isInWebLinkQueryMode || isInUtilityMode)
                 && searchField.stringValue.isEmpty
             {
@@ -1297,8 +1494,7 @@ class SearchPanelViewController: NSViewController {
         case "uuid":
             loadUUIDGenerator()
         case "url":
-            // TODO: URL 编码解码
-            break
+            loadURLCoder()
         case "base64":
             // TODO: Base64 编码解码
             break
@@ -1327,6 +1523,9 @@ class SearchPanelViewController: NSViewController {
         // 清理 UUID 模式数据
         generatedUUIDs = []
         uuidOptionsView.isHidden = true
+
+        // 清理 URL 编码解码模式数据
+        urlCoderView.isHidden = true
 
         // 恢复 UI
         restoreNormalModeUI()
@@ -1447,6 +1646,54 @@ class SearchPanelViewController: NSViewController {
 
         // 关闭面板
         PanelManager.shared.hidePanel()
+    }
+
+    // MARK: - URL 编码解码方法
+
+    /// 加载 URL 编码解码工具
+    private func loadURLCoder() {
+        // 显示 URL 编码解码视图
+        urlCoderView.isHidden = false
+        scrollView.isHidden = true
+        divider.isHidden = false
+
+        // 清空输入框
+        decodedURLTextView.string = ""
+        encodedURLTextView.string = ""
+
+        // 更新窗口高度
+        updateWindowHeight(expanded: true)
+
+        // 延迟让解码输入框获取焦点（确保窗口已显示）
+        DispatchQueue.main.async { [weak self] in
+            self?.view.window?.makeFirstResponder(self?.decodedURLTextView)
+        }
+    }
+
+    /// 处理解码输入框变化 - 编码 URL
+    private func encodeURL() {
+        let decoded = decodedURLTextView.string
+        if decoded.isEmpty {
+            encodedURLTextView.string = ""
+            return
+        }
+        // URL 编码
+        if let encoded = decoded.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) {
+            encodedURLTextView.string = encoded
+        }
+    }
+
+    /// 处理编码输入框变化 - 解码 URL
+    private func decodeURL() {
+        let encoded = encodedURLTextView.string
+        if encoded.isEmpty {
+            decodedURLTextView.string = ""
+            return
+        }
+        // URL 解码
+        if let decoded = encoded.removingPercentEncoding {
+            decodedURLTextView.string = decoded
+        }
     }
 
     /// 加载 IP 地址
@@ -2136,6 +2383,32 @@ extension SearchPanelViewController: NSTextFieldDelegate {
 extension SearchPanelViewController: NSTableViewDataSource {
     func numberOfRows(in tableView: NSTableView) -> Int {
         return results.count
+    }
+}
+
+// MARK: - NSTextViewDelegate
+
+extension SearchPanelViewController: NSTextViewDelegate {
+    func textDidChange(_ notification: Notification) {
+        guard let textView = notification.object as? NSTextView else { return }
+
+        if textView == decodedURLTextView {
+            // 解码输入框变化 -> 编码
+            urlCoderDebounceWorkItem?.cancel()
+            let workItem = DispatchWorkItem { [weak self] in
+                self?.encodeURL()
+            }
+            urlCoderDebounceWorkItem = workItem
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1, execute: workItem)
+        } else if textView == encodedURLTextView {
+            // 编码输入框变化 -> 解码
+            urlCoderDebounceWorkItem?.cancel()
+            let workItem = DispatchWorkItem { [weak self] in
+                self?.decodeURL()
+            }
+            urlCoderDebounceWorkItem = workItem
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1, execute: workItem)
+        }
     }
 }
 
