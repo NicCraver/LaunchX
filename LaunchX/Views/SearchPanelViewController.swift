@@ -263,6 +263,9 @@ class SearchPanelViewController: NSViewController {
         tableView.reloadData()
         updateVisibility()
 
+        // 聚焦搜索框
+        view.window?.makeFirstResponder(searchField)
+
         print("SearchPanelViewController: IDE mode setup complete, results count=\(results.count)")
     }
 
@@ -321,6 +324,9 @@ class SearchPanelViewController: NSViewController {
         setPlaceholder("请输入关键词搜索...")
         tableView.reloadData()
         updateVisibility()
+
+        // 聚焦搜索框
+        view.window?.makeFirstResponder(searchField)
 
         print("SearchPanelViewController: WebLink query mode setup complete")
     }
@@ -1203,8 +1209,11 @@ class SearchPanelViewController: NSViewController {
         let isBase64Mode = isInUtilityMode && currentUtilityIdentifier == "base64"
         let isIndependentViewMode = isUUIDMode || isURLMode || isBase64Mode
 
+        // 网页直达 Query 模式下，没有输入时不显示结果列表
+        let isWebLinkQueryModeEmpty = isInWebLinkQueryMode && !hasQuery
+
         divider.isHidden = !hasQuery && !isShowingRecents && !isIndependentViewMode
-        scrollView.isHidden = !hasResults || isIndependentViewMode
+        scrollView.isHidden = !hasResults || isIndependentViewMode || isWebLinkQueryModeEmpty
         noResultsLabel.isHidden = !hasQuery || hasResults || isIndependentViewMode
 
         // Update window height

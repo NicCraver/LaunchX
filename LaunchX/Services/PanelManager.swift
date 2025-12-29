@@ -126,8 +126,10 @@ class PanelManager: NSObject, NSWindowDelegate {
             userInfo: ["path": idePath, "ideType": ideType]
         )
 
-        // 显示面板
-        showPanel()
+        // 只有面板未显示时才调用 showPanel()，避免重复触发 onWillShow
+        if !panel.isVisible {
+            showPanel()
+        }
     }
 
     /// 显示面板并直接进入网页直达 Query 模式
@@ -141,8 +143,10 @@ class PanelManager: NSObject, NSWindowDelegate {
             userInfo: ["tool": tool]
         )
 
-        // 显示面板
-        showPanel()
+        // 只有面板未显示时才调用 showPanel()，避免重复触发 onWillShow
+        if !panel.isVisible {
+            showPanel()
+        }
     }
 
     /// 显示面板并直接进入实用工具模式
