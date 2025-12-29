@@ -1172,6 +1172,9 @@ class SearchPanelViewController: NSViewController {
         searchField.stringValue = ""
         setPlaceholder("搜索应用或文档...")
         resetState()
+
+        // 聚焦搜索框，方便用户继续搜索
+        view.window?.makeFirstResponder(searchField)
     }
 
     /// 更新实用工具模式 UI
