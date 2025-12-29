@@ -81,6 +81,18 @@ class SearchPanelViewController: NSViewController {
     private let encodedURLCopyButton = NSButton()
     private var urlCoderDebounceWorkItem: DispatchWorkItem?  // URL 编码解码防抖
 
+    // Base64 编码解码 UI 组件
+    private let base64CoderView = NSView()  // Base64 编码解码容器
+    private let originalTextLabel = NSTextField(labelWithString: "原始文本")
+    private let originalTextScrollView = NSScrollView()  // 原始文本滚动视图
+    private let originalTextView = NSTextView()  // 原始文本视图
+    private let originalTextCopyButton = NSButton()
+    private let base64TextLabel = NSTextField(labelWithString: "Base64")
+    private let base64TextScrollView = NSScrollView()  // Base64 文本滚动视图
+    private let base64TextView = NSTextView()  // Base64 文本视图
+    private let base64TextCopyButton = NSButton()
+    private var base64CoderDebounceWorkItem: DispatchWorkItem?  // Base64 编码解码防抖
+
     // MARK: - Constants
     private let rowHeight: CGFloat = 44
     private let headerHeight: CGFloat = 80
@@ -362,8 +374,7 @@ class SearchPanelViewController: NSViewController {
         case "url":
             loadURLCoder()
         case "base64":
-            // TODO: Base64 编码解码
-            break
+            loadBase64Coder()
         case "kill":
             loadKillModeProcesses()
         default:
@@ -505,6 +516,9 @@ class SearchPanelViewController: NSViewController {
 
         // URL 编码解码 UI 设置
         setupURLCoderUI()
+
+        // Base64 编码解码 UI 设置
+        setupBase64CoderUI()
     }
 
     /// 设置 UUID 生成器 UI
@@ -759,6 +773,182 @@ class SearchPanelViewController: NSViewController {
         ])
     }
 
+    /// 设置 Base64 编码解码 UI
+    private func setupBase64CoderUI() {
+        // Base64 编码解码容器
+        base64CoderView.translatesAutoresizingMaskIntoConstraints = false
+        base64CoderView.isHidden = true
+        view.addSubview(base64CoderView)
+
+        // 原始文本标签
+        originalTextLabel.font = .systemFont(ofSize: 12, weight: .medium)
+        originalTextLabel.textColor = .secondaryLabelColor
+        originalTextLabel.translatesAutoresizingMaskIntoConstraints = false
+        base64CoderView.addSubview(originalTextLabel)
+
+        // 原始文本复制按钮
+        originalTextCopyButton.image = NSImage(
+            systemSymbolName: "doc.on.doc", accessibilityDescription: "复制")
+        originalTextCopyButton.bezelStyle = .inline
+        originalTextCopyButton.isBordered = false
+        originalTextCopyButton.target = self
+        originalTextCopyButton.action = #selector(copyOriginalText)
+        originalTextCopyButton.translatesAutoresizingMaskIntoConstraints = false
+        base64CoderView.addSubview(originalTextCopyButton)
+
+        // 原始文本输入框背景
+        let originalFieldBg = NSView()
+        originalFieldBg.wantsLayer = true
+        originalFieldBg.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.2).cgColor
+        originalFieldBg.layer?.cornerRadius = 6
+        originalFieldBg.translatesAutoresizingMaskIntoConstraints = false
+        base64CoderView.addSubview(originalFieldBg)
+
+        // 原始文本滚动视图
+        originalTextScrollView.hasVerticalScroller = true
+        originalTextScrollView.hasHorizontalScroller = false
+        originalTextScrollView.autohidesScrollers = true
+        originalTextScrollView.borderType = .noBorder
+        originalTextScrollView.drawsBackground = false
+        originalTextScrollView.translatesAutoresizingMaskIntoConstraints = false
+        base64CoderView.addSubview(originalTextScrollView)
+
+        // 原始文本视图
+        originalTextView.isEditable = true
+        originalTextView.isSelectable = true
+        originalTextView.isRichText = false
+        originalTextView.font = .systemFont(ofSize: 13)
+        originalTextView.drawsBackground = false
+        originalTextView.textColor = .labelColor
+        originalTextView.textContainerInset = NSSize(width: 4, height: 4)
+        originalTextView.delegate = self
+        originalTextView.autoresizingMask = [.width]
+        originalTextScrollView.documentView = originalTextView
+
+        // Base64 文本标签
+        base64TextLabel.font = .systemFont(ofSize: 12, weight: .medium)
+        base64TextLabel.textColor = .secondaryLabelColor
+        base64TextLabel.translatesAutoresizingMaskIntoConstraints = false
+        base64CoderView.addSubview(base64TextLabel)
+
+        // Base64 文本复制按钮
+        base64TextCopyButton.image = NSImage(
+            systemSymbolName: "doc.on.doc", accessibilityDescription: "复制")
+        base64TextCopyButton.bezelStyle = .inline
+        base64TextCopyButton.isBordered = false
+        base64TextCopyButton.target = self
+        base64TextCopyButton.action = #selector(copyBase64Text)
+        base64TextCopyButton.translatesAutoresizingMaskIntoConstraints = false
+        base64CoderView.addSubview(base64TextCopyButton)
+
+        // Base64 文本输入框背景
+        let base64FieldBg = NSView()
+        base64FieldBg.wantsLayer = true
+        base64FieldBg.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.2).cgColor
+        base64FieldBg.layer?.cornerRadius = 6
+        base64FieldBg.translatesAutoresizingMaskIntoConstraints = false
+        base64CoderView.addSubview(base64FieldBg)
+
+        // Base64 文本滚动视图
+        base64TextScrollView.hasVerticalScroller = true
+        base64TextScrollView.hasHorizontalScroller = false
+        base64TextScrollView.autohidesScrollers = true
+        base64TextScrollView.borderType = .noBorder
+        base64TextScrollView.drawsBackground = false
+        base64TextScrollView.translatesAutoresizingMaskIntoConstraints = false
+        base64CoderView.addSubview(base64TextScrollView)
+
+        // Base64 文本视图
+        base64TextView.isEditable = true
+        base64TextView.isSelectable = true
+        base64TextView.isRichText = false
+        base64TextView.font = .systemFont(ofSize: 13)
+        base64TextView.drawsBackground = false
+        base64TextView.textColor = .labelColor
+        base64TextView.textContainerInset = NSSize(width: 4, height: 4)
+        base64TextView.delegate = self
+        base64TextView.autoresizingMask = [.width]
+        base64TextScrollView.documentView = base64TextView
+
+        // Base64 编码解码约束
+        NSLayoutConstraint.activate([
+            base64CoderView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+            base64CoderView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            base64CoderView.topAnchor.constraint(equalTo: divider.bottomAnchor, constant: 12),
+            base64CoderView.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -12),
+
+            // 原始文本标签
+            originalTextLabel.leadingAnchor.constraint(equalTo: base64CoderView.leadingAnchor),
+            originalTextLabel.topAnchor.constraint(equalTo: base64CoderView.topAnchor),
+
+            // 原始文本复制按钮
+            originalTextCopyButton.trailingAnchor.constraint(
+                equalTo: base64CoderView.trailingAnchor),
+            originalTextCopyButton.centerYAnchor.constraint(
+                equalTo: originalTextLabel.centerYAnchor),
+            originalTextCopyButton.widthAnchor.constraint(equalToConstant: 20),
+            originalTextCopyButton.heightAnchor.constraint(equalToConstant: 20),
+
+            // 原始文本输入框背景
+            originalFieldBg.leadingAnchor.constraint(equalTo: base64CoderView.leadingAnchor),
+            originalFieldBg.trailingAnchor.constraint(equalTo: base64CoderView.trailingAnchor),
+            originalFieldBg.topAnchor.constraint(
+                equalTo: originalTextLabel.bottomAnchor, constant: 6),
+            originalFieldBg.heightAnchor.constraint(equalToConstant: 150),
+
+            // 原始文本滚动视图
+            originalTextScrollView.leadingAnchor.constraint(
+                equalTo: originalFieldBg.leadingAnchor, constant: 4),
+            originalTextScrollView.trailingAnchor.constraint(
+                equalTo: originalFieldBg.trailingAnchor, constant: -4),
+            originalTextScrollView.topAnchor.constraint(
+                equalTo: originalFieldBg.topAnchor, constant: 4),
+            originalTextScrollView.bottomAnchor.constraint(
+                equalTo: originalFieldBg.bottomAnchor, constant: -4),
+
+            // Base64 文本标签
+            base64TextLabel.leadingAnchor.constraint(equalTo: base64CoderView.leadingAnchor),
+            base64TextLabel.topAnchor.constraint(
+                equalTo: originalFieldBg.bottomAnchor, constant: 12),
+
+            // Base64 文本复制按钮
+            base64TextCopyButton.trailingAnchor.constraint(equalTo: base64CoderView.trailingAnchor),
+            base64TextCopyButton.centerYAnchor.constraint(equalTo: base64TextLabel.centerYAnchor),
+            base64TextCopyButton.widthAnchor.constraint(equalToConstant: 20),
+            base64TextCopyButton.heightAnchor.constraint(equalToConstant: 20),
+
+            // Base64 文本输入框背景
+            base64FieldBg.leadingAnchor.constraint(equalTo: base64CoderView.leadingAnchor),
+            base64FieldBg.trailingAnchor.constraint(equalTo: base64CoderView.trailingAnchor),
+            base64FieldBg.topAnchor.constraint(equalTo: base64TextLabel.bottomAnchor, constant: 6),
+            base64FieldBg.heightAnchor.constraint(equalToConstant: 150),
+
+            // Base64 文本滚动视图
+            base64TextScrollView.leadingAnchor.constraint(
+                equalTo: base64FieldBg.leadingAnchor, constant: 4),
+            base64TextScrollView.trailingAnchor.constraint(
+                equalTo: base64FieldBg.trailingAnchor, constant: -4),
+            base64TextScrollView.topAnchor.constraint(
+                equalTo: base64FieldBg.topAnchor, constant: 4),
+            base64TextScrollView.bottomAnchor.constraint(
+                equalTo: base64FieldBg.bottomAnchor, constant: -4),
+        ])
+    }
+
+    @objc private func copyOriginalText() {
+        let text = originalTextView.string
+        guard !text.isEmpty else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+    }
+
+    @objc private func copyBase64Text() {
+        let text = base64TextView.string
+        guard !text.isEmpty else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+    }
+
     @objc private func copyDecodedURL() {
         let text = decodedURLTextView.string
         guard !text.isEmpty else { return }
@@ -890,6 +1080,10 @@ class SearchPanelViewController: NSViewController {
             urlCoderView.isHidden = true
             decodedURLTextView.string = ""
             encodedURLTextView.string = ""
+            // 清理 Base64 编码解码模式数据
+            base64CoderView.isHidden = true
+            originalTextView.string = ""
+            base64TextView.string = ""
             restoreNormalModeUI()
             searchField.isHidden = false
             setPlaceholder("搜索应用或文档...")
@@ -989,7 +1183,8 @@ class SearchPanelViewController: NSViewController {
         // UUID 模式和 URL 模式使用独立视图，隐藏 scrollView
         let isUUIDMode = isInUtilityMode && currentUtilityIdentifier == "uuid"
         let isURLMode = isInUtilityMode && currentUtilityIdentifier == "url"
-        let isIndependentViewMode = isUUIDMode || isURLMode
+        let isBase64Mode = isInUtilityMode && currentUtilityIdentifier == "base64"
+        let isIndependentViewMode = isUUIDMode || isURLMode || isBase64Mode
 
         divider.isHidden = !hasQuery && !isShowingRecents && !isIndependentViewMode
         scrollView.isHidden = !hasResults || isIndependentViewMode
@@ -1050,8 +1245,10 @@ class SearchPanelViewController: NSViewController {
         switch Int(event.keyCode) {
         case 51:  // Delete - IDE 项目模式、文件夹打开模式、网页直达 Query 模式或实用工具模式下，输入框为空时退出
             if isComposing { return event }
-            // URL 模式使用独立文本框，delete 键由文本框处理，不退出
-            if isInUtilityMode && currentUtilityIdentifier == "url" {
+            // URL 模式和 Base64 模式使用独立文本框，delete 键由文本框处理，不退出
+            if isInUtilityMode
+                && (currentUtilityIdentifier == "url" || currentUtilityIdentifier == "base64")
+            {
                 return event
             }
             if (isInIDEProjectMode || isInFolderOpenMode || isInWebLinkQueryMode || isInUtilityMode)
@@ -1496,8 +1693,7 @@ class SearchPanelViewController: NSViewController {
         case "url":
             loadURLCoder()
         case "base64":
-            // TODO: Base64 编码解码
-            break
+            loadBase64Coder()
         case "kill":
             loadKillModeProcesses()
         default:
@@ -1526,6 +1722,9 @@ class SearchPanelViewController: NSViewController {
 
         // 清理 URL 编码解码模式数据
         urlCoderView.isHidden = true
+
+        // 清理 Base64 编码解码模式数据
+        base64CoderView.isHidden = true
 
         // 恢复 UI
         restoreNormalModeUI()
@@ -1693,6 +1892,56 @@ class SearchPanelViewController: NSViewController {
         // URL 解码
         if let decoded = encoded.removingPercentEncoding {
             decodedURLTextView.string = decoded
+        }
+    }
+
+    // MARK: - Base64 编码解码方法
+
+    /// 加载 Base64 编码解码工具
+    private func loadBase64Coder() {
+        // 显示 Base64 编码解码视图
+        base64CoderView.isHidden = false
+        scrollView.isHidden = true
+        divider.isHidden = false
+
+        // 清空输入框
+        originalTextView.string = ""
+        base64TextView.string = ""
+
+        // 更新窗口高度
+        updateWindowHeight(expanded: true)
+
+        // 延迟让原始文本输入框获取焦点（确保窗口已显示）
+        DispatchQueue.main.async { [weak self] in
+            self?.view.window?.makeFirstResponder(self?.originalTextView)
+        }
+    }
+
+    /// 处理原始文本变化 - 编码为 Base64
+    private func encodeBase64() {
+        let original = originalTextView.string
+        if original.isEmpty {
+            base64TextView.string = ""
+            return
+        }
+        // Base64 编码
+        if let data = original.data(using: .utf8) {
+            base64TextView.string = data.base64EncodedString()
+        }
+    }
+
+    /// 处理 Base64 文本变化 - 解码为原始文本
+    private func decodeBase64() {
+        let base64 = base64TextView.string
+        if base64.isEmpty {
+            originalTextView.string = ""
+            return
+        }
+        // Base64 解码
+        if let data = Data(base64Encoded: base64),
+            let decoded = String(data: data, encoding: .utf8)
+        {
+            originalTextView.string = decoded
         }
     }
 
@@ -2407,6 +2656,22 @@ extension SearchPanelViewController: NSTextViewDelegate {
                 self?.decodeURL()
             }
             urlCoderDebounceWorkItem = workItem
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1, execute: workItem)
+        } else if textView == originalTextView {
+            // 原始文本变化 -> Base64 编码
+            base64CoderDebounceWorkItem?.cancel()
+            let workItem = DispatchWorkItem { [weak self] in
+                self?.encodeBase64()
+            }
+            base64CoderDebounceWorkItem = workItem
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1, execute: workItem)
+        } else if textView == base64TextView {
+            // Base64 文本变化 -> 解码
+            base64CoderDebounceWorkItem?.cancel()
+            let workItem = DispatchWorkItem { [weak self] in
+                self?.decodeBase64()
+            }
+            base64CoderDebounceWorkItem = workItem
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1, execute: workItem)
         }
     }
