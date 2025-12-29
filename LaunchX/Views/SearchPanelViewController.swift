@@ -65,8 +65,6 @@ class SearchPanelViewController: NSViewController {
     private let hyphenCheckbox = NSButton(checkboxWithTitle: "连字符", target: nil, action: nil)
     private let uppercaseRadio = NSButton(radioButtonWithTitle: "大写字符", target: nil, action: nil)
     private let lowercaseRadio = NSButton(radioButtonWithTitle: "小写字符", target: nil, action: nil)
-    private let countLabel = NSTextField(labelWithString: "生成数量")
-    private let countField = NSTextField()
     private let resultLabel = NSTextField(labelWithString: "结果")
     private let uuidResultView = NSScrollView()  // UUID 结果滚动视图
     private let uuidResultTextView = NSTextView()  // UUID 结果文本
@@ -508,6 +506,7 @@ class SearchPanelViewController: NSViewController {
         hyphenCheckbox.action = #selector(uuidOptionChanged)
         hyphenCheckbox.translatesAutoresizingMaskIntoConstraints = false
         hyphenCheckbox.setContentHuggingPriority(.required, for: .horizontal)
+        hyphenCheckbox.refusesFirstResponder = true
         uuidOptionsView.addSubview(hyphenCheckbox)
 
         // 大写单选按钮
@@ -516,6 +515,7 @@ class SearchPanelViewController: NSViewController {
         uppercaseRadio.action = #selector(uuidCaseChanged(_:))
         uppercaseRadio.translatesAutoresizingMaskIntoConstraints = false
         uppercaseRadio.setContentHuggingPriority(.required, for: .horizontal)
+        uppercaseRadio.refusesFirstResponder = true
         uuidOptionsView.addSubview(uppercaseRadio)
 
         // 小写单选按钮
@@ -524,34 +524,8 @@ class SearchPanelViewController: NSViewController {
         lowercaseRadio.action = #selector(uuidCaseChanged(_:))
         lowercaseRadio.translatesAutoresizingMaskIntoConstraints = false
         lowercaseRadio.setContentHuggingPriority(.required, for: .horizontal)
+        lowercaseRadio.refusesFirstResponder = true
         uuidOptionsView.addSubview(lowercaseRadio)
-
-        // 生成数量标签
-        countLabel.stringValue = "数量"
-        countLabel.font = .systemFont(ofSize: 12, weight: .medium)
-        countLabel.textColor = .secondaryLabelColor
-        countLabel.translatesAutoresizingMaskIntoConstraints = false
-        uuidOptionsView.addSubview(countLabel)
-
-        // 生成数量输入框 - 简化样式
-        countField.stringValue = ""
-        countField.placeholderString = "1-500"
-        countField.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
-        countField.isBordered = false
-        countField.drawsBackground = false
-        countField.alignment = .center
-        countField.focusRingType = .none
-        countField.delegate = self
-        countField.translatesAutoresizingMaskIntoConstraints = false
-        uuidOptionsView.addSubview(countField)
-
-        // 数量输入框背景
-        let countFieldBg = NSView()
-        countFieldBg.wantsLayer = true
-        countFieldBg.layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
-        countFieldBg.layer?.cornerRadius = 4
-        countFieldBg.translatesAutoresizingMaskIntoConstraints = false
-        uuidOptionsView.addSubview(countFieldBg, positioned: .below, relativeTo: countField)
 
         // 结果标签
         resultLabel.stringValue = "结果"
@@ -599,20 +573,6 @@ class SearchPanelViewController: NSViewController {
             lowercaseRadio.leadingAnchor.constraint(
                 equalTo: uppercaseRadio.trailingAnchor, constant: 12),
             lowercaseRadio.centerYAnchor.constraint(equalTo: hyphenCheckbox.centerYAnchor),
-
-            // 数量标签和输入框（与选项同行，靠右）
-            countLabel.trailingAnchor.constraint(equalTo: countFieldBg.leadingAnchor, constant: -8),
-            countLabel.centerYAnchor.constraint(equalTo: hyphenCheckbox.centerYAnchor),
-
-            countFieldBg.trailingAnchor.constraint(equalTo: uuidOptionsView.trailingAnchor),
-            countFieldBg.centerYAnchor.constraint(equalTo: hyphenCheckbox.centerYAnchor),
-            countFieldBg.widthAnchor.constraint(equalToConstant: 60),
-            countFieldBg.heightAnchor.constraint(equalToConstant: 24),
-
-            countField.leadingAnchor.constraint(equalTo: countFieldBg.leadingAnchor, constant: 4),
-            countField.trailingAnchor.constraint(
-                equalTo: countFieldBg.trailingAnchor, constant: -4),
-            countField.centerYAnchor.constraint(equalTo: countFieldBg.centerYAnchor),
 
             // 结果标签
             resultLabel.leadingAnchor.constraint(equalTo: uuidOptionsView.leadingAnchor),
@@ -1395,11 +1355,14 @@ class SearchPanelViewController: NSViewController {
         searchFieldLeadingToTag?.isActive = true
 
         // 根据实用工具类型决定是否显示搜索框
-        // kill 模式需要搜索，其他模式（如 IP 查询）不需要
+        // kill 模式需要搜索，uuid 模式需要输入数量，其他模式（如 IP 查询）不需要
         if currentUtilityIdentifier == "kill" {
             searchField.isHidden = false
             searchField.stringValue = ""
             setPlaceholder("请输入关键词搜索")
+        } else if currentUtilityIdentifier == "uuid" {
+            searchField.isHidden = false
+            // uuid 模式的 placeholder 在 loadUUIDGenerator 中设置
         } else {
             searchField.isHidden = true
         }
@@ -1418,7 +1381,13 @@ class SearchPanelViewController: NSViewController {
         hyphenCheckbox.state = uuidUseHyphen ? .on : .off
         uppercaseRadio.state = uuidUppercase ? .on : .off
         lowercaseRadio.state = uuidUppercase ? .off : .on
-        countField.stringValue = "\(uuidCount)"
+
+        // 设置搜索框用于输入数量
+        searchField.stringValue = ""
+        setPlaceholder("1-1000")
+
+        // 确保搜索框获取焦点
+        view.window?.makeFirstResponder(searchField)
 
         // 生成初始 UUID
         generateUUIDs()
@@ -1429,14 +1398,14 @@ class SearchPanelViewController: NSViewController {
 
     /// 生成 UUID 列表
     private func generateUUIDs() {
-        // 从输入框获取数量
-        if let count = Int(countField.stringValue), count > 0, count <= 500 {
+        // 从搜索框获取数量
+        let inputText = searchField.stringValue
+        if let count = Int(inputText), count > 0, count <= 1000 {
             uuidCount = count
-        } else if countField.stringValue.isEmpty {
+        } else if inputText.isEmpty {
             uuidCount = 1
         } else {
-            uuidCount = min(max(1, Int(countField.stringValue) ?? 1), 500)
-            countField.stringValue = "\(uuidCount)"
+            uuidCount = min(max(1, Int(inputText) ?? 1), 1000)
         }
 
         // 生成 UUID
@@ -2120,18 +2089,6 @@ class SearchPanelViewController: NSViewController {
 
 extension SearchPanelViewController: NSTextFieldDelegate {
     func controlTextDidChange(_ obj: Notification) {
-        // 检查是否是 UUID 数量输入框
-        if let textField = obj.object as? NSTextField, textField == countField {
-            // 防抖处理 UUID 生成
-            uuidDebounceWorkItem?.cancel()
-            let workItem = DispatchWorkItem { [weak self] in
-                self?.generateUUIDs()
-            }
-            uuidDebounceWorkItem = workItem
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: workItem)
-            return
-        }
-
         let query = searchField.stringValue
 
         // IDE 项目模式：搜索项目
@@ -2156,6 +2113,14 @@ extension SearchPanelViewController: NSTextFieldDelegate {
             // kill 模式支持搜索
             if currentUtilityIdentifier == "kill" {
                 performKillModeSearch(query)
+            } else if currentUtilityIdentifier == "uuid" {
+                // UUID 模式：防抖处理数量变化
+                uuidDebounceWorkItem?.cancel()
+                let workItem = DispatchWorkItem { [weak self] in
+                    self?.generateUUIDs()
+                }
+                uuidDebounceWorkItem = workItem
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: workItem)
             }
             // 其他实用工具模式不进行搜索
             return
