@@ -47,6 +47,12 @@ class SearchPanelViewController: NSViewController {
     // IP 查询结果
     private var ipQueryResults: [(label: String, ip: String)] = []
 
+    // Kill 进程模式数据
+    private var killModeApps: [RunningProcessInfo] = []  // 已打开应用
+    private var killModePorts: [RunningProcessInfo] = []  // 监听端口进程
+    private var killModeAllItems: [RunningProcessInfo] = []  // 合并列表（用于显示）
+    private var killModeFilteredItems: [RunningProcessInfo] = []  // 搜索过滤后的列表
+
     // MARK: - Constants
     private let rowHeight: CGFloat = 44
     private let headerHeight: CGFloat = 80
@@ -333,8 +339,7 @@ class SearchPanelViewController: NSViewController {
             // TODO: Base64 编码解码
             break
         case "kill":
-            // TODO: 退出应用与进程
-            break
+            loadKillModeProcesses()
         default:
             break
         }
@@ -835,18 +840,34 @@ class SearchPanelViewController: NSViewController {
 
     private func moveSelectionDown() {
         guard !results.isEmpty else { return }
-        selectedIndex = min(selectedIndex + 1, results.count - 1)
-        tableView.selectRowIndexes(IndexSet(integer: selectedIndex), byExtendingSelection: false)
-        scrollToKeepSelectionCentered()
-        tableView.reloadData()
+        var newIndex = selectedIndex + 1
+        // 跳过分组标题
+        while newIndex < results.count && results[newIndex].isSectionHeader {
+            newIndex += 1
+        }
+        if newIndex < results.count {
+            selectedIndex = newIndex
+            tableView.selectRowIndexes(
+                IndexSet(integer: selectedIndex), byExtendingSelection: false)
+            scrollToKeepSelectionCentered()
+            tableView.reloadData()
+        }
     }
 
     private func moveSelectionUp() {
         guard !results.isEmpty else { return }
-        selectedIndex = max(selectedIndex - 1, 0)
-        tableView.selectRowIndexes(IndexSet(integer: selectedIndex), byExtendingSelection: false)
-        scrollToKeepSelectionCentered()
-        tableView.reloadData()
+        var newIndex = selectedIndex - 1
+        // 跳过分组标题
+        while newIndex >= 0 && results[newIndex].isSectionHeader {
+            newIndex -= 1
+        }
+        if newIndex >= 0 {
+            selectedIndex = newIndex
+            tableView.selectRowIndexes(
+                IndexSet(integer: selectedIndex), byExtendingSelection: false)
+            scrollToKeepSelectionCentered()
+            tableView.reloadData()
+        }
     }
 
     // MARK: - IDE Project Mode
@@ -1148,8 +1169,7 @@ class SearchPanelViewController: NSViewController {
             // TODO: Base64 编码解码
             break
         case "kill":
-            // TODO: 退出应用与进程
-            break
+            loadKillModeProcesses()
         default:
             break
         }
@@ -1163,6 +1183,12 @@ class SearchPanelViewController: NSViewController {
         currentUtilityIdentifier = nil
         currentUtilityResult = nil
         ipQueryResults = []
+
+        // 清理 kill 模式数据
+        killModeApps = []
+        killModePorts = []
+        killModeAllItems = []
+        killModeFilteredItems = []
 
         // 恢复 UI
         restoreNormalModeUI()
@@ -1190,8 +1216,15 @@ class SearchPanelViewController: NSViewController {
         searchFieldLeadingToIcon?.isActive = false
         searchFieldLeadingToTag?.isActive = true
 
-        // 隐藏搜索框（IP 查询不需要输入）
-        searchField.isHidden = true
+        // 根据实用工具类型决定是否显示搜索框
+        // kill 模式需要搜索，其他模式（如 IP 查询）不需要
+        if currentUtilityIdentifier == "kill" {
+            searchField.isHidden = false
+            searchField.stringValue = ""
+            setPlaceholder("请输入关键词搜索")
+        } else {
+            searchField.isHidden = true
+        }
     }
 
     /// 加载 IP 地址
@@ -1412,8 +1445,219 @@ class SearchPanelViewController: NSViewController {
                     }
                 }
             }
+        case "kill":
+            // 显示 kill 确认弹窗
+            showKillConfirmation()
         default:
             break
+        }
+    }
+
+    // MARK: - Kill 模式方法
+
+    /// 加载 kill 模式的进程列表
+    private func loadKillModeProcesses() {
+        // 设置 placeholder
+        setPlaceholder("请输入关键词搜索")
+
+        // 显示加载中状态
+        results = []
+        tableView.reloadData()
+
+        // 异步加载进程列表
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let apps = ProcessManager.shared.getRunningApps()
+            let ports = ProcessManager.shared.getListeningPortProcesses()
+
+            DispatchQueue.main.async {
+                guard let self = self,
+                    self.isInUtilityMode,
+                    self.currentUtilityIdentifier == "kill"
+                else { return }
+
+                self.killModeApps = apps
+                self.killModePorts = ports
+                self.killModeAllItems = apps + ports
+                self.killModeFilteredItems = self.killModeAllItems
+                self.reloadKillModeResults()
+            }
+        }
+    }
+
+    /// 刷新 kill 模式结果显示
+    private func reloadKillModeResults() {
+        let currentSelection = selectedIndex
+
+        // 构建带分组标题的结果列表
+        var newResults: [SearchResult] = []
+
+        // 过滤已打开应用
+        let filteredApps = killModeFilteredItems.filter { $0.isApp }
+        // 过滤监听端口进程
+        let filteredPorts = killModeFilteredItems.filter { !$0.isApp }
+
+        // 添加「已打开应用」分组
+        if !filteredApps.isEmpty {
+            // 添加分组标题
+            let headerResult = SearchResult(
+                name: "已打开应用",
+                path: "",
+                icon: NSImage(),
+                isDirectory: false,
+                isSectionHeader: true
+            )
+            newResults.append(headerResult)
+
+            // 添加应用列表
+            for app in filteredApps {
+                let icon =
+                    app.icon ?? NSImage(
+                        systemSymbolName: "app", accessibilityDescription: "App")!
+                icon.size = NSSize(width: 32, height: 32)
+
+                let result = SearchResult(
+                    name: app.name,
+                    path: "\(app.id)",  // 存储 PID
+                    icon: icon,
+                    isDirectory: false,
+                    processStats: "|\(app.formattedCPU)|\(app.formattedMemory)"  // 格式: |cpu|memory (无端口)
+                )
+                newResults.append(result)
+            }
+        }
+
+        // 添加「已监听端口」分组
+        if !filteredPorts.isEmpty {
+            // 添加分组标题
+            let headerResult = SearchResult(
+                name: "已打开监听端口",
+                path: "",
+                icon: NSImage(),
+                isDirectory: false,
+                isSectionHeader: true
+            )
+            newResults.append(headerResult)
+
+            // 添加端口进程列表
+            for process in filteredPorts {
+                let icon =
+                    process.icon ?? NSImage(
+                        systemSymbolName: "terminal", accessibilityDescription: "Process")!
+                icon.size = NSSize(width: 32, height: 32)
+
+                // 端口号放到 processStats 前面，使用管道分隔
+                let portStr = process.port != nil ? ":\(process.port!)" : ""
+                let result = SearchResult(
+                    name: process.name,
+                    path: "\(process.id)",  // 存储 PID
+                    icon: icon,
+                    isDirectory: false,
+                    processStats: "\(portStr)|\(process.formattedCPU)|\(process.formattedMemory)"  // 格式: port|cpu|memory
+                )
+                newResults.append(result)
+            }
+        }
+
+        results = newResults
+
+        // 恢复选中索引，跳过分组标题
+        if results.indices.contains(currentSelection)
+            && !results[currentSelection].isSectionHeader
+        {
+            selectedIndex = currentSelection
+        } else {
+            // 找到第一个非标题行
+            selectedIndex = results.firstIndex { !$0.isSectionHeader } ?? 0
+        }
+
+        tableView.reloadData()
+
+        if results.indices.contains(selectedIndex) {
+            tableView.selectRowIndexes(
+                IndexSet(integer: selectedIndex), byExtendingSelection: false)
+        }
+
+        updateVisibility()
+    }
+
+    /// 执行 kill 模式搜索过滤
+    private func performKillModeSearch(_ query: String) {
+        if query.isEmpty {
+            killModeFilteredItems = killModeAllItems
+        } else {
+            let lowercaseQuery = query.lowercased()
+            killModeFilteredItems = killModeAllItems.filter { process in
+                // 匹配名称
+                if process.name.lowercased().contains(lowercaseQuery) {
+                    return true
+                }
+                // 匹配端口号
+                if let port = process.port, "\(port)".contains(query) {
+                    return true
+                }
+                // 匹配 PID
+                if "\(process.id)".contains(query) {
+                    return true
+                }
+                return false
+            }
+        }
+        reloadKillModeResults()
+    }
+
+    /// 显示 kill 确认弹窗
+    private func showKillConfirmation() {
+        guard selectedIndex < results.count else { return }
+        let selectedResult = results[selectedIndex]
+
+        // 跳过分组标题
+        guard !selectedResult.isSectionHeader else { return }
+
+        // 获取 PID
+        guard let pid = Int32(selectedResult.path) else { return }
+
+        // 查找对应的进程信息
+        guard let processInfo = killModeAllItems.first(where: { $0.id == pid }) else { return }
+
+        // 显示确认弹窗
+        let alert = NSAlert()
+        alert.messageText = "是否确定退出 \(processInfo.name)?"
+        alert.informativeText = processInfo.isApp ? "" : "进程 ID: \(pid)"
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "确定")
+        alert.addButton(withTitle: "取消")
+
+        // 设置图标
+        if let icon = processInfo.icon {
+            alert.icon = icon
+        }
+
+        let response = alert.runModal()
+        if response == .alertFirstButtonReturn {
+            // 执行 kill
+            let success: Bool
+            if processInfo.isApp {
+                success = ProcessManager.shared.terminateApp(pid: pid)
+            } else {
+                success = ProcessManager.shared.killProcess(pid: pid)
+            }
+
+            if success {
+                // 从列表中移除
+                killModeAllItems.removeAll { $0.id == pid }
+                killModeFilteredItems.removeAll { $0.id == pid }
+                killModeApps.removeAll { $0.id == pid }
+                killModePorts.removeAll { $0.id == pid }
+                reloadKillModeResults()
+            } else {
+                // 显示失败提示
+                let failAlert = NSAlert()
+                failAlert.messageText = "无法终止 \(processInfo.name)"
+                failAlert.informativeText = "可能需要更高的权限"
+                failAlert.alertStyle = .critical
+                failAlert.addButton(withTitle: "确定")
+                failAlert.runModal()
+            }
         }
     }
 
@@ -1639,8 +1883,13 @@ extension SearchPanelViewController: NSTextFieldDelegate {
             return
         }
 
-        // 实用工具模式：不进行搜索
+        // 实用工具模式：根据类型处理
         if isInUtilityMode {
+            // kill 模式支持搜索
+            if currentUtilityIdentifier == "kill" {
+                performKillModeSearch(query)
+            }
+            // 其他实用工具模式不进行搜索
             return
         }
 
@@ -1690,7 +1939,18 @@ extension SearchPanelViewController: NSTableViewDelegate {
     }
 
     func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool {
-        return true
+        // 分组标题不可选中
+        guard row < results.count else { return true }
+        return !results[row].isSectionHeader
+    }
+
+    func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
+        // 分组标题使用较小的行高
+        guard row < results.count else { return rowHeight }
+        if results[row].isSectionHeader {
+            return 28  // 分组标题行高
+        }
+        return rowHeight
     }
 }
 
@@ -1705,11 +1965,24 @@ class ResultCellView: NSView {
     private let backgroundView = NSView()
     private let arrowIndicator = NSImageView()  // IDE 箭头指示器
 
+    // 进程统计信息（三列独立显示）
+    private let portLabel = NSTextField(labelWithString: "")
+    private let cpuIcon = NSImageView()
+    private let cpuLabel = NSTextField(labelWithString: "")
+    private let memoryIcon = NSImageView()
+    private let memoryLabel = NSTextField(labelWithString: "")
+    private let statsContainerView = NSView()  // 统计信息容器
+
     // 用于切换 nameLabel 位置的约束
     private var nameLabelTopConstraint: NSLayoutConstraint!
     private var nameLabelCenterYConstraint: NSLayoutConstraint!
     private var nameLabelTrailingToArrow: NSLayoutConstraint!
     private var nameLabelTrailingToEdge: NSLayoutConstraint!
+    private var nameLabelTrailingToStats: NSLayoutConstraint!
+
+    // 分组标题模式的约束
+    private var nameLabelLeadingNormal: NSLayoutConstraint!
+    private var nameLabelLeadingHeader: NSLayoutConstraint!
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -1749,7 +2022,7 @@ class ResultCellView: NSView {
         addSubview(aliasBadgeView)
 
         // Alias label
-        aliasLabel.font = .monospacedSystemFont(ofSize: 10, weight: .medium)
+        aliasLabel.font = .monospacedSystemFont(ofSize: 12, weight: .medium)
         aliasLabel.textColor = .secondaryLabelColor
         aliasLabel.translatesAutoresizingMaskIntoConstraints = false
         aliasLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
@@ -1771,6 +2044,45 @@ class ResultCellView: NSView {
         arrowIndicator.isHidden = true
         addSubview(arrowIndicator)
 
+        // 进程统计信息容器
+        statsContainerView.translatesAutoresizingMaskIntoConstraints = false
+        statsContainerView.isHidden = true
+        addSubview(statsContainerView)
+
+        // 端口号标签
+        portLabel.font = .monospacedSystemFont(ofSize: 11, weight: .medium)
+        portLabel.textColor = .secondaryLabelColor
+        portLabel.alignment = .left  // 改为左对齐
+        portLabel.translatesAutoresizingMaskIntoConstraints = false
+        statsContainerView.addSubview(portLabel)
+
+        // CPU 图标
+        cpuIcon.image = NSImage(systemSymbolName: "cpu", accessibilityDescription: "CPU")
+        cpuIcon.contentTintColor = .secondaryLabelColor
+        cpuIcon.translatesAutoresizingMaskIntoConstraints = false
+        statsContainerView.addSubview(cpuIcon)
+
+        // CPU 标签
+        cpuLabel.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
+        cpuLabel.textColor = .secondaryLabelColor
+        cpuLabel.alignment = .left  // 改为左对齐
+        cpuLabel.translatesAutoresizingMaskIntoConstraints = false
+        statsContainerView.addSubview(cpuLabel)
+
+        // 内存图标
+        memoryIcon.image = NSImage(
+            systemSymbolName: "memorychip", accessibilityDescription: "Memory")
+        memoryIcon.contentTintColor = .secondaryLabelColor
+        memoryIcon.translatesAutoresizingMaskIntoConstraints = false
+        statsContainerView.addSubview(memoryIcon)
+
+        // 内存标签
+        memoryLabel.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
+        memoryLabel.textColor = .secondaryLabelColor
+        memoryLabel.alignment = .left  // 改为左对齐
+        memoryLabel.translatesAutoresizingMaskIntoConstraints = false
+        statsContainerView.addSubview(memoryLabel)
+
         // 创建布局约束
         nameLabelTopConstraint = nameLabel.topAnchor.constraint(equalTo: topAnchor, constant: 6)
         nameLabelCenterYConstraint = nameLabel.centerYAnchor.constraint(equalTo: centerYAnchor)
@@ -1779,6 +2091,14 @@ class ResultCellView: NSView {
             lessThanOrEqualTo: arrowIndicator.leadingAnchor, constant: -8)
         nameLabelTrailingToEdge = nameLabel.trailingAnchor.constraint(
             lessThanOrEqualTo: trailingAnchor, constant: -20)
+        nameLabelTrailingToStats = nameLabel.trailingAnchor.constraint(
+            lessThanOrEqualTo: statsContainerView.leadingAnchor, constant: -12)
+
+        // 名称的 leading 约束
+        nameLabelLeadingNormal = nameLabel.leadingAnchor.constraint(
+            equalTo: iconView.trailingAnchor, constant: 12)
+        nameLabelLeadingHeader = nameLabel.leadingAnchor.constraint(
+            equalTo: leadingAnchor, constant: 16)  // 分组标题靠左对齐
 
         NSLayoutConstraint.activate([
             backgroundView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
@@ -1791,7 +2111,7 @@ class ResultCellView: NSView {
             iconView.widthAnchor.constraint(equalToConstant: 24),
             iconView.heightAnchor.constraint(equalToConstant: 24),
 
-            nameLabel.leadingAnchor.constraint(equalTo: iconView.trailingAnchor, constant: 12),
+            nameLabelLeadingNormal,
             nameLabelTopConstraint,
 
             // Alias badge - 紧跟在名称后面
@@ -1810,6 +2130,43 @@ class ResultCellView: NSView {
             arrowIndicator.widthAnchor.constraint(equalToConstant: 16),
             arrowIndicator.heightAnchor.constraint(equalToConstant: 16),
 
+            // 统计信息容器（靠右）
+            statsContainerView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -20),
+            statsContainerView.centerYAnchor.constraint(equalTo: centerYAnchor),
+
+            // 从左到右布局：端口 -> CPU图标+标签 -> 内存图标+标签
+            // 端口标签（最左边，固定宽度）
+            portLabel.leadingAnchor.constraint(equalTo: statsContainerView.leadingAnchor),
+            portLabel.centerYAnchor.constraint(equalTo: statsContainerView.centerYAnchor),
+            portLabel.widthAnchor.constraint(equalToConstant: 50),
+
+            // CPU 图标（紧跟端口）
+            cpuIcon.leadingAnchor.constraint(equalTo: portLabel.trailingAnchor, constant: 8),
+            cpuIcon.centerYAnchor.constraint(equalTo: statsContainerView.centerYAnchor),
+            cpuIcon.widthAnchor.constraint(equalToConstant: 12),
+            cpuIcon.heightAnchor.constraint(equalToConstant: 12),
+
+            // CPU 标签（紧跟 CPU 图标）
+            cpuLabel.leadingAnchor.constraint(equalTo: cpuIcon.trailingAnchor, constant: 2),
+            cpuLabel.centerYAnchor.constraint(equalTo: statsContainerView.centerYAnchor),
+            cpuLabel.widthAnchor.constraint(equalToConstant: 45),
+
+            // 内存图标（紧跟 CPU 标签）
+            memoryIcon.leadingAnchor.constraint(equalTo: cpuLabel.trailingAnchor, constant: 8),
+            memoryIcon.centerYAnchor.constraint(equalTo: statsContainerView.centerYAnchor),
+            memoryIcon.widthAnchor.constraint(equalToConstant: 12),
+            memoryIcon.heightAnchor.constraint(equalToConstant: 12),
+
+            // 内存标签（紧跟内存图标，最右边）
+            memoryLabel.leadingAnchor.constraint(equalTo: memoryIcon.trailingAnchor, constant: 2),
+            memoryLabel.centerYAnchor.constraint(equalTo: statsContainerView.centerYAnchor),
+            memoryLabel.widthAnchor.constraint(equalToConstant: 60),
+            memoryLabel.trailingAnchor.constraint(equalTo: statsContainerView.trailingAnchor),
+
+            // 容器高度
+            statsContainerView.topAnchor.constraint(equalTo: portLabel.topAnchor),
+            statsContainerView.bottomAnchor.constraint(equalTo: portLabel.bottomAnchor),
+
             pathLabel.leadingAnchor.constraint(equalTo: nameLabel.leadingAnchor),
             pathLabel.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -20),
             pathLabel.topAnchor.constraint(equalTo: nameLabel.bottomAnchor, constant: 2),
@@ -1817,7 +2174,14 @@ class ResultCellView: NSView {
     }
 
     func configure(with item: SearchResult, isSelected: Bool, hideArrow: Bool = false) {
+        // 处理分组标题
+        if item.isSectionHeader {
+            configureSectionHeader(with: item)
+            return
+        }
+
         iconView.image = item.icon
+        iconView.isHidden = false
         nameLabel.stringValue = item.name
 
         // 显示别名标签（badge 样式，紧跟在名称后面）
@@ -1829,33 +2193,66 @@ class ResultCellView: NSView {
             aliasBadgeView.isHidden = true
         }
 
+        // 显示进程统计信息（三列独立显示）
+        let hasProcessStats = item.processStats != nil && !item.processStats!.isEmpty
+        if hasProcessStats {
+            // 解析 processStats: 格式为 "port|cpu|memory" 或 "|cpu|memory"（无端口）
+            let stats = item.processStats!
+            let parts = stats.components(separatedBy: "|")
+            if parts.count >= 3 {
+                portLabel.stringValue = parts[0]
+                cpuLabel.stringValue = parts[1]
+                memoryLabel.stringValue = parts[2]
+            } else if parts.count == 2 {
+                portLabel.stringValue = ""
+                cpuLabel.stringValue = parts[0]
+                memoryLabel.stringValue = parts[1]
+            }
+            statsContainerView.isHidden = false
+        } else {
+            portLabel.stringValue = ""
+            cpuLabel.stringValue = ""
+            memoryLabel.stringValue = ""
+            statsContainerView.isHidden = true
+        }
+
         // App、网页直达、实用工具只显示名称（垂直居中、字体大），文件和文件夹显示路径
         let isApp = item.path.hasSuffix(".app")
         let isWebLink = item.isWebLink
         let isUtility = item.isUtility
-        let showPathLabel = !isApp && !isWebLink && !isUtility
+        let showPathLabel = !isApp && !isWebLink && !isUtility && !hasProcessStats
         pathLabel.isHidden = !showPathLabel
         pathLabel.stringValue = showPathLabel ? item.path : ""
 
         // 检测是否为支持的 IDE、文件夹、网页直达 Query 扩展或实用工具，显示箭头指示器
         // hideArrow 为 true 时强制隐藏（如文件夹打开模式下）
+        // 有进程统计信息时也隐藏箭头
         let isIDE = IDEType.detect(from: item.path) != nil
         let isFolder = item.isDirectory && !isApp
         let isQueryWebLink = item.isWebLink && item.supportsQueryExtension
-        let showArrow = !hideArrow && (isIDE || isFolder || isQueryWebLink || isUtility)
+        let showArrow =
+            !hideArrow && !hasProcessStats && (isIDE || isFolder || isQueryWebLink || isUtility)
         arrowIndicator.isHidden = !showArrow
 
+        // 切换 nameLabel leading 约束（普通模式）
+        nameLabelLeadingHeader.isActive = false
+        nameLabelLeadingNormal.isActive = true
+
         // 切换 nameLabel trailing 约束
-        if showArrow {
-            nameLabelTrailingToEdge.isActive = false
+        nameLabelTrailingToEdge.isActive = false
+        nameLabelTrailingToArrow.isActive = false
+        nameLabelTrailingToStats.isActive = false
+
+        if hasProcessStats {
+            nameLabelTrailingToStats.isActive = true
+        } else if showArrow {
             nameLabelTrailingToArrow.isActive = true
         } else {
-            nameLabelTrailingToArrow.isActive = false
             nameLabelTrailingToEdge.isActive = true
         }
 
-        // 切换布局：App、网页直达、实用工具垂直居中，其他顶部对齐
-        if isApp || isWebLink || isUtility {
+        // 切换布局：App、网页直达、实用工具、有进程统计的项垂直居中，其他顶部对齐
+        if isApp || isWebLink || isUtility || hasProcessStats {
             nameLabel.font = .systemFont(ofSize: 14, weight: .medium)
             nameLabelTopConstraint.isActive = false
             nameLabelCenterYConstraint.isActive = true
@@ -1870,6 +2267,12 @@ class ResultCellView: NSView {
             nameLabel.textColor = .white
             pathLabel.textColor = .white.withAlphaComponent(0.8)
             arrowIndicator.contentTintColor = .white.withAlphaComponent(0.8)
+            // 统计信息选中时的样式
+            portLabel.textColor = .white.withAlphaComponent(0.9)
+            cpuIcon.contentTintColor = .white.withAlphaComponent(0.7)
+            cpuLabel.textColor = .white.withAlphaComponent(0.8)
+            memoryIcon.contentTintColor = .white.withAlphaComponent(0.7)
+            memoryLabel.textColor = .white.withAlphaComponent(0.8)
             // 别名标签在选中时的样式
             aliasLabel.textColor = .white.withAlphaComponent(0.9)
             aliasBadgeView.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.2).cgColor
@@ -1878,10 +2281,45 @@ class ResultCellView: NSView {
             nameLabel.textColor = .labelColor
             pathLabel.textColor = .secondaryLabelColor
             arrowIndicator.contentTintColor = .secondaryLabelColor
+            // 统计信息未选中时的样式
+            portLabel.textColor = .secondaryLabelColor
+            cpuIcon.contentTintColor = .tertiaryLabelColor
+            cpuLabel.textColor = .secondaryLabelColor
+            memoryIcon.contentTintColor = .tertiaryLabelColor
+            memoryLabel.textColor = .secondaryLabelColor
             // 别名标签在未选中时的样式
             aliasLabel.textColor = .secondaryLabelColor
             aliasBadgeView.layer?.backgroundColor =
                 NSColor.systemGray.withAlphaComponent(0.25).cgColor
         }
+    }
+
+    /// 配置分组标题样式
+    private func configureSectionHeader(with item: SearchResult) {
+        // 隐藏不需要的元素
+        iconView.isHidden = true
+        aliasBadgeView.isHidden = true
+        aliasLabel.stringValue = ""
+        pathLabel.isHidden = true
+        arrowIndicator.isHidden = true
+        statsContainerView.isHidden = true
+        backgroundView.layer?.backgroundColor = NSColor.clear.cgColor
+
+        // 设置标题样式
+        nameLabel.stringValue = item.name
+        nameLabel.font = .systemFont(ofSize: 11, weight: .medium)
+        nameLabel.textColor = .secondaryLabelColor
+
+        // 切换到标题布局（左对齐，无图标）
+        nameLabelLeadingNormal.isActive = false
+        nameLabelLeadingHeader.isActive = true
+        nameLabelTopConstraint.isActive = false
+        nameLabelCenterYConstraint.isActive = true
+
+        // 清除其他约束
+        nameLabelTrailingToEdge.isActive = false
+        nameLabelTrailingToArrow.isActive = false
+        nameLabelTrailingToStats.isActive = false
+        nameLabelTrailingToEdge.isActive = true
     }
 }

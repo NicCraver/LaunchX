@@ -12,11 +12,14 @@ struct SearchResult: Identifiable, Hashable {
     let isUtility: Bool  // 是否为实用工具
     let supportsQueryExtension: Bool  // 是否支持 query 扩展
     let defaultUrl: String?  // 默认 URL（用于 query 扩展）
+    let isSectionHeader: Bool  // 是否为分组标题
+    let processStats: String?  // 进程统计信息（CPU、内存等，靠右显示）
 
     init(
         id: UUID = UUID(), name: String, path: String, icon: NSImage, isDirectory: Bool,
         displayAlias: String? = nil, isWebLink: Bool = false, isUtility: Bool = false,
-        supportsQueryExtension: Bool = false, defaultUrl: String? = nil
+        supportsQueryExtension: Bool = false, defaultUrl: String? = nil,
+        isSectionHeader: Bool = false, processStats: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -28,6 +31,8 @@ struct SearchResult: Identifiable, Hashable {
         self.isUtility = isUtility
         self.supportsQueryExtension = supportsQueryExtension
         self.defaultUrl = defaultUrl
+        self.isSectionHeader = isSectionHeader
+        self.processStats = processStats
     }
 
     static func == (lhs: SearchResult, rhs: SearchResult) -> Bool {
