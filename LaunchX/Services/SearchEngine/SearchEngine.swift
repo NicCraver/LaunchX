@@ -182,10 +182,11 @@ final class SearchEngine: ObservableObject {
                 case .systemCommand:
                     if let command = tool.command {
                         let info = MemoryIndex.AliasToolInfo(
-                            name: tool.name,
+                            name: tool.displayName,  // 使用动态名称
                             path: command,
                             isWebLink: false,
                             isUtility: false,
+                            isSystemCommand: true,
                             iconData: nil,
                             alias: tool.alias,
                             supportsQuery: false,

@@ -141,12 +141,13 @@ struct ToolItem: Codable, Identifiable, Equatable, Hashable {
         )
     }
 
-    /// 从系统命令创建 (预留)
+    /// 从系统命令创建
     static func systemCommand(name: String, command: String, alias: String? = nil) -> ToolItem {
         ToolItem(
             type: .systemCommand,
             name: name,
             alias: alias,
+            isBuiltIn: true,
             command: command
         )
     }
@@ -184,6 +185,15 @@ struct ToolItem: Codable, Identifiable, Equatable, Hashable {
     }
 
     // MARK: - 计算属性
+
+    /// 显示名称（支持动态名称）
+    /// 对于系统命令，会根据当前状态返回动态名称（如"打开/关闭自动隐藏程序坞"）
+    var displayName: String {
+        if type == .systemCommand, let command = command {
+            return SystemCommandService.shared.getDynamicName(for: command)
+        }
+        return name
+    }
 
     /// 是否为 IDE 应用
     var isIDE: Bool {
@@ -258,6 +268,15 @@ struct ToolItem: Codable, Identifiable, Equatable, Hashable {
             return icon
 
         case .systemCommand:
+            // 根据命令类型使用不同的 SF Symbol 图标
+            if let command = command,
+                let identifier = SystemCommandService.Identifier(rawValue: command),
+                let icon = NSImage(
+                    systemSymbolName: identifier.iconName, accessibilityDescription: nil)
+            {
+                icon.size = NSSize(width: 32, height: 32)
+                return icon
+            }
             let icon = type.defaultIcon
             icon.size = NSSize(width: 32, height: 32)
             return icon

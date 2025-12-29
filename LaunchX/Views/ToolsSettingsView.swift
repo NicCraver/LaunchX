@@ -409,6 +409,11 @@ struct ToolItemRow: View {
                     }
                     .buttonStyle(.plain)
                     .help("点击编辑")
+                } else if tool.type == .systemCommand {
+                    // 系统命令：显示动态名称
+                    Text(tool.displayName)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
                 } else {
                     Text(tool.name)
                         .lineLimit(1)

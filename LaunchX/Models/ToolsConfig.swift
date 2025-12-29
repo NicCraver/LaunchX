@@ -39,6 +39,7 @@ struct ToolsConfig: Codable {
     private static let migrationKey = "ToolsConfigMigrated"
     private static let defaultWebLinksAddedKey = "DefaultWebLinksAdded"
     private static let defaultUtilitiesAddedKey = "DefaultUtilitiesAdded"
+    private static let defaultSystemCommandsAddedKey = "DefaultSystemCommandsAdded"
 
     /// 从 UserDefaults 加载配置（含自动迁移）
     static func load() -> ToolsConfig {
@@ -62,6 +63,13 @@ struct ToolsConfig: Codable {
                 needsSave = true
             }
 
+            // 检查是否需要添加默认系统命令
+            if !UserDefaults.standard.bool(forKey: defaultSystemCommandsAddedKey) {
+                config.addDefaultSystemCommandsIfNeeded()
+                UserDefaults.standard.set(true, forKey: defaultSystemCommandsAddedKey)
+                needsSave = true
+            }
+
             if needsSave {
                 config.save()
             }
@@ -76,20 +84,23 @@ struct ToolsConfig: Codable {
             // 迁移后也添加默认内容
             config.addDefaultWebLinksIfNeeded()
             config.addDefaultUtilitiesIfNeeded()
+            config.addDefaultSystemCommandsIfNeeded()
             // 先设置标记，避免循环
             UserDefaults.standard.set(true, forKey: migrationKey)
             UserDefaults.standard.set(true, forKey: defaultWebLinksAddedKey)
             UserDefaults.standard.set(true, forKey: defaultUtilitiesAddedKey)
+            UserDefaults.standard.set(true, forKey: defaultSystemCommandsAddedKey)
             config.save()
             return config
         }
 
         // 3. 返回带有默认内容的配置
         var config = ToolsConfig()
-        config.tools = defaultWebLinks() + defaultUtilities()
+        config.tools = defaultWebLinks() + defaultUtilities() + defaultSystemCommands()
         // 先设置标记，避免循环
         UserDefaults.standard.set(true, forKey: defaultWebLinksAddedKey)
         UserDefaults.standard.set(true, forKey: defaultUtilitiesAddedKey)
+        UserDefaults.standard.set(true, forKey: defaultSystemCommandsAddedKey)
         config.save()
         return config
     }
@@ -118,6 +129,21 @@ struct ToolsConfig: Codable {
                 !existingIdentifiers.contains(identifier)
             {
                 tools.append(utility)
+            }
+        }
+    }
+
+    /// 添加默认系统命令（如果尚未添加）
+    private mutating func addDefaultSystemCommandsIfNeeded() {
+        let defaults = ToolsConfig.defaultSystemCommands()
+        let existingCommands = Set(tools.compactMap { $0.command })
+
+        for systemCommand in defaults {
+            // 只添加 command 不存在的
+            if let command = systemCommand.command,
+                !existingCommands.contains(command)
+            {
+                tools.append(systemCommand)
             }
         }
     }
@@ -154,6 +180,62 @@ struct ToolsConfig: Codable {
                 identifier: "base64",
                 alias: "b64",
                 iconData: loadIconData(named: "Utility_base64")
+            ),
+        ]
+    }
+
+    /// 默认系统命令列表
+    private static func defaultSystemCommands() -> [ToolItem] {
+        return [
+            ToolItem.systemCommand(
+                name: "自动隐藏程序坞",
+                command: "toggle_dock_autohide",
+                alias: "dock"
+            ),
+            ToolItem.systemCommand(
+                name: "自动隐藏菜单栏",
+                command: "toggle_menubar_autohide",
+                alias: "menubar"
+            ),
+            ToolItem.systemCommand(
+                name: "切换隐藏文件显示",
+                command: "toggle_hidden_files",
+                alias: "hidden"
+            ),
+            ToolItem.systemCommand(
+                name: "切换深色模式",
+                command: "toggle_dark_mode",
+                alias: "dark"
+            ),
+            ToolItem.systemCommand(
+                name: "切换夜览",
+                command: "toggle_night_shift",
+                alias: "night"
+            ),
+            ToolItem.systemCommand(
+                name: "推出所有磁盘",
+                command: "eject_all_disks",
+                alias: "eject"
+            ),
+            ToolItem.systemCommand(
+                name: "清空废纸篓",
+                command: "empty_trash",
+                alias: "trash"
+            ),
+            ToolItem.systemCommand(
+                name: "锁屏",
+                command: "lock_screen",
+                alias: "lock"
+            ),
+            ToolItem.systemCommand(
+                name: "关机",
+                command: "shutdown",
+                alias: "shut"
+            ),
+            ToolItem.systemCommand(
+                name: "重启电脑",
+                command: "restart",
+                alias: "restart"
             ),
         ]
     }

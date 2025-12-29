@@ -2665,6 +2665,37 @@ class SearchPanelViewController: NSViewController {
             return
         }
 
+        // 系统命令：执行对应的系统操作
+        if item.isSystemCommand {
+            // 先隐藏面板，避免弹窗被遮挡
+            PanelManager.shared.hidePanel()
+            // 执行系统命令（path 存储的是命令标识符）
+            SystemCommandService.shared.execute(identifier: item.path) { success in
+                if success {
+                    print(
+                        "SearchPanelViewController: System command '\(item.path)' executed successfully"
+                    )
+                } else {
+                    print(
+                        "SearchPanelViewController: System command '\(item.path)' failed or was cancelled"
+                    )
+                }
+            }
+            return
+        }
+
+        // 实用工具：进入扩展模式
+        if item.isUtility {
+            // 通过搜索结果中的 path 获取工具信息
+            let toolsConfig = ToolsConfig.load()
+            if let tool = toolsConfig.enabledTools.first(where: {
+                $0.extensionIdentifier == item.path
+            }) {
+                PanelManager.shared.showPanelInUtilityMode(tool: tool)
+            }
+            return
+        }
+
         // 普通模式：使用默认应用打开
         let url = URL(fileURLWithPath: item.path)
         NSWorkspace.shared.open(url)
@@ -3084,11 +3115,13 @@ class ResultCellView: NSView {
             statsContainerView.isHidden = true
         }
 
-        // App、网页直达、实用工具只显示名称（垂直居中、字体大），文件和文件夹显示路径
+        // App、网页直达、实用工具、系统命令只显示名称（垂直居中、字体大），文件和文件夹显示路径
         let isApp = item.path.hasSuffix(".app")
         let isWebLink = item.isWebLink
         let isUtility = item.isUtility
-        let showPathLabel = !isApp && !isWebLink && !isUtility && !hasProcessStats
+        let isSystemCommand = item.isSystemCommand
+        let showPathLabel =
+            !isApp && !isWebLink && !isUtility && !isSystemCommand && !hasProcessStats
         pathLabel.isHidden = !showPathLabel
         pathLabel.stringValue = showPathLabel ? item.path : ""
 
@@ -3119,8 +3152,8 @@ class ResultCellView: NSView {
             nameLabelTrailingToEdge.isActive = true
         }
 
-        // 切换布局：App、网页直达、实用工具、有进程统计的项垂直居中，其他顶部对齐
-        if isApp || isWebLink || isUtility || hasProcessStats {
+        // 切换布局：App、网页直达、实用工具、系统命令、有进程统计的项垂直居中，其他顶部对齐
+        if isApp || isWebLink || isUtility || isSystemCommand || hasProcessStats {
             nameLabel.font = .systemFont(ofSize: 14, weight: .medium)
             nameLabelTopConstraint.isActive = false
             nameLabelCenterYConstraint.isActive = true

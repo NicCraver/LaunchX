@@ -10,6 +10,7 @@ struct SearchResult: Identifiable, Hashable {
     let displayAlias: String?  // 用于显示的别名
     let isWebLink: Bool  // 是否为网页直达
     let isUtility: Bool  // 是否为实用工具
+    let isSystemCommand: Bool  // 是否为系统命令
     let supportsQueryExtension: Bool  // 是否支持 query 扩展
     let defaultUrl: String?  // 默认 URL（用于 query 扩展）
     let isSectionHeader: Bool  // 是否为分组标题
@@ -18,6 +19,7 @@ struct SearchResult: Identifiable, Hashable {
     init(
         id: UUID = UUID(), name: String, path: String, icon: NSImage, isDirectory: Bool,
         displayAlias: String? = nil, isWebLink: Bool = false, isUtility: Bool = false,
+        isSystemCommand: Bool = false,
         supportsQueryExtension: Bool = false, defaultUrl: String? = nil,
         isSectionHeader: Bool = false, processStats: String? = nil
     ) {
@@ -29,6 +31,7 @@ struct SearchResult: Identifiable, Hashable {
         self.displayAlias = displayAlias
         self.isWebLink = isWebLink
         self.isUtility = isUtility
+        self.isSystemCommand = isSystemCommand
         self.supportsQueryExtension = supportsQueryExtension
         self.defaultUrl = defaultUrl
         self.isSectionHeader = isSectionHeader

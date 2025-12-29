@@ -24,6 +24,7 @@ final class MemoryIndex {
         let isDirectory: Bool
         let isWebLink: Bool  // 是否为网页直达
         let isUtility: Bool  // 是否为实用工具
+        let isSystemCommand: Bool  // 是否为系统命令
         let supportsQuery: Bool  // 是否支持 query 扩展
         let defaultUrl: String?  // 默认 URL
         let modifiedDate: Date
@@ -52,6 +53,7 @@ final class MemoryIndex {
             self.isDirectory = record.isDirectory
             self.isWebLink = false  // 文件系统项目不是网页直达
             self.isUtility = false  // 文件系统项目不是实用工具
+            self.isSystemCommand = false  // 文件系统项目不是系统命令
             self.supportsQuery = false
             self.defaultUrl = nil
             self.modifiedDate = record.modifiedDate ?? Date.distantPast
@@ -62,9 +64,10 @@ final class MemoryIndex {
             self.wordAcronym = SearchItem.generateWordAcronym(from: record.name)
         }
 
-        /// 用于创建网页直达、实用工具等非文件系统项目
+        /// 用于创建网页直达、实用工具、系统命令等非文件系统项目
         init(
             name: String, path: String, isWebLink: Bool, isUtility: Bool = false,
+            isSystemCommand: Bool = false,
             iconData: Data? = nil, alias: String? = nil,
             supportsQuery: Bool = false, defaultUrl: String? = nil
         ) {
@@ -76,18 +79,38 @@ final class MemoryIndex {
             self.isDirectory = false
             self.isWebLink = isWebLink
             self.isUtility = isUtility
+            self.isSystemCommand = isSystemCommand
             self.supportsQuery = supportsQuery
             self.defaultUrl = defaultUrl
             self.modifiedDate = Date()
-            self.pinyinFull = nil
-            self.pinyinAcronym = nil
             self.wordAcronym = SearchItem.generateWordAcronym(from: name)
             self._displayAlias = alias
+
+            // 为中文名称生成拼音
+            if name.hasMultiByteCharacters {
+                self.pinyinFull = name.pinyin.lowercased().replacingOccurrences(of: " ", with: "")
+                self.pinyinAcronym = name.pinyinAcronym.lowercased()
+            } else {
+                self.pinyinFull = nil
+                self.pinyinAcronym = nil
+            }
 
             // 设置图标：优先使用自定义图标
             if let data = iconData, let customIcon = NSImage(data: data) {
                 customIcon.size = NSSize(width: 32, height: 32)
                 self._icon = customIcon
+            } else if isSystemCommand {
+                // 系统命令：根据命令标识符使用对应的 SF Symbol 图标
+                if let identifier = SystemCommandService.Identifier(rawValue: path) {
+                    self._icon = NSImage(
+                        systemSymbolName: identifier.iconName,
+                        accessibilityDescription: "System Command")
+                    self._icon?.size = NSSize(width: 32, height: 32)
+                } else {
+                    self._icon = NSImage(
+                        systemSymbolName: "terminal", accessibilityDescription: "System Command")
+                    self._icon?.size = NSSize(width: 32, height: 32)
+                }
             } else if isWebLink {
                 self._icon = NSImage(
                     systemSymbolName: "globe", accessibilityDescription: "Web Link")
@@ -179,6 +202,7 @@ final class MemoryIndex {
                 displayAlias: displayAlias,
                 isWebLink: isWebLink,
                 isUtility: isUtility,
+                isSystemCommand: isSystemCommand,
                 supportsQueryExtension: supportsQuery,
                 defaultUrl: defaultUrl
             )
@@ -387,8 +411,8 @@ final class MemoryIndex {
             if excludedApps.contains(item.path) { continue }
             aliasMatched.insert(item.path)
 
-            // 工具类（网页直达、实用工具）和应用都放入 matchedApps，以便优先显示
-            if item.isApp || item.isWebLink || item.isUtility {
+            // 工具类（网页直达、实用工具、系统命令）和应用都放入 matchedApps，以便优先显示
+            if item.isApp || item.isWebLink || item.isUtility || item.isSystemCommand {
                 matchedApps.append((item, .exact))  // 别名匹配视为精确匹配
             } else if item.isDirectory {
                 matchedDirs.append((item, .exact))
@@ -437,9 +461,9 @@ final class MemoryIndex {
                 lhs: (item: SearchItem, matchType: SearchItem.MatchType),
                 rhs: (item: SearchItem, matchType: SearchItem.MatchType)
             ) in
-            // 工具类（网页直达、实用工具）优先排在最前面
-            let lhsIsTool = lhs.item.isWebLink || lhs.item.isUtility
-            let rhsIsTool = rhs.item.isWebLink || rhs.item.isUtility
+            // 工具类（网页直达、实用工具、系统命令）优先排在最前面
+            let lhsIsTool = lhs.item.isWebLink || lhs.item.isUtility || lhs.item.isSystemCommand
+            let rhsIsTool = rhs.item.isWebLink || rhs.item.isUtility || rhs.item.isSystemCommand
             if lhsIsTool != rhsIsTool {
                 return lhsIsTool
             }
@@ -650,9 +674,10 @@ final class MemoryIndex {
     /// 别名工具信息（用于非应用类型的工具）
     struct AliasToolInfo {
         let name: String
-        let path: String  // 对于网页是 URL，对于应用是路径
+        let path: String  // 对于网页是 URL，对于应用是路径，对于系统命令是命令标识符
         let isWebLink: Bool
         let isUtility: Bool  // 是否为实用工具
+        let isSystemCommand: Bool  // 是否为系统命令
         let iconData: Data?  // 自定义图标数据
         let alias: String?  // 别名（用于显示）
         let supportsQuery: Bool  // 是否支持 query 扩展
@@ -660,6 +685,7 @@ final class MemoryIndex {
 
         init(
             name: String, path: String, isWebLink: Bool, isUtility: Bool = false,
+            isSystemCommand: Bool = false,
             iconData: Data? = nil, alias: String? = nil,
             supportsQuery: Bool = false, defaultUrl: String? = nil
         ) {
@@ -667,6 +693,7 @@ final class MemoryIndex {
             self.path = path
             self.isWebLink = isWebLink
             self.isUtility = isUtility
+            self.isSystemCommand = isSystemCommand
             self.iconData = iconData
             self.alias = alias
             self.supportsQuery = supportsQuery
@@ -722,6 +749,7 @@ final class MemoryIndex {
                     path: toolInfo.path,
                     isWebLink: toolInfo.isWebLink,
                     isUtility: toolInfo.isUtility,
+                    isSystemCommand: toolInfo.isSystemCommand,
                     iconData: toolInfo.iconData,
                     alias: toolInfo.alias,
                     supportsQuery: toolInfo.supportsQuery,
@@ -759,6 +787,7 @@ final class MemoryIndex {
                     path: toolInfo.path,
                     isWebLink: toolInfo.isWebLink,
                     isUtility: toolInfo.isUtility,
+                    isSystemCommand: toolInfo.isSystemCommand,
                     iconData: toolInfo.iconData,
                     alias: toolInfo.alias,
                     supportsQuery: toolInfo.supportsQuery,
@@ -781,13 +810,14 @@ final class MemoryIndex {
             if let item = allItems[path] {
                 insertIntoTrie(aliasTrie, key: alias, item: item)
             }
-            // 如果找不到，尝试从 aliasToolMap 创建临时 SearchItem（网页直达等）
+            // 如果找不到，尝试从 aliasToolMap 创建临时 SearchItem（网页直达、系统命令等）
             else if let toolInfo = aliasToolMap[alias] {
                 let item = SearchItem(
                     name: toolInfo.name,
                     path: toolInfo.path,
                     isWebLink: toolInfo.isWebLink,
                     isUtility: toolInfo.isUtility,
+                    isSystemCommand: toolInfo.isSystemCommand,
                     iconData: toolInfo.iconData,
                     alias: toolInfo.alias,
                     supportsQuery: toolInfo.supportsQuery,
@@ -809,12 +839,13 @@ final class MemoryIndex {
             if let item = allItems[path] {
                 results.append(item)
             } else if let toolInfo = aliasToolMap[lowerQuery] {
-                // 为网页直达等创建临时 SearchItem
+                // 为网页直达、系统命令等创建临时 SearchItem
                 let item = SearchItem(
                     name: toolInfo.name,
                     path: toolInfo.path,
                     isWebLink: toolInfo.isWebLink,
                     isUtility: toolInfo.isUtility,
+                    isSystemCommand: toolInfo.isSystemCommand,
                     iconData: toolInfo.iconData,
                     alias: toolInfo.alias,
                     supportsQuery: toolInfo.supportsQuery,

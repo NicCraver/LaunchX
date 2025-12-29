@@ -115,7 +115,7 @@ class ToolExecutor {
         PanelManager.shared.showPanelInUtilityMode(tool: tool)
     }
 
-    // MARK: - 系统命令执行（预留）
+    // MARK: - 系统命令执行
 
     private func executeSystemCommand(_ tool: ToolItem) {
         guard let command = tool.command else {
@@ -124,8 +124,18 @@ class ToolExecutor {
         }
 
         print("[ToolExecutor] Executing system command: \(command)")
-        // TODO: 实现系统命令执行逻辑
-        // 需要考虑安全性，可能需要沙盒限制
+
+        // 先隐藏面板，避免弹窗被遮挡
+        PanelManager.shared.hidePanel()
+
+        // 执行系统命令
+        SystemCommandService.shared.execute(identifier: command) { success in
+            if success {
+                print("[ToolExecutor] System command '\(command)' executed successfully")
+            } else {
+                print("[ToolExecutor] System command '\(command)' failed or was cancelled")
+            }
+        }
     }
 
     // MARK: - 便捷方法
