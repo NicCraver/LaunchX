@@ -348,8 +348,7 @@ class SearchPanelViewController: NSViewController {
         case "ip":
             loadIPAddresses()
         case "uuid":
-            // TODO: UUID 生成器
-            break
+            loadUUIDGenerator()
         case "url":
             // TODO: URL 编码解码
             break
@@ -1474,12 +1473,8 @@ class SearchPanelViewController: NSViewController {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
 
-        // 显示复制成功提示
-        let originalLabel = resultLabel.stringValue
-        resultLabel.stringValue = "结果 ✓ 已复制到剪贴板"
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
-            self?.resultLabel.stringValue = originalLabel
-        }
+        // 关闭面板
+        PanelManager.shared.hidePanel()
     }
 
     /// 加载 IP 地址
