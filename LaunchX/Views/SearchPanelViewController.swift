@@ -239,6 +239,11 @@ class SearchPanelViewController: NSViewController {
             isDirectory: true
         )
 
+        // 如果在其他扩展模式中，先清理
+        if isInWebLinkQueryMode || isInFolderOpenMode || isInUtilityMode {
+            cleanupAllExtensionModes()
+        }
+
         // 进入 IDE 项目模式
         isInIDEProjectMode = true
         currentIDEApp = ideApp
@@ -251,6 +256,7 @@ class SearchPanelViewController: NSViewController {
 
         // 显示项目列表
         results = projects.map { $0.toSearchResult() }
+        isShowingRecents = false
         selectedIndex = 0
         searchField.stringValue = ""
         setPlaceholder("搜索项目...")
@@ -295,6 +301,11 @@ class SearchPanelViewController: NSViewController {
             defaultUrl: tool.defaultUrl
         )
 
+        // 如果在其他扩展模式中，先清理
+        if isInIDEProjectMode || isInFolderOpenMode || isInUtilityMode {
+            cleanupAllExtensionModes()
+        }
+
         // 进入网页直达 Query 模式
         isInWebLinkQueryMode = true
         currentWebLinkResult = webLinkResult
@@ -302,8 +313,9 @@ class SearchPanelViewController: NSViewController {
         // 更新 UI
         updateWebLinkQueryModeUI()
 
-        // 清空结果列表
+        // 清空结果列表，确保不显示最近使用的app
         results = []
+        isShowingRecents = false
         selectedIndex = 0
         searchField.stringValue = ""
         setPlaceholder("请输入关键词搜索...")
@@ -330,6 +342,11 @@ class SearchPanelViewController: NSViewController {
                 "SearchPanelViewController: Already in utility mode for \(tool.extensionIdentifier ?? "nil"), ignoring"
             )
             return
+        }
+
+        // 如果在其他扩展模式中（包括其他实用工具），先清理
+        if isInIDEProjectMode || isInFolderOpenMode || isInWebLinkQueryMode || isInUtilityMode {
+            cleanupAllExtensionModes()
         }
 
         print(
@@ -1701,6 +1718,77 @@ class SearchPanelViewController: NSViewController {
         }
 
         return true
+    }
+
+    /// 清理所有扩展模式的 UI（用于切换到不同类型的扩展模式时）
+    private func cleanupAllExtensionModes() {
+        // 清理 IDE 项目模式
+        if isInIDEProjectMode {
+            isInIDEProjectMode = false
+            currentIDEApp = nil
+            currentIDEType = nil
+            ideProjects = []
+            filteredIDEProjects = []
+        }
+
+        // 清理文件夹打开模式
+        if isInFolderOpenMode {
+            isInFolderOpenMode = false
+            currentFolder = nil
+            folderOpeners = []
+        }
+
+        // 清理网页直达 Query 模式
+        if isInWebLinkQueryMode {
+            isInWebLinkQueryMode = false
+            currentWebLinkResult = nil
+        }
+
+        // 清理实用工具模式
+        if isInUtilityMode {
+            isInUtilityMode = false
+            currentUtilityIdentifier = nil
+            currentUtilityResult = nil
+            cleanupCurrentUtilityModeUI()
+        }
+
+        // 恢复 UI
+        restoreNormalModeUI()
+        searchField.isHidden = false
+    }
+
+    /// 清理当前实用工具模式的 UI（用于切换到其他实用工具时）
+    private func cleanupCurrentUtilityModeUI() {
+        // 清理 kill 模式数据
+        killModeApps = []
+        killModePorts = []
+        killModeAllItems = []
+        killModeFilteredItems = []
+
+        // 清理 UUID 模式数据和 UI
+        generatedUUIDs = []
+        uuidOptionsView.isHidden = true
+        uuidResultView.isHidden = true
+
+        // 清理 URL 编码解码模式数据和 UI
+        urlCoderView.isHidden = true
+        decodedURLTextView.string = ""
+        encodedURLTextView.string = ""
+
+        // 清理 Base64 编码解码模式数据和 UI
+        base64CoderView.isHidden = true
+        originalTextView.string = ""
+        base64TextView.string = ""
+
+        // 清理 IP 查询数据
+        ipQueryResults = []
+
+        // 清理搜索框
+        searchField.stringValue = ""
+
+        // 清理表格数据
+        results = []
+        tableView.reloadData()
     }
 
     /// 退出实用工具模式
