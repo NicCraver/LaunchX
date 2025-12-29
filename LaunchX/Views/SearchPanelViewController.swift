@@ -53,6 +53,24 @@ class SearchPanelViewController: NSViewController {
     private var killModeAllItems: [RunningProcessInfo] = []  // 合并列表（用于显示）
     private var killModeFilteredItems: [RunningProcessInfo] = []  // 搜索过滤后的列表
 
+    // UUID 生成器状态
+    private var uuidUseHyphen: Bool = true  // 是否使用连字符
+    private var uuidUppercase: Bool = true  // 是否大写
+    private var uuidCount: Int = 1  // 生成数量
+    private var generatedUUIDs: [String] = []  // 生成的 UUID 列表
+    private var uuidDebounceWorkItem: DispatchWorkItem?  // UUID 生成防抖
+
+    // UUID 生成器 UI 组件
+    private let uuidOptionsView = NSView()  // 选项容器
+    private let hyphenCheckbox = NSButton(checkboxWithTitle: "连字符", target: nil, action: nil)
+    private let uppercaseRadio = NSButton(radioButtonWithTitle: "大写字符", target: nil, action: nil)
+    private let lowercaseRadio = NSButton(radioButtonWithTitle: "小写字符", target: nil, action: nil)
+    private let countLabel = NSTextField(labelWithString: "生成数量")
+    private let countField = NSTextField()
+    private let resultLabel = NSTextField(labelWithString: "结果")
+    private let uuidResultView = NSScrollView()  // UUID 结果滚动视图
+    private let uuidResultTextView = NSTextView()  // UUID 结果文本
+
     // MARK: - Constants
     private let rowHeight: CGFloat = 44
     private let headerHeight: CGFloat = 80
@@ -473,6 +491,158 @@ class SearchPanelViewController: NSViewController {
         searchFieldLeadingToTag = searchField.leadingAnchor.constraint(
             equalTo: ideTagView.trailingAnchor, constant: 12)
         searchFieldLeadingToIcon?.isActive = true
+
+        // UUID 生成器 UI 设置
+        setupUUIDGeneratorUI()
+    }
+
+    /// 设置 UUID 生成器 UI
+    private func setupUUIDGeneratorUI() {
+        // 选项容器
+        uuidOptionsView.translatesAutoresizingMaskIntoConstraints = false
+        uuidOptionsView.isHidden = true
+        view.addSubview(uuidOptionsView)
+
+        // 连字符复选框
+        hyphenCheckbox.state = .on
+        hyphenCheckbox.target = self
+        hyphenCheckbox.action = #selector(uuidOptionChanged)
+        hyphenCheckbox.translatesAutoresizingMaskIntoConstraints = false
+        hyphenCheckbox.setContentHuggingPriority(.required, for: .horizontal)
+        uuidOptionsView.addSubview(hyphenCheckbox)
+
+        // 大写单选按钮
+        uppercaseRadio.state = .on
+        uppercaseRadio.target = self
+        uppercaseRadio.action = #selector(uuidCaseChanged(_:))
+        uppercaseRadio.translatesAutoresizingMaskIntoConstraints = false
+        uppercaseRadio.setContentHuggingPriority(.required, for: .horizontal)
+        uuidOptionsView.addSubview(uppercaseRadio)
+
+        // 小写单选按钮
+        lowercaseRadio.state = .off
+        lowercaseRadio.target = self
+        lowercaseRadio.action = #selector(uuidCaseChanged(_:))
+        lowercaseRadio.translatesAutoresizingMaskIntoConstraints = false
+        lowercaseRadio.setContentHuggingPriority(.required, for: .horizontal)
+        uuidOptionsView.addSubview(lowercaseRadio)
+
+        // 生成数量标签
+        countLabel.stringValue = "数量"
+        countLabel.font = .systemFont(ofSize: 12, weight: .medium)
+        countLabel.textColor = .secondaryLabelColor
+        countLabel.translatesAutoresizingMaskIntoConstraints = false
+        uuidOptionsView.addSubview(countLabel)
+
+        // 生成数量输入框 - 简化样式
+        countField.stringValue = ""
+        countField.placeholderString = "1-500"
+        countField.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
+        countField.isBordered = false
+        countField.drawsBackground = false
+        countField.alignment = .center
+        countField.focusRingType = .none
+        countField.delegate = self
+        countField.translatesAutoresizingMaskIntoConstraints = false
+        uuidOptionsView.addSubview(countField)
+
+        // 数量输入框背景
+        let countFieldBg = NSView()
+        countFieldBg.wantsLayer = true
+        countFieldBg.layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
+        countFieldBg.layer?.cornerRadius = 4
+        countFieldBg.translatesAutoresizingMaskIntoConstraints = false
+        uuidOptionsView.addSubview(countFieldBg, positioned: .below, relativeTo: countField)
+
+        // 结果标签
+        resultLabel.stringValue = "结果"
+        resultLabel.font = .systemFont(ofSize: 12, weight: .medium)
+        resultLabel.textColor = .secondaryLabelColor
+        resultLabel.translatesAutoresizingMaskIntoConstraints = false
+        uuidOptionsView.addSubview(resultLabel)
+
+        // UUID 结果滚动视图
+        uuidResultView.hasVerticalScroller = true
+        uuidResultView.hasHorizontalScroller = false
+        uuidResultView.autohidesScrollers = true
+        uuidResultView.borderType = .noBorder
+        uuidResultView.drawsBackground = false
+        uuidResultView.translatesAutoresizingMaskIntoConstraints = false
+        uuidOptionsView.addSubview(uuidResultView)
+
+        // UUID 结果文本视图
+        uuidResultTextView.isEditable = false
+        uuidResultTextView.isSelectable = true
+        uuidResultTextView.isRichText = false
+        uuidResultTextView.font = .monospacedSystemFont(ofSize: 13, weight: .regular)
+        uuidResultTextView.drawsBackground = false
+        uuidResultTextView.textColor = .labelColor
+        uuidResultTextView.textContainerInset = NSSize(width: 0, height: 4)
+        uuidResultTextView.textContainer?.lineFragmentPadding = 0
+        uuidResultTextView.autoresizingMask = [.width]
+        uuidResultView.documentView = uuidResultTextView
+
+        // UUID 选项约束
+        NSLayoutConstraint.activate([
+            uuidOptionsView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+            uuidOptionsView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            uuidOptionsView.topAnchor.constraint(equalTo: divider.bottomAnchor, constant: 12),
+            uuidOptionsView.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -12),
+
+            // 第一行：选项按钮（水平排列）
+            hyphenCheckbox.leadingAnchor.constraint(equalTo: uuidOptionsView.leadingAnchor),
+            hyphenCheckbox.topAnchor.constraint(equalTo: uuidOptionsView.topAnchor),
+
+            uppercaseRadio.leadingAnchor.constraint(
+                equalTo: hyphenCheckbox.trailingAnchor, constant: 16),
+            uppercaseRadio.centerYAnchor.constraint(equalTo: hyphenCheckbox.centerYAnchor),
+
+            lowercaseRadio.leadingAnchor.constraint(
+                equalTo: uppercaseRadio.trailingAnchor, constant: 12),
+            lowercaseRadio.centerYAnchor.constraint(equalTo: hyphenCheckbox.centerYAnchor),
+
+            // 数量标签和输入框（与选项同行，靠右）
+            countLabel.trailingAnchor.constraint(equalTo: countFieldBg.leadingAnchor, constant: -8),
+            countLabel.centerYAnchor.constraint(equalTo: hyphenCheckbox.centerYAnchor),
+
+            countFieldBg.trailingAnchor.constraint(equalTo: uuidOptionsView.trailingAnchor),
+            countFieldBg.centerYAnchor.constraint(equalTo: hyphenCheckbox.centerYAnchor),
+            countFieldBg.widthAnchor.constraint(equalToConstant: 60),
+            countFieldBg.heightAnchor.constraint(equalToConstant: 24),
+
+            countField.leadingAnchor.constraint(equalTo: countFieldBg.leadingAnchor, constant: 4),
+            countField.trailingAnchor.constraint(
+                equalTo: countFieldBg.trailingAnchor, constant: -4),
+            countField.centerYAnchor.constraint(equalTo: countFieldBg.centerYAnchor),
+
+            // 结果标签
+            resultLabel.leadingAnchor.constraint(equalTo: uuidOptionsView.leadingAnchor),
+            resultLabel.topAnchor.constraint(equalTo: hyphenCheckbox.bottomAnchor, constant: 12),
+
+            // UUID 结果视图
+            uuidResultView.leadingAnchor.constraint(equalTo: uuidOptionsView.leadingAnchor),
+            uuidResultView.trailingAnchor.constraint(equalTo: uuidOptionsView.trailingAnchor),
+            uuidResultView.topAnchor.constraint(equalTo: resultLabel.bottomAnchor, constant: 8),
+            uuidResultView.bottomAnchor.constraint(equalTo: uuidOptionsView.bottomAnchor),
+        ])
+    }
+
+    @objc private func uuidOptionChanged() {
+        uuidUseHyphen = (hyphenCheckbox.state == .on)
+        generateUUIDs()
+    }
+
+    @objc private func uuidCaseChanged(_ sender: NSButton) {
+        if sender == uppercaseRadio {
+            uppercaseRadio.state = .on
+            lowercaseRadio.state = .off
+            uuidUppercase = true
+        } else {
+            uppercaseRadio.state = .off
+            lowercaseRadio.state = .on
+            uuidUppercase = false
+        }
+        generateUUIDs()
     }
 
     private var keyboardMonitor: Any?
@@ -567,6 +737,9 @@ class SearchPanelViewController: NSViewController {
             currentUtilityIdentifier = nil
             currentUtilityResult = nil
             ipQueryResults = []
+            // 清理 UUID 模式数据
+            generatedUUIDs = []
+            uuidOptionsView.isHidden = true
             restoreNormalModeUI()
             searchField.isHidden = false
             setPlaceholder("搜索应用或文档...")
@@ -1160,8 +1333,7 @@ class SearchPanelViewController: NSViewController {
         case "ip":
             loadIPAddresses()
         case "uuid":
-            // TODO: UUID 生成器
-            break
+            loadUUIDGenerator()
         case "url":
             // TODO: URL 编码解码
             break
@@ -1189,6 +1361,10 @@ class SearchPanelViewController: NSViewController {
         killModePorts = []
         killModeAllItems = []
         killModeFilteredItems = []
+
+        // 清理 UUID 模式数据
+        generatedUUIDs = []
+        uuidOptionsView.isHidden = true
 
         // 恢复 UI
         restoreNormalModeUI()
@@ -1224,6 +1400,85 @@ class SearchPanelViewController: NSViewController {
             setPlaceholder("请输入关键词搜索")
         } else {
             searchField.isHidden = true
+        }
+    }
+
+    // MARK: - UUID 生成器方法
+
+    /// 加载 UUID 生成器
+    private func loadUUIDGenerator() {
+        // 显示 UUID 选项视图
+        uuidOptionsView.isHidden = false
+        scrollView.isHidden = true
+        divider.isHidden = false
+
+        // 重置选项状态
+        hyphenCheckbox.state = uuidUseHyphen ? .on : .off
+        uppercaseRadio.state = uuidUppercase ? .on : .off
+        lowercaseRadio.state = uuidUppercase ? .off : .on
+        countField.stringValue = "\(uuidCount)"
+
+        // 生成初始 UUID
+        generateUUIDs()
+
+        // 更新窗口高度
+        updateWindowHeight(expanded: true)
+    }
+
+    /// 生成 UUID 列表
+    private func generateUUIDs() {
+        // 从输入框获取数量
+        if let count = Int(countField.stringValue), count > 0, count <= 500 {
+            uuidCount = count
+        } else if countField.stringValue.isEmpty {
+            uuidCount = 1
+        } else {
+            uuidCount = min(max(1, Int(countField.stringValue) ?? 1), 500)
+            countField.stringValue = "\(uuidCount)"
+        }
+
+        // 生成 UUID
+        generatedUUIDs = (0..<uuidCount).map { _ in
+            var uuid = UUID().uuidString
+            if !uuidUseHyphen {
+                uuid = uuid.replacingOccurrences(of: "-", with: "")
+            }
+            if !uuidUppercase {
+                uuid = uuid.lowercased()
+            }
+            return uuid
+        }
+
+        // 更新文本视图
+        let text = generatedUUIDs.joined(separator: "\n")
+        uuidResultTextView.string = text
+
+        // 确保文本视图大小正确
+        if let container = uuidResultTextView.textContainer,
+            let layoutManager = uuidResultTextView.layoutManager
+        {
+            layoutManager.ensureLayout(for: container)
+            let size = layoutManager.usedRect(for: container).size
+            uuidResultTextView.setFrameSize(
+                NSSize(
+                    width: uuidResultView.contentSize.width,
+                    height: max(size.height + 16, uuidResultView.contentSize.height)
+                ))
+        }
+    }
+
+    /// 复制所有 UUID 到剪贴板
+    private func copyAllUUIDs() {
+        guard !generatedUUIDs.isEmpty else { return }
+        let text = generatedUUIDs.joined(separator: "\n")
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+
+        // 显示复制成功提示
+        let originalLabel = resultLabel.stringValue
+        resultLabel.stringValue = "结果 ✓ 已复制到剪贴板"
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            self?.resultLabel.stringValue = originalLabel
         }
     }
 
@@ -1448,6 +1703,9 @@ class SearchPanelViewController: NSViewController {
         case "kill":
             // 显示 kill 确认弹窗
             showKillConfirmation()
+        case "uuid":
+            // 复制所有 UUID
+            copyAllUUIDs()
         default:
             break
         }
@@ -1864,6 +2122,18 @@ class SearchPanelViewController: NSViewController {
 
 extension SearchPanelViewController: NSTextFieldDelegate {
     func controlTextDidChange(_ obj: Notification) {
+        // 检查是否是 UUID 数量输入框
+        if let textField = obj.object as? NSTextField, textField == countField {
+            // 防抖处理 UUID 生成
+            uuidDebounceWorkItem?.cancel()
+            let workItem = DispatchWorkItem { [weak self] in
+                self?.generateUUIDs()
+            }
+            uuidDebounceWorkItem = workItem
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: workItem)
+            return
+        }
+
         let query = searchField.stringValue
 
         // IDE 项目模式：搜索项目
