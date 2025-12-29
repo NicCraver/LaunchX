@@ -835,13 +835,16 @@ class SearchPanelViewController: NSViewController {
         let defaultWindowMode =
             UserDefaults.standard.string(forKey: "defaultWindowMode") ?? "full"
 
-        divider.isHidden = !hasQuery && !isShowingRecents
-        scrollView.isHidden = !hasResults
-        noResultsLabel.isHidden = !hasQuery || hasResults
+        // UUID 模式使用独立视图，隐藏 scrollView
+        let isUUIDMode = isInUtilityMode && currentUtilityIdentifier == "uuid"
+
+        divider.isHidden = !hasQuery && !isShowingRecents && !isUUIDMode
+        scrollView.isHidden = !hasResults || isUUIDMode
+        noResultsLabel.isHidden = !hasQuery || hasResults || isUUIDMode
 
         // Update window height
-        if defaultWindowMode == "full" {
-            // Full 模式：始终展开
+        if defaultWindowMode == "full" || isUUIDMode {
+            // Full 模式或 UUID 模式：始终展开
             updateWindowHeight(expanded: true)
         } else {
             // Simple 模式：有搜索内容且有结果时展开
@@ -1991,7 +1994,7 @@ class SearchPanelViewController: NSViewController {
                 // 再次检查是否在特殊模式，避免覆盖 IDE 项目列表
                 guard
                     self?.isInIDEProjectMode != true && self?.isInFolderOpenMode != true
-                        && self?.isInWebLinkQueryMode != true
+                        && self?.isInWebLinkQueryMode != true && self?.isInUtilityMode != true
                 else {
                     return
                 }
