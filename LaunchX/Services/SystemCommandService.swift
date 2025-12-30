@@ -57,7 +57,7 @@ class SystemCommandService {
         /// 是否需要二次确认
         var requiresDoubleConfirmation: Bool {
             switch self {
-            case .ejectAllDisks, .emptyTrash, .lockScreen, .shutdown, .restart:
+            case .ejectAllDisks, .emptyTrash, .shutdown, .restart:
                 return true
             default:
                 return false
@@ -84,24 +84,11 @@ class SystemCommandService {
     // MARK: - 动态名称
 
     /// 获取命令的动态显示名称
-    /// 对于 Dock 和菜单栏自动隐藏，根据当前状态返回"打开/关闭..."
     func getDynamicName(for identifier: String) -> String {
         guard let id = Identifier(rawValue: identifier) else {
             return identifier
         }
-
-        switch id {
-        case .toggleDockAutohide:
-            let isEnabled = isDockAutoHideEnabled()
-            return isEnabled ? "关闭自动隐藏程序坞" : "打开自动隐藏程序坞"
-
-        case .toggleMenubarAutohide:
-            let isEnabled = isMenuBarAutoHideEnabled()
-            return isEnabled ? "关闭自动隐藏菜单栏" : "打开自动隐藏菜单栏"
-
-        default:
-            return id.baseName
-        }
+        return id.baseName
     }
 
     // MARK: - 状态查询
@@ -113,6 +100,13 @@ class SystemCommandService {
 
     /// 检查菜单栏自动隐藏是否启用
     func isMenuBarAutoHideEnabled() -> Bool {
+        // 优先检查新版 macOS 的设置键
+        let newKey = readDefaultsString(
+            domain: "com.apple.dock", key: "autohide-menubar-in-fullscreen")
+        if newKey != nil {
+            return readDefaultsBool(domain: "com.apple.dock", key: "autohide-menubar-in-fullscreen")
+        }
+        // 回退到旧版设置键
         return readDefaultsBool(domain: "NSGlobalDomain", key: "_HIHideMenuBar")
     }
 
@@ -192,24 +186,28 @@ class SystemCommandService {
 
     /// 切换 Dock 自动隐藏
     private func toggleDockAutohide() -> Bool {
-        let currentValue = isDockAutoHideEnabled()
-        let newValue = !currentValue
-
-        let success = writeDefaultsBool(domain: "com.apple.dock", key: "autohide", value: newValue)
-        if success {
-            // 重启 Dock 使设置生效
-            runShellCommand("/usr/bin/killall", arguments: ["Dock"])
-        }
-        return success
+        // 使用 AppleScript 切换 Dock 自动隐藏，避免 killall Dock 导致的屏幕闪烁
+        let script = """
+            tell application "System Events"
+                tell dock preferences
+                    set autohide to not autohide
+                end tell
+            end tell
+            """
+        return runAppleScript(script)
     }
 
     /// 切换菜单栏自动隐藏
     private func toggleMenuBarAutohide() -> Bool {
-        let currentValue = isMenuBarAutoHideEnabled()
-        let newValue = !currentValue
-
-        return writeDefaultsBool(domain: "NSGlobalDomain", key: "_HIHideMenuBar", value: newValue)
-        // 菜单栏设置通常不需要重启进程即可生效
+        // 使用 AppleScript 通过 System Events 切换菜单栏自动隐藏
+        let script = """
+            tell application "System Events"
+                tell dock preferences
+                    set autohide menu bar to not autohide menu bar
+                end tell
+            end tell
+            """
+        return runAppleScript(script)
     }
 
     /// 切换隐藏文件显示
@@ -235,14 +233,22 @@ class SystemCommandService {
 
     /// 切换夜览
     private func toggleNightShift() -> Bool {
-        // 直接打开显示器设置中的夜览选项卡
-        if let url = URL(
-            string: "x-apple.systempreferences:com.apple.preference.displays?displaysNightShiftTab")
-        {
-            NSWorkspace.shared.open(url)
-            return true
-        }
-        return false
+        // 使用 AppleScript 调用 CoreBrightness 私有框架切换夜览
+        let script = """
+            use framework "CoreBrightness"
+
+            set client to current application's CBBlueLightClient's alloc()'s init()
+            set {theResult, theProps} to client's getBlueLightStatus:(reference)
+
+            set isEnabled to item 2 of theProps
+
+            if isEnabled then
+                client's setEnabled:false
+            else
+                client's setEnabled:true
+            end if
+            """
+        return runAppleScript(script)
     }
 
     /// 推出所有磁盘
@@ -267,11 +273,11 @@ class SystemCommandService {
 
     /// 锁屏
     private func lockScreen() -> Bool {
-        // 使用 CGSession 命令锁屏
-        let result = runShellCommand(
-            "/System/Library/CoreServices/Menu Extras/User.menu/Contents/Resources/CGSession",
-            arguments: ["-suspend"])
-        return result
+        // 使用 pmset 命令锁屏（更可靠的方式）
+        let script = """
+            tell application "System Events" to keystroke "q" using {control down, command down}
+            """
+        return runAppleScript(script)
     }
 
     /// 关机
