@@ -101,13 +101,10 @@ class PermissionService: ObservableObject {
     // MARK: - Accessibility
 
     func requestAccessibility() {
-        // 调用系统API显示权限弹窗
-        let options: NSDictionary = [
-            kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true
-        ]
-        AXIsProcessTrustedWithOptions(options)
+        // 直接打开系统设置，不显示系统弹窗
+        openAccessibilitySettings()
 
-        // 立即检查一次权限状态
+        // 延迟检查权限状态
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
             self?.checkAllPermissions()
         }
