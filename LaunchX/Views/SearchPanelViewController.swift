@@ -1178,8 +1178,8 @@ class SearchPanelViewController: NSViewController {
         let existingPaths = Set(searchResults.map { $0.path })
         let filteredDefaultLinks = defaultSearchLinks.filter { !existingPaths.contains($0.path) }
 
-        // 根据 LRU 对搜索结果重新排序
-        let sortedResults = sortResultsByLRU(searchResults)
+        // 根据 LRU 对搜索结果重新排序（传入查询字符串用于别名匹配优先级）
+        let sortedResults = sortSearchResults(searchResults, query: query)
 
         if sortedResults.isEmpty {
             // 没有搜索结果时，默认搜索显示在最上面
@@ -1200,8 +1200,9 @@ class SearchPanelViewController: NSViewController {
         }
     }
 
-    /// 根据 LRU 对搜索结果排序（最近使用的排前面）
-    private func sortResultsByLRU(_ results: [SearchResult]) -> [SearchResult] {
+    /// 对搜索结果排序（别名完全匹配 > LRU > 其他）
+    private func sortSearchResults(_ results: [SearchResult], query: String) -> [SearchResult] {
+        let queryLower = query.lowercased()
         let recentItems = RecentAppsManager.shared.getRecentItems(limit: 30)
 
         // path -> LRU 顺序映射
@@ -1210,12 +1211,16 @@ class SearchPanelViewController: NSViewController {
             lruOrder[item.identifier] = index
         }
 
-        // 分离 LRU 结果和其他结果
+        // 分离结果：别名完全匹配、LRU 结果、其他结果
+        var exactAliasMatches: [SearchResult] = []
         var lruResults: [(result: SearchResult, order: Int)] = []
         var otherResults: [SearchResult] = []
 
         for result in results {
-            if let order = lruOrder[result.path] {
+            // 检查别名是否完全匹配
+            if let alias = result.displayAlias?.lowercased(), alias == queryLower {
+                exactAliasMatches.append(result)
+            } else if let order = lruOrder[result.path] {
                 lruResults.append((result, order))
             } else {
                 otherResults.append(result)
@@ -1225,7 +1230,8 @@ class SearchPanelViewController: NSViewController {
         // LRU 结果按顺序排序
         lruResults.sort { $0.order < $1.order }
 
-        return lruResults.map { $0.result } + otherResults
+        // 别名完全匹配优先 > LRU > 其他
+        return exactAliasMatches + lruResults.map { $0.result } + otherResults
     }
 
     private func updateVisibility() {
