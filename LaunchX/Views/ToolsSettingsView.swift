@@ -16,6 +16,39 @@ enum WebLinkEditMode: Identifiable {
     }
 }
 
+// MARK: - 图标缓存管理器
+
+private class IconCacheManager {
+    static let shared = IconCacheManager()
+    private var cache: [UUID: NSImage] = [:]
+    private let queue = DispatchQueue(label: "com.launchx.iconcache", qos: .userInitiated)
+
+    func getIcon(for tool: ToolItem) -> NSImage? {
+        return cache[tool.id]
+    }
+
+    func loadIcon(for tool: ToolItem, completion: @escaping (NSImage) -> Void) {
+        // 如果已经缓存，直接返回
+        if let cached = cache[tool.id] {
+            completion(cached)
+            return
+        }
+
+        // 在后台加载
+        queue.async { [weak self] in
+            let icon = tool.icon
+            self?.cache[tool.id] = icon
+            DispatchQueue.main.async {
+                completion(icon)
+            }
+        }
+    }
+
+    func clearCache() {
+        cache.removeAll()
+    }
+}
+
 // MARK: - 工具管理设置视图
 
 struct ToolsSettingsView: View {
@@ -367,7 +400,7 @@ struct ToolSectionHeader: View {
 
 struct ToolItemRow: View {
     @Binding var tool: ToolItem
-    @ObservedObject var viewModel: ToolsViewModel
+    let viewModel: ToolsViewModel  // 移除 @ObservedObject 避免不必要的重绘
     let isEvenRow: Bool
     var focusedField: FocusState<UUID?>.Binding
     var onEdit: (() -> Void)?
@@ -375,6 +408,7 @@ struct ToolItemRow: View {
     @State private var aliasText: String = ""
     @State private var showHotKeyPopover = false
     @State private var showExtensionHotKeyPopover = false
+    @State private var displayIcon: NSImage?  // 缓存图标
 
     /// 是否显示打开快捷键（实用工具不显示）
     private var showOpenHotKey: Bool {
@@ -391,11 +425,16 @@ struct ToolItemRow: View {
         !tool.isBuiltIn
     }
 
+    /// 当前显示的图标（优先使用缓存）
+    private var currentIcon: NSImage {
+        displayIcon ?? tool.type.defaultIcon
+    }
+
     var body: some View {
         HStack(spacing: 12) {
             // 图标和名称
             HStack(spacing: 8) {
-                Image(nsImage: tool.icon)
+                Image(nsImage: currentIcon)
                     .resizable()
                     .frame(width: 20, height: 20)
 
@@ -547,6 +586,12 @@ struct ToolItemRow: View {
         .padding(.horizontal, 16)
         .background(isEvenRow ? Color.clear : Color(nsColor: .controlBackgroundColor).opacity(0.3))
         .contentShape(Rectangle())
+        .onAppear {
+            // 使用全局缓存加载图标
+            IconCacheManager.shared.loadIcon(for: tool) { icon in
+                self.displayIcon = icon
+            }
+        }
     }
 }
 
