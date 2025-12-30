@@ -20,6 +20,11 @@ class ToolExecutor {
             return
         }
 
+        // 记录 LRU 使用（扩展模式不记录，因为用户只是进入了选择界面）
+        if !isExtension {
+            recordLRUUsage(tool)
+        }
+
         switch tool.type {
         case .app:
             executeApp(tool, isExtension: isExtension)
@@ -32,6 +37,28 @@ class ToolExecutor {
 
         case .systemCommand:
             executeSystemCommand(tool)
+        }
+    }
+
+    /// 记录工具使用到 LRU 缓存
+    private func recordLRUUsage(_ tool: ToolItem) {
+        switch tool.type {
+        case .app:
+            if let path = tool.path {
+                RecentAppsManager.shared.recordAppOpen(path: path)
+            }
+        case .webLink:
+            if let url = tool.url {
+                RecentAppsManager.shared.recordWebLinkOpen(url: url, name: tool.name)
+            }
+        case .utility:
+            if let identifier = tool.extensionIdentifier {
+                RecentAppsManager.shared.recordUtilityOpen(identifier: identifier, name: tool.name)
+            }
+        case .systemCommand:
+            if let command = tool.command {
+                RecentAppsManager.shared.recordSystemCommandOpen(command: command, name: tool.name)
+            }
         }
     }
 

@@ -2506,48 +2506,51 @@ class SearchPanelViewController: NSViewController {
         }
     }
 
-    /// 加载最近使用的应用
+    /// 加载最近使用的项目（支持所有工具类型）
     private func loadRecentApps() {
-        // 如果已经在扩展模式中，不加载最近应用
+        // 如果已经在扩展模式中，不加载最近项目
         if isInIDEProjectMode || isInFolderOpenMode || isInWebLinkQueryMode || isInUtilityMode {
             return
         }
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            var apps: [SearchResult] = []
-            var addedPaths = Set<String>()
+            var items: [SearchResult] = []
+            var addedKeys = Set<String>()
 
-            // 1. 优先从 LRU 缓存获取最近使用的应用
-            let lruPaths = RecentAppsManager.shared.getRecentApps(limit: 8)
-            for path in lruPaths {
-                guard !addedPaths.contains(path) else { continue }
-                if let result = self?.createSearchResult(from: path) {
-                    apps.append(result)
-                    addedPaths.insert(path)
+            // 获取工具配置用于查找别名等信息
+            let config = ToolsConfig.load()
+
+            // 1. 从 LRU 缓存获取最近使用的项目（最多 5 个）
+            let recentItems = RecentAppsManager.shared.getRecentItems(limit: 5)
+
+            for item in recentItems {
+                guard !addedKeys.contains(item.uniqueKey) else { continue }
+
+                if let result = self?.createSearchResultFromRecentItem(item, config: config) {
+                    items.append(result)
+                    addedKeys.insert(item.uniqueKey)
                 }
             }
 
-            // 2. 如果 LRU 记录不足，用默认应用补充
-            if apps.count < 8 {
+            // 2. 如果 LRU 记录不足 5 个，用默认应用补充
+            if items.count < 5 {
                 let defaultApps = [
                     "/System/Library/CoreServices/Finder.app",
                     "/System/Applications/System Settings.app",
-                    "/System/Applications/App Store.app",
                     "/System/Applications/Notes.app",
                     "/System/Volumes/Preboot/Cryptexes/App/System/Applications/Safari.app",
-                    "/System/Applications/Mail.app",
-                    "/System/Applications/Calendar.app",
-                    "/System/Applications/Weather.app",
+                    "/System/Applications/App Store.app",
                 ]
 
                 for path in defaultApps {
-                    guard apps.count < 8 else { break }
-                    guard !addedPaths.contains(path) else { continue }
+                    guard items.count < 5 else { break }
+                    let key = "app:\(path)"
+                    guard !addedKeys.contains(key) else { continue }
                     guard FileManager.default.fileExists(atPath: path) else { continue }
 
                     if let result = self?.createSearchResult(from: path) {
-                        apps.append(result)
-                        addedPaths.insert(path)
+                        items.append(result)
+                        addedKeys.insert(key)
                     }
                 }
             }
@@ -2561,18 +2564,85 @@ class SearchPanelViewController: NSViewController {
                     return
                 }
 
-                self?.recentApps = apps
+                self?.recentApps = items
 
-                // 如果是 Full 模式且当前没有搜索内容，显示最近应用
+                // 如果是 Full 模式且当前没有搜索内容，显示最近项目
                 let defaultWindowMode =
                     UserDefaults.standard.string(forKey: "defaultWindowMode") ?? "full"
                 if defaultWindowMode == "full" && self?.searchField.stringValue.isEmpty == true {
-                    self?.results = apps
+                    self?.results = items
                     self?.isShowingRecents = true
                     self?.tableView.reloadData()
                     self?.updateVisibility()
                 }
             }
+        }
+    }
+
+    /// 从 RecentItem 创建 SearchResult
+    private func createSearchResultFromRecentItem(_ item: RecentItem, config: ToolsConfig)
+        -> SearchResult?
+    {
+        switch item.type {
+        case .app:
+            return createSearchResult(from: item.identifier)
+
+        case .webLink:
+            // 查找对应的 ToolItem 获取完整信息
+            if let tool = config.tools.first(where: {
+                $0.type == .webLink && $0.url == item.identifier
+            }) {
+                let icon = tool.icon
+                icon.size = NSSize(width: 32, height: 32)
+                return SearchResult(
+                    name: tool.name,
+                    path: item.identifier,
+                    icon: icon,
+                    isDirectory: false,
+                    displayAlias: tool.alias,
+                    isWebLink: true,
+                    supportsQueryExtension: tool.supportsQueryExtension,
+                    defaultUrl: tool.defaultUrl
+                )
+            }
+            return nil
+
+        case .utility:
+            // 查找对应的 ToolItem
+            if let tool = config.tools.first(where: {
+                $0.type == .utility && $0.extensionIdentifier == item.identifier
+            }) {
+                let icon = tool.icon
+                icon.size = NSSize(width: 32, height: 32)
+                return SearchResult(
+                    name: tool.name,
+                    path: item.identifier,
+                    icon: icon,
+                    isDirectory: false,
+                    displayAlias: tool.alias,
+                    isUtility: true,
+                    supportsQueryExtension: true
+                )
+            }
+            return nil
+
+        case .systemCommand:
+            // 查找对应的 ToolItem
+            if let tool = config.tools.first(where: {
+                $0.type == .systemCommand && $0.command == item.identifier
+            }) {
+                let icon = tool.icon
+                icon.size = NSSize(width: 32, height: 32)
+                return SearchResult(
+                    name: tool.displayName,
+                    path: item.identifier,
+                    icon: icon,
+                    isDirectory: false,
+                    displayAlias: tool.alias,
+                    isSystemCommand: true
+                )
+            }
+            return nil
         }
     }
 
