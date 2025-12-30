@@ -1178,12 +1178,15 @@ class SearchPanelViewController: NSViewController {
         let existingPaths = Set(searchResults.map { $0.path })
         let filteredDefaultLinks = defaultSearchLinks.filter { !existingPaths.contains($0.path) }
 
-        if searchResults.isEmpty {
+        // 根据 LRU 对搜索结果重新排序
+        let sortedResults = sortResultsByLRU(searchResults)
+
+        if sortedResults.isEmpty {
             // 没有搜索结果时，默认搜索显示在最上面
             results = filteredDefaultLinks
         } else {
             // 有搜索结果时，默认搜索显示在最后面
-            results = searchResults + filteredDefaultLinks
+            results = sortedResults + filteredDefaultLinks
         }
 
         selectedIndex = results.isEmpty ? 0 : 0
@@ -1195,6 +1198,34 @@ class SearchPanelViewController: NSViewController {
                 IndexSet(integer: selectedIndex), byExtendingSelection: false)
             tableView.scrollRowToVisible(selectedIndex)
         }
+    }
+
+    /// 根据 LRU 对搜索结果排序（最近使用的排前面）
+    private func sortResultsByLRU(_ results: [SearchResult]) -> [SearchResult] {
+        let recentItems = RecentAppsManager.shared.getRecentItems(limit: 30)
+
+        // path -> LRU 顺序映射
+        var lruOrder: [String: Int] = [:]
+        for (index, item) in recentItems.enumerated() {
+            lruOrder[item.identifier] = index
+        }
+
+        // 分离 LRU 结果和其他结果
+        var lruResults: [(result: SearchResult, order: Int)] = []
+        var otherResults: [SearchResult] = []
+
+        for result in results {
+            if let order = lruOrder[result.path] {
+                lruResults.append((result, order))
+            } else {
+                otherResults.append(result)
+            }
+        }
+
+        // LRU 结果按顺序排序
+        lruResults.sort { $0.order < $1.order }
+
+        return lruResults.map { $0.result } + otherResults
     }
 
     private func updateVisibility() {
@@ -1691,6 +1722,8 @@ class SearchPanelViewController: NSViewController {
 
         if let urlString = finalUrl, let url = URL(string: urlString) {
             NSWorkspace.shared.open(url)
+            // 记录到 LRU 缓存
+            RecentAppsManager.shared.recordWebLinkOpen(url: webLink.path, name: webLink.name)
         }
 
         exitWebLinkQueryMode()
@@ -2520,8 +2553,8 @@ class SearchPanelViewController: NSViewController {
             // 获取工具配置用于查找别名等信息
             let config = ToolsConfig.load()
 
-            // 1. 从 LRU 缓存获取最近使用的项目（最多 5 个）
-            let recentItems = RecentAppsManager.shared.getRecentItems(limit: 5)
+            // 1. 从 LRU 缓存获取最近使用的项目（最多 8 个）
+            let recentItems = RecentAppsManager.shared.getRecentItems(limit: 8)
 
             for item in recentItems {
                 guard !addedKeys.contains(item.uniqueKey) else { continue }
@@ -2532,18 +2565,21 @@ class SearchPanelViewController: NSViewController {
                 }
             }
 
-            // 2. 如果 LRU 记录不足 5 个，用默认应用补充
-            if items.count < 5 {
+            // 2. 如果 LRU 记录不足 8 个，用默认应用补充
+            if items.count < 8 {
                 let defaultApps = [
                     "/System/Library/CoreServices/Finder.app",
                     "/System/Applications/System Settings.app",
                     "/System/Applications/Notes.app",
                     "/System/Volumes/Preboot/Cryptexes/App/System/Applications/Safari.app",
                     "/System/Applications/App Store.app",
+                    "/System/Applications/Mail.app",
+                    "/System/Applications/Calendar.app",
+                    "/System/Applications/Messages.app",
                 ]
 
                 for path in defaultApps {
-                    guard items.count < 5 else { break }
+                    guard items.count < 8 else { break }
                     let key = "app:\(path)"
                     guard !addedKeys.contains(key) else { continue }
                     guard FileManager.default.fileExists(atPath: path) else { continue }
@@ -2693,6 +2729,8 @@ class SearchPanelViewController: NSViewController {
                 IDEProject(name: item.name, path: item.path, ideType: currentIDEType ?? .vscode),
                 withIDEAt: ideApp.path
             )
+            // 记录 IDE 应用到 LRU 缓存
+            RecentAppsManager.shared.recordAppOpen(path: ideApp.path)
             PanelManager.shared.hidePanel()
             return
         }
@@ -2700,6 +2738,8 @@ class SearchPanelViewController: NSViewController {
         // 文件夹打开模式：使用选中的应用打开文件夹
         if isInFolderOpenMode, let folder = currentFolder {
             IDERecentProjectsService.shared.openFolder(folder.path, withApp: item.path)
+            // 记录打开文件夹的应用到 LRU 缓存
+            RecentAppsManager.shared.recordAppOpen(path: item.path)
             PanelManager.shared.hidePanel()
             return
         }
@@ -2730,6 +2770,8 @@ class SearchPanelViewController: NSViewController {
 
             if let url = URL(string: finalUrl) {
                 NSWorkspace.shared.open(url)
+                // 记录到 LRU 缓存
+                RecentAppsManager.shared.recordWebLinkOpen(url: item.path, name: item.name)
             }
             PanelManager.shared.hidePanel()
             return
@@ -2737,6 +2779,8 @@ class SearchPanelViewController: NSViewController {
 
         // 系统命令：执行对应的系统操作
         if item.isSystemCommand {
+            // 记录到 LRU 缓存
+            RecentAppsManager.shared.recordSystemCommandOpen(command: item.path, name: item.name)
             // 先隐藏面板，避免弹窗被遮挡
             PanelManager.shared.hidePanel()
             // 执行系统命令（path 存储的是命令标识符）
@@ -2756,6 +2800,8 @@ class SearchPanelViewController: NSViewController {
 
         // 实用工具：进入扩展模式
         if item.isUtility {
+            // 记录到 LRU 缓存
+            RecentAppsManager.shared.recordUtilityOpen(identifier: item.path, name: item.name)
             // 通过搜索结果中的 path 获取工具信息
             let toolsConfig = ToolsConfig.load()
             if let tool = toolsConfig.enabledTools.first(where: {

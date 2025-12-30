@@ -28,11 +28,16 @@ private final class LRUCache<Key: Hashable, Value> {
         self.capacity = capacity
     }
 
-    /// 获取值（O(1)）
+    /// 获取值并移动到头部（O(1)）- 用于记录访问
     func get(_ key: Key) -> Value? {
         guard let node = cache[key] else { return nil }
         moveToHead(node)
         return node.value
+    }
+
+    /// 只读取值，不改变顺序（O(1)）- 用于查询
+    func peek(_ key: Key) -> Value? {
+        return cache[key]?.value
     }
 
     /// 插入或更新值（O(1)）
@@ -227,7 +232,7 @@ final class RecentAppsManager {
             for key in allKeys {
                 guard result.count < limit else { break }
 
-                if let item = lruCache.get(key) {
+                if let item = lruCache.peek(key) {
                     // 如果指定了类型过滤
                     if let types = types, !types.contains(item.type) {
                         continue
@@ -299,7 +304,7 @@ final class RecentAppsManager {
         var items: [RecentItem] = []
 
         for key in keys {
-            if let item = lruCache.get(key) {
+            if let item = lruCache.peek(key) {
                 items.append(item)
             }
         }
