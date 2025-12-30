@@ -1212,8 +1212,8 @@ class ToolsViewModel: ObservableObject {
     @Published var tools: [ToolItem] = []
     @Published var appExpanded: Bool = true
     @Published var webLinkExpanded: Bool = true
-    @Published var utilityExpanded: Bool = false
-    @Published var systemCommandExpanded: Bool = false
+    @Published var utilityExpanded: Bool = true
+    @Published var systemCommandExpanded: Bool = true
 
     init() {
         loadConfig()
