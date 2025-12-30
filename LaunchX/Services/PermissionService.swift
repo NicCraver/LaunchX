@@ -101,7 +101,13 @@ class PermissionService: ObservableObject {
     // MARK: - Accessibility
 
     func requestAccessibility() {
-        // 直接打开系统设置，不显示系统弹窗
+        // 先调用系统 API 将应用添加到辅助功能列表（prompt: false 不显示弹窗）
+        let options: NSDictionary = [
+            kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: false
+        ]
+        AXIsProcessTrustedWithOptions(options)
+
+        // 然后直接打开系统设置
         openAccessibilitySettings()
 
         // 延迟检查权限状态
