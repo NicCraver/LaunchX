@@ -302,55 +302,25 @@ class SystemCommandService {
 
     // MARK: - 确认弹窗
 
-    /// 显示二次确认弹窗
+    /// 显示确认弹窗
     private func showDoubleConfirmation(for id: Identifier, completion: @escaping (Bool) -> Void) {
         DispatchQueue.main.async {
-            // 第一次确认
-            let alert1 = NSAlert()
-            alert1.messageText = "确认\(id.baseName)？"
-            alert1.informativeText = id.description
-            alert1.alertStyle = .warning
+            let alert = NSAlert()
+            alert.messageText = "确认\(id.baseName)？"
+            alert.informativeText = id.description
+            alert.alertStyle = .warning
 
             // 设置图标
             if let icon = NSImage(systemSymbolName: id.iconName, accessibilityDescription: nil) {
                 let config = NSImage.SymbolConfiguration(pointSize: 48, weight: .medium)
-                alert1.icon = icon.withSymbolConfiguration(config)
+                alert.icon = icon.withSymbolConfiguration(config)
             }
 
-            alert1.addButton(withTitle: "继续")
-            alert1.addButton(withTitle: "取消")
+            alert.addButton(withTitle: "确认")
+            alert.addButton(withTitle: "取消")
 
-            let response1 = alert1.runModal()
-            guard response1 == .alertFirstButtonReturn else {
-                completion(false)
-                return
-            }
-
-            // 短暂延迟，让用户有时间思考
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                // 第二次确认 - 更严重的警告
-                let alert2 = NSAlert()
-                alert2.messageText = "再次确认"
-                alert2.informativeText = "您确定要\(id.baseName)吗？此操作无法撤销。"
-                alert2.alertStyle = .critical
-
-                // 设置图标
-                if let icon = NSImage(
-                    systemSymbolName: "exclamationmark.triangle.fill",
-                    accessibilityDescription: nil)
-                {
-                    let config = NSImage.SymbolConfiguration(pointSize: 48, weight: .medium)
-                    alert2.icon = icon.withSymbolConfiguration(config)
-                }
-
-                // 添加按钮 - 确认按钮在前
-                let confirmButton = alert2.addButton(withTitle: "确认\(id.baseName)")
-                confirmButton.hasDestructiveAction = true  // 标记为危险操作（macOS 11+）
-                alert2.addButton(withTitle: "取消")
-
-                let response2 = alert2.runModal()
-                completion(response2 == .alertFirstButtonReturn)
-            }
+            let response = alert.runModal()
+            completion(response == .alertFirstButtonReturn)
         }
     }
 
