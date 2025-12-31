@@ -538,15 +538,13 @@ class SearchPanelViewController: NSViewController {
         isInBookmarkMode = false
         bookmarkResults = []
 
-        // 隐藏标签
-        ideTagView.isHidden = true
+        // 恢复 UI
+        restoreNormalModeUI()
 
-        // 恢复占位符
+        // 恢复搜索状态
+        searchField.stringValue = ""
         setPlaceholder("搜索应用或文档...")
-
-        // 清空结果
-        results = []
-        tableView.reloadData()
+        resetState()
     }
 
     /// 进入书签模式（通过别名搜索选择）
@@ -1517,7 +1515,7 @@ class SearchPanelViewController: NSViewController {
         }
 
         switch Int(event.keyCode) {
-        case 51:  // Delete - IDE 项目模式、文件夹打开模式、网页直达 Query 模式或实用工具模式下，输入框为空时退出
+        case 51:  // Delete - IDE 项目模式、文件夹打开模式、网页直达 Query 模式、实用工具模式或书签模式下，输入框为空时退出
             if isComposing { return event }
             // URL 模式和 Base64 模式使用独立文本框，delete 键由文本框处理，不退出
             if isInUtilityMode
@@ -1525,7 +1523,8 @@ class SearchPanelViewController: NSViewController {
             {
                 return event
             }
-            if (isInIDEProjectMode || isInFolderOpenMode || isInWebLinkQueryMode || isInUtilityMode)
+            if (isInIDEProjectMode || isInFolderOpenMode || isInWebLinkQueryMode || isInUtilityMode
+                || isInBookmarkMode)
                 && searchField.stringValue.isEmpty
             {
                 if isInIDEProjectMode {
@@ -1536,6 +1535,8 @@ class SearchPanelViewController: NSViewController {
                     exitWebLinkQueryMode()
                 } else if isInUtilityMode {
                     exitUtilityMode()
+                } else if isInBookmarkMode {
+                    exitBookmarkMode()
                 }
                 return nil
             }
