@@ -132,6 +132,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // 设置书签快捷键回调
         HotKeyService.shared.onBookmarkHotKeyPressed = {
+            // 检查书签功能是否启用
+            let settings = BookmarkSettings.load()
+            guard settings.isEnabled else { return }
             PanelManager.shared.showPanelInBookmarkMode()
         }
 

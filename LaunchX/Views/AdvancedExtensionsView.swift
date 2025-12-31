@@ -319,6 +319,7 @@ struct BookmarkSearchSettingsView: View {
 struct BookmarkHotKeyButton: View {
     @Binding var settings: BookmarkSettings
     @Binding var showPopover: Bool
+    @State private var isHovered = false
 
     private var hasHotKey: Bool {
         settings.hotKeyCode != 0
@@ -330,26 +331,34 @@ struct BookmarkHotKeyButton: View {
         }) {
             Group {
                 if hasHotKey {
-                    HStack(spacing: 3) {
+                    HStack(spacing: 2) {
                         ForEach(
                             HotKeyService.modifierSymbols(for: settings.hotKeyModifiers), id: \.self
                         ) { symbol in
-                            KeyCapView(text: symbol)
+                            KeyCapViewSettings(text: symbol)
                         }
-                        KeyCapView(text: HotKeyService.keyString(for: settings.hotKeyCode))
+                        KeyCapViewSettings(text: HotKeyService.keyString(for: settings.hotKeyCode))
                     }
                 } else {
-                    Text("设置快捷键")
+                    Text("快捷键")
                         .foregroundColor(.secondary)
-                        .font(.system(size: 12))
                 }
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(Color(nsColor: .controlBackgroundColor))
-            .cornerRadius(4)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(
+                        (isHovered && !hasHotKey) ? Color.secondary.opacity(0.5) : Color.clear,
+                        lineWidth: 1
+                    )
+            )
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .onHover { hovering in
+            isHovered = hovering
+        }
         .popover(isPresented: $showPopover) {
             BookmarkHotKeyRecorderPopover(settings: $settings, isPresented: $showPopover)
         }
