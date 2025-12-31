@@ -3320,7 +3320,20 @@ class SearchPanelViewController: NSViewController {
             // 从 twoFAResults 中找到对应的验证码
             if let codeItem = twoFAResults.first(where: { "验证码: \($0.code)" == item.name }) {
                 codeItem.copyToClipboard()
-                print("SearchPanelViewController: Copied 2FA code \(codeItem.code) to clipboard")
+
+                // 如果设置了复制后删除短信，则从列表移除并删除短信
+                let settings = TwoFactorAuthSettings.load()
+                if settings.deleteAfterCopy {
+                    // 从列表中移除
+                    twoFAResults.removeAll { $0.messageRowId == codeItem.messageRowId }
+                    results.removeAll { $0.name == item.name }
+
+                    // 异步删除短信（不阻塞 UI）
+                    let rowId = codeItem.messageRowId
+                    DispatchQueue.global(qos: .background).async {
+                        _ = TwoFactorAuthService.shared.deleteMessage(rowId: rowId)
+                    }
+                }
             }
             PanelManager.shared.hidePanel()
             return

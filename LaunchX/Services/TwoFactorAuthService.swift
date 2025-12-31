@@ -204,26 +204,194 @@ final class TwoFactorAuthService {
 
     // MARK: - 删除消息
 
-    /// 删除指定的消息（需要写入权限）
+    /// 删除指定消息所在的对话
+    /// 由于 macOS Messages app 的限制：
+    /// 1. 无法通过 API 删除单条消息
+    /// 2. 直接修改数据库会破坏 iCloud 同步
+    /// 因此我们使用 AppleScript 删除整个对话（包含该消息的发送者的所有消息）
+    @discardableResult
     func deleteMessage(rowId: Int64) -> Bool {
-        // 注意：直接删除 chat.db 中的消息可能会导致同步问题
-        // 这里只是标记为已读或使用其他方式处理
-        // 实际删除需要通过 Apple Script 或其他方式
+        // 首先通过 rowId 查找消息的发送者（chat_identifier）
+        guard let chatIdentifier = getChatIdentifier(for: rowId) else {
+            print("[TwoFactorAuthService] Cannot find chat identifier for rowId: \(rowId)")
+            return false
+        }
 
-        let script = """
-            tell application "Messages"
-                -- Messages app doesn't provide direct deletion API
-                -- This is a placeholder for future implementation
-            end tell
+        // 使用 AppleScript 删除对话
+        return deleteConversation(chatIdentifier: chatIdentifier)
+    }
+
+    /// 根据消息 rowId 获取对应的 chat_identifier
+    private func getChatIdentifier(for rowId: Int64) -> String? {
+        guard openDatabase() else { return nil }
+        defer { closeDatabase() }
+
+        let query = """
+            SELECT c.chat_identifier
+            FROM message m
+            JOIN chat_message_join cmj ON m.ROWID = cmj.message_id
+            JOIN chat c ON cmj.chat_id = c.ROWID
+            WHERE m.ROWID = ?
             """
 
-        // 由于 Messages app 没有提供删除 API，这里返回 false
-        // 未来可以考虑使用其他方式实现
-        print("[TwoFactorAuthService] Message deletion is not supported yet")
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, query, -1, &stmt, nil) == SQLITE_OK else {
+            return nil
+        }
+        defer { sqlite3_finalize(stmt) }
+
+        sqlite3_bind_int64(stmt, 1, rowId)
+
+        if sqlite3_step(stmt) == SQLITE_ROW {
+            if let cString = sqlite3_column_text(stmt, 0) {
+                return String(cString: cString)
+            }
+        }
+
+        return nil
+    }
+
+    /// 使用 AppleScript 删除指定对话
+    /// 这会删除该发送者的所有消息，而不仅仅是单条消息
+    private func deleteConversation(chatIdentifier: String) -> Bool {
+        // 先检查 Messages 是否已经在运行
+        let wasRunning = isMessagesRunning()
+
+        // 使用 AppleScript 删除对话
+        let script = """
+            tell application "Messages"
+                set targetChat to null
+                repeat with c in chats
+                    if id of c contains "\(chatIdentifier)" then
+                        set targetChat to c
+                        exit repeat
+                    end if
+                end repeat
+
+                if targetChat is not null then
+                    delete targetChat
+                end if
+            end tell
+
+            return true
+            """
+
+        var error: NSDictionary?
+        if let scriptObject = NSAppleScript(source: script) {
+            let result = scriptObject.executeAndReturnError(&error)
+            if error == nil {
+                // 如果之前没有运行，则关闭 Messages
+                if !wasRunning {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        self.killMessages()
+                    }
+                }
+                return result.booleanValue
+            }
+            print("[TwoFactorAuthService] AppleScript error: \(error ?? [:])")
+            // 如果标准方法失败，尝试 UI 脚本方法
+            return deleteConversationViaUI(chatIdentifier: chatIdentifier, wasRunning: wasRunning)
+        }
         return false
     }
 
-    // MARK: - 私���方法
+    /// 检查 Messages 是否在运行
+    private func isMessagesRunning() -> Bool {
+        let task = Process()
+        task.launchPath = "/usr/bin/pgrep"
+        task.arguments = ["-x", "Messages"]
+
+        let pipe = Pipe()
+        task.standardOutput = pipe
+        task.standardError = pipe
+
+        do {
+            try task.run()
+            task.waitUntilExit()
+            return task.terminationStatus == 0
+        } catch {
+            return false
+        }
+    }
+
+    /// 使用 killall 关闭 Messages
+    private func killMessages() {
+        let task = Process()
+        task.launchPath = "/usr/bin/killall"
+        task.arguments = ["Messages"]
+
+        do {
+            try task.run()
+        } catch {
+            print("[TwoFactorAuthService] Failed to kill Messages: \(error)")
+        }
+    }
+
+    /// 使用 UI 脚本删除对话（备用方法）
+    private func deleteConversationViaUI(chatIdentifier: String, wasRunning: Bool = false) -> Bool {
+        let script = """
+            tell application "Messages"
+                activate
+            end tell
+
+            delay 0.5
+
+            tell application "System Events"
+                tell process "Messages"
+                    -- 搜索对话
+                    keystroke "f" using command down
+                    delay 0.2
+                    keystroke "\(chatIdentifier)"
+                    delay 0.5
+                    key code 36 -- Return
+                    delay 0.3
+
+                    -- 使用菜单删除对话（中文系统）
+                    try
+                        click menu item "删除对话…" of menu "对话" of menu bar 1
+                        delay 0.3
+
+                        -- 确认删除
+                        if exists sheet 1 of window 1 then
+                            click button "删除" of sheet 1 of window 1
+                        end if
+                    on error
+                        -- 英文系统
+                        try
+                            click menu item "Delete Conversation…" of menu "Conversations" of menu bar 1
+                            delay 0.3
+                            if exists sheet 1 of window 1 then
+                                click button "Delete" of sheet 1 of window 1
+                            end if
+                        end try
+                    end try
+
+                    -- 关闭搜索
+                    delay 0.2
+                    key code 53 -- Escape
+                end tell
+            end tell
+            """
+
+        var error: NSDictionary?
+        if let scriptObject = NSAppleScript(source: script) {
+            scriptObject.executeAndReturnError(&error)
+            if let error = error {
+                print("[TwoFactorAuthService] UI Script error: \(error)")
+                return false
+            }
+            // 如果之前没有运行，则关闭 Messages
+            if !wasRunning {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    self.killMessages()
+                }
+            }
+            return true
+        }
+        return false
+    }
+
+    // MARK: - 私有方法
 
     private func openDatabase() -> Bool {
         guard sqlite3_open_v2(chatDbPath, &db, SQLITE_OPEN_READONLY, nil) == SQLITE_OK else {

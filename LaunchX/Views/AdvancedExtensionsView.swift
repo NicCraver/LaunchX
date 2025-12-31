@@ -623,6 +623,21 @@ struct TwoFactorAuthSettingsView: View {
                     Spacer()
                 }
 
+                // 复制后删除短信
+                HStack {
+                    Text("复制后删除短信:")
+                        .frame(width: labelWidth, alignment: .trailing)
+                    Toggle("", isOn: $settings.deleteAfterCopy)
+                        .toggleStyle(.switch)
+                        .onChange(of: settings.deleteAfterCopy) { _, _ in
+                            settings.save()
+                        }
+                    Text("将删除该发送者的整个对话")
+                        .font(.caption)
+                        .foregroundColor(.orange)
+                    Spacer()
+                }
+
                 Divider()
 
                 // 权限状态
