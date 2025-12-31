@@ -138,6 +138,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             PanelManager.shared.showPanelInBookmarkMode()
         }
 
+        // 设置 2FA 快捷键回调
+        HotKeyService.shared.on2FAHotKeyPressed = {
+            // 检查 2FA 功能是否启用
+            let settings = TwoFactorAuthSettings.load()
+            guard settings.isEnabled else { return }
+            PanelManager.shared.showPanelIn2FAMode()
+        }
+
         // 优先从新的 ToolsConfig 加载，否则回退到 CustomItemsConfig
         let toolsConfig = ToolsConfig.load()
         if !toolsConfig.tools.isEmpty {
@@ -151,6 +159,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // 加载书签快捷键
         HotKeyService.shared.loadBookmarkHotKey()
+
+        // 加载 2FA 快捷键
+        HotKeyService.shared.load2FAHotKey()
     }
 
     private func setupHotKeyAndShowPanel() {

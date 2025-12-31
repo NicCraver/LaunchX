@@ -48,6 +48,10 @@ class SearchPanelViewController: NSViewController {
     private var isInBookmarkMode: Bool = false
     private var bookmarkResults: [BookmarkItem] = []
 
+    // 2FA 短信模式状态
+    private var isIn2FAMode: Bool = false
+    private var twoFAResults: [TwoFactorCodeItem] = []
+
     // IP 查询结果
     private var ipQueryResults: [(label: String, ip: String)] = []
 
@@ -198,6 +202,14 @@ class SearchPanelViewController: NSViewController {
             self,
             selector: #selector(handleEnterBookmarkModeDirectly),
             name: .enterBookmarkModeDirectly,
+            object: nil
+        )
+
+        // 监听直接进入 2FA 模式的通知（由快捷键触发）
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleEnter2FAModeDirectly),
+            name: .enter2FAModeDirectly,
             object: nil
         )
 
@@ -564,6 +576,167 @@ class SearchPanelViewController: NSViewController {
         loadAllBookmarks()
 
         print("SearchPanelViewController: Entered bookmark mode via alias")
+    }
+
+    /// 进入 2FA 模式（通过别名搜索选择）
+    private func enter2FAMode() {
+        // 如果在其他扩展模式中，先清理
+        if isInIDEProjectMode || isInFolderOpenMode || isInWebLinkQueryMode || isInUtilityMode
+            || isInBookmarkMode
+        {
+            cleanupAllExtensionModes()
+        }
+
+        // 进入 2FA 模式
+        isIn2FAMode = true
+
+        // 更新 UI
+        update2FAModeUI()
+
+        // 加载所有验证码
+        loadAll2FACodes()
+
+        print("SearchPanelViewController: Entered 2FA mode via alias")
+    }
+
+    // MARK: - 2FA 短信模式
+
+    /// 处理直接进入 2FA 模式的通知
+    @objc private func handleEnter2FAModeDirectly() {
+        print("SearchPanelViewController: handleEnter2FAModeDirectly called")
+
+        // 如果已经在 2FA 模式中，忽略重复触发
+        if isIn2FAMode {
+            print("SearchPanelViewController: Already in 2FA mode, ignoring")
+            return
+        }
+
+        // 如果在其他扩展模式中，先清理
+        if isInIDEProjectMode || isInFolderOpenMode || isInWebLinkQueryMode || isInUtilityMode
+            || isInBookmarkMode
+        {
+            cleanupAllExtensionModes()
+        }
+
+        // 进入 2FA 模式
+        isIn2FAMode = true
+
+        // 更新 UI
+        update2FAModeUI()
+
+        // 加载所有验证码
+        loadAll2FACodes()
+
+        print("SearchPanelViewController: 2FA mode setup complete")
+    }
+
+    /// 更新 2FA 模式 UI
+    private func update2FAModeUI() {
+        // 显示 IDE Tag View 作为 2FA 标签
+        ideTagView.isHidden = false
+        let twoFAIcon =
+            NSImage(systemSymbolName: "lock.shield.fill", accessibilityDescription: "2FA")
+            ?? NSImage()
+        twoFAIcon.size = NSSize(width: 16, height: 16)
+        ideIconView.image = twoFAIcon
+        ideNameLabel.stringValue = "2FA 短信"
+
+        // 切换 searchField 的 leading 约束（避免与标签重叠）
+        searchFieldLeadingToIcon?.isActive = false
+        searchFieldLeadingToTag?.isActive = true
+
+        // 更新搜索框占位符
+        setPlaceholder("搜索验证码...")
+
+        // 清空搜索框
+        searchField.stringValue = ""
+
+        // 聚焦搜索框
+        view.window?.makeFirstResponder(searchField)
+    }
+
+    /// 加载所有 2FA 验证码
+    private func loadAll2FACodes() {
+        let settings = TwoFactorAuthSettings.load()
+        twoFAResults = TwoFactorAuthService.shared.getRecentCodes(
+            timeSpanMinutes: settings.timeSpanMinutes)
+
+        // 转换为 SearchResult
+        results = twoFAResults.map { code in
+            SearchResult(
+                name: "验证码: \(code.code)",
+                path: "\(code.sender) · \(code.formattedTime)",
+                icon: NSImage(
+                    systemSymbolName: "number.circle.fill", accessibilityDescription: "Code")
+                    ?? NSImage(),
+                isDirectory: false,
+                displayAlias: nil,
+                is2FACode: true
+            )
+        }
+
+        selectedIndex = 0
+        tableView.reloadData()
+        updateVisibility()
+
+        if !results.isEmpty {
+            tableView.selectRowIndexes(
+                IndexSet(integer: selectedIndex), byExtendingSelection: false)
+            tableView.scrollRowToVisible(selectedIndex)
+        }
+    }
+
+    /// 2FA 模式搜索
+    private func perform2FASearch(_ query: String) {
+        let filteredCodes: [TwoFactorCodeItem]
+        if query.isEmpty {
+            filteredCodes = twoFAResults
+        } else {
+            // 搜索验证码或发送者
+            filteredCodes = twoFAResults.filter { code in
+                code.code.contains(query) || code.sender.localizedCaseInsensitiveContains(query)
+                    || code.fullMessage.localizedCaseInsensitiveContains(query)
+            }
+        }
+
+        results = filteredCodes.map { code in
+            SearchResult(
+                name: "验证码: \(code.code)",
+                path: "\(code.sender) · \(code.formattedTime)",
+                icon: NSImage(
+                    systemSymbolName: "number.circle.fill", accessibilityDescription: "Code")
+                    ?? NSImage(),
+                isDirectory: false,
+                displayAlias: nil,
+                is2FACode: true
+            )
+        }
+
+        selectedIndex = 0
+        tableView.reloadData()
+        updateVisibility()
+
+        if !results.isEmpty {
+            tableView.selectRowIndexes(
+                IndexSet(integer: selectedIndex), byExtendingSelection: false)
+            tableView.scrollRowToVisible(selectedIndex)
+        }
+    }
+
+    /// 退出 2FA 模式
+    private func exit2FAMode() {
+        guard isIn2FAMode else { return }
+
+        isIn2FAMode = false
+        twoFAResults = []
+
+        // 恢复 UI
+        restoreNormalModeUI()
+
+        // 恢复搜索状态
+        searchField.stringValue = ""
+        setPlaceholder("搜索应用或文档...")
+        resetState()
     }
 
     // MARK: - Setup
@@ -1348,15 +1521,21 @@ class SearchPanelViewController: NSViewController {
         // 检查是否匹配书签别名（用于显示书签入口）
         let bookmarkEntryResult = checkBookmarkAliasMatch(query: query)
 
+        // 检查是否匹配 2FA 别名（用于显示 2FA 入口）
+        let twoFAEntryResult = check2FAAliasMatch(query: query)
+
         // 根据 LRU 对搜索结果重新排序（传入查询字符串用于别名匹配优先级）
         let sortedResults = sortSearchResults(searchResults, query: query)
 
         // 构建最终结果
         var finalResults: [SearchResult] = []
 
-        // 书签入口在最前面（如果匹配别名）
+        // 扩展入口在最前面（如果匹配别名）
         if let bookmarkEntry = bookmarkEntryResult {
             finalResults.append(bookmarkEntry)
+        }
+        if let twoFAEntry = twoFAEntryResult {
+            finalResults.append(twoFAEntry)
         }
 
         if sortedResults.isEmpty {
@@ -1406,6 +1585,35 @@ class SearchPanelViewController: NSViewController {
             isDirectory: false,
             displayAlias: settings.alias,
             isBookmarkEntry: true
+        )
+    }
+
+    /// 检查 2FA 别名匹配
+    /// - Parameter query: 搜索查询
+    /// - Returns: 如果匹配，返回 2FA 入口 SearchResult
+    private func check2FAAliasMatch(query: String) -> SearchResult? {
+        let settings = TwoFactorAuthSettings.load()
+        guard settings.isEnabled, !settings.alias.isEmpty else { return nil }
+
+        let queryLower = query.lowercased()
+        let aliasLower = settings.alias.lowercased()
+
+        // 检查是否匹配别名（前缀匹配或完全匹配）
+        guard aliasLower.hasPrefix(queryLower) || queryLower == aliasLower else { return nil }
+
+        // 创建 2FA 入口结果
+        let twoFAIcon =
+            NSImage(systemSymbolName: "lock.shield.fill", accessibilityDescription: "2FA")
+            ?? NSImage()
+        twoFAIcon.size = NSSize(width: 32, height: 32)
+
+        return SearchResult(
+            name: "2FA 短信",
+            path: "2fa-entry",
+            icon: twoFAIcon,
+            isDirectory: false,
+            displayAlias: settings.alias,
+            is2FAEntry: true
         )
     }
 
@@ -1515,7 +1723,7 @@ class SearchPanelViewController: NSViewController {
         }
 
         switch Int(event.keyCode) {
-        case 51:  // Delete - IDE 项目模式、文件夹打开模式、网页直达 Query 模式、实用工具模式或书签模式下，输入框为空时退出
+        case 51:  // Delete - IDE 项目模式、文件夹打开模式、网页直达 Query 模式、实用工具模式、书签模式或 2FA 模式下，输入框为空时退出
             if isComposing { return event }
             // URL 模式和 Base64 模式使用独立文本框，delete 键由文本框处理，不退出
             if isInUtilityMode
@@ -1524,7 +1732,7 @@ class SearchPanelViewController: NSViewController {
                 return event
             }
             if (isInIDEProjectMode || isInFolderOpenMode || isInWebLinkQueryMode || isInUtilityMode
-                || isInBookmarkMode)
+                || isInBookmarkMode || isIn2FAMode)
                 && searchField.stringValue.isEmpty
             {
                 if isInIDEProjectMode {
@@ -1537,6 +1745,8 @@ class SearchPanelViewController: NSViewController {
                     exitUtilityMode()
                 } else if isInBookmarkMode {
                     exitBookmarkMode()
+                } else if isIn2FAMode {
+                    exit2FAMode()
                 }
                 return nil
             }
@@ -1544,7 +1754,7 @@ class SearchPanelViewController: NSViewController {
         case 48:  // Tab - 进入 IDE 项目模式、文件夹打开模式、网页直达 Query 模式或书签模式
             if isComposing { return event }
             if !isInIDEProjectMode && !isInFolderOpenMode && !isInWebLinkQueryMode
-                && !isInBookmarkMode
+                && !isInBookmarkMode && !isIn2FAMode
             {
                 // 检查当前选中项是否有扩展功能
                 guard results.indices.contains(selectedIndex) else {
@@ -1556,6 +1766,12 @@ class SearchPanelViewController: NSViewController {
                 // 检查是否为书签入口
                 if item.isBookmarkEntry {
                     enterBookmarkMode()
+                    return nil
+                }
+
+                // 检查是否为 2FA 入口
+                if item.is2FAEntry {
+                    enter2FAMode()
                     return nil
                 }
 
@@ -2024,6 +2240,12 @@ class SearchPanelViewController: NSViewController {
         if isInBookmarkMode {
             isInBookmarkMode = false
             bookmarkResults = []
+        }
+
+        // 清理 2FA 模式
+        if isIn2FAMode {
+            isIn2FAMode = false
+            twoFAResults = []
         }
 
         // 恢复 UI
@@ -3050,6 +3272,12 @@ class SearchPanelViewController: NSViewController {
             return
         }
 
+        // 2FA 入口：进入 2FA 搜索模式
+        if item.is2FAEntry {
+            enter2FAMode()
+            return
+        }
+
         // 书签：打开书签 URL
         if item.isBookmark {
             BookmarkService.shared.open(
@@ -3058,6 +3286,17 @@ class SearchPanelViewController: NSViewController {
                     url: item.path,
                     source: item.bookmarkSource == "Chrome" ? .chrome : .safari
                 ))
+            PanelManager.shared.hidePanel()
+            return
+        }
+
+        // 2FA 验证码：复制到剪贴板
+        if item.is2FACode {
+            // 从 twoFAResults 中找到对应的验证码
+            if let codeItem = twoFAResults.first(where: { "验证码: \($0.code)" == item.name }) {
+                codeItem.copyToClipboard()
+                print("SearchPanelViewController: Copied 2FA code \(codeItem.code) to clipboard")
+            }
             PanelManager.shared.hidePanel()
             return
         }
@@ -3119,6 +3358,12 @@ extension SearchPanelViewController: NSTextFieldDelegate {
         // 书签模式：搜索书签
         if isInBookmarkMode {
             performBookmarkSearch(query)
+            return
+        }
+
+        // 2FA 模式：搜索验证码
+        if isIn2FAMode {
+            perform2FASearch(query)
             return
         }
 
@@ -3487,19 +3732,20 @@ class ResultCellView: NSView {
             statsContainerView.isHidden = true
         }
 
-        // App、网页直达、实用工具、系统命令、书签入口只显示名称（垂直居中、字体大），文件和文件夹显示路径
+        // App、网页直达、实用工具、系统命令、书签入口、2FA 入口只显示名称（垂直居中、字体大），文件和文件夹显示路径
         let isApp = item.path.hasSuffix(".app")
         let isWebLink = item.isWebLink
         let isUtility = item.isUtility
         let isSystemCommand = item.isSystemCommand
         let isBookmarkEntry = item.isBookmarkEntry
+        let is2FAEntry = item.is2FAEntry
         let showPathLabel =
             !isApp && !isWebLink && !isUtility && !isSystemCommand && !isBookmarkEntry
-            && !hasProcessStats
+            && !is2FAEntry && !hasProcessStats
         pathLabel.isHidden = !showPathLabel
         pathLabel.stringValue = showPathLabel ? item.path : ""
 
-        // 检测是否为支持的 IDE、文件夹、网页直达 Query 扩展、实用工具或书签入口，显示箭头指示器
+        // 检测是否为支持的 IDE、文件夹、网页直达 Query 扩展、实用工具、书签入口或 2FA 入口，显示箭头指示器
         // hideArrow 为 true 时强制隐藏（如文件夹打开模式下）
         // 有进程统计信息时也隐藏箭头
         let isIDE = IDEType.detect(from: item.path) != nil
@@ -3507,7 +3753,7 @@ class ResultCellView: NSView {
         let isQueryWebLink = item.isWebLink && item.supportsQueryExtension
         let showArrow =
             !hideArrow && !hasProcessStats
-            && (isIDE || isFolder || isQueryWebLink || isUtility || isBookmarkEntry)
+            && (isIDE || isFolder || isQueryWebLink || isUtility || isBookmarkEntry || is2FAEntry)
         arrowIndicator.isHidden = !showArrow
 
         // 切换 nameLabel leading 约束（普通模式）
@@ -3527,8 +3773,9 @@ class ResultCellView: NSView {
             nameLabelTrailingToEdge.isActive = true
         }
 
-        // 切换布局：App、网页直达、实用工具、系统命令、书签入口、有进程统计的项垂直居中，其他顶部对齐
-        if isApp || isWebLink || isUtility || isSystemCommand || isBookmarkEntry || hasProcessStats
+        // 切换布局：App、网页直达、实用工具、系统命令、书签入口、2FA 入口、有进程统计的项垂直居中，其他顶部对齐
+        if isApp || isWebLink || isUtility || isSystemCommand || isBookmarkEntry || is2FAEntry
+            || hasProcessStats
         {
             nameLabel.font = .systemFont(ofSize: 14, weight: .medium)
             nameLabelTopConstraint.isActive = false

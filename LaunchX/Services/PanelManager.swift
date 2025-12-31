@@ -184,6 +184,24 @@ class PanelManager: NSObject, NSWindowDelegate {
         }
     }
 
+    /// 显示面板并直接进入 2FA 短信模式
+    func showPanelIn2FAMode() {
+        guard isSetup else { return }
+
+        // 先显示面板
+        if !panel.isVisible {
+            showPanel()
+        }
+
+        // 面板显示后再发送通知进入 2FA 模式
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(
+                name: .enter2FAModeDirectly,
+                object: nil
+            )
+        }
+    }
+
     // MARK: - NSWindowDelegate
 
     func windowDidResignKey(_ notification: Notification) {

@@ -99,6 +99,13 @@ class HotKeyService: ObservableObject {
     /// 书签快捷键 ID
     private let bookmarkHotKeyId: UInt32 = 2
 
+    /// 2FA 快捷键触发回调
+    var on2FAHotKeyPressed: (() -> Void)?
+    /// 2FA 快捷键引用
+    private var twoFAHotKeyRef: EventHotKeyRef?
+    /// 2FA 快捷键 ID
+    private let twoFAHotKeyId: UInt32 = 3
+
     // MARK: - 私有属性
 
     private let hotKeySignature: OSType
@@ -478,6 +485,54 @@ class HotKeyService: ObservableObject {
         }
     }
 
+    // MARK: - 2FA 快捷键
+
+    /// 注册 2FA 扩展快捷键
+    func register2FAHotKey(keyCode: UInt32, modifiers: UInt32) {
+        // 先注销旧的
+        unregister2FAHotKey()
+
+        guard keyCode != 0 else { return }
+
+        let hotKeyID = EventHotKeyID(signature: hotKeySignature, id: twoFAHotKeyId)
+        var hotKeyRef: EventHotKeyRef?
+
+        let status = RegisterEventHotKey(
+            keyCode,
+            modifiers,
+            hotKeyID,
+            GetApplicationEventTarget(),
+            0,
+            &hotKeyRef
+        )
+
+        if status == noErr {
+            twoFAHotKeyRef = hotKeyRef
+            print(
+                "HotKeyService: Registered 2FA HotKey (Code: \(keyCode), Mods: \(modifiers))")
+        } else {
+            print("HotKeyService: Failed to register 2FA hotkey. Status: \(status)")
+        }
+    }
+
+    /// 注销 2FA 扩展快捷键
+    func unregister2FAHotKey() {
+        if let ref = twoFAHotKeyRef {
+            UnregisterEventHotKey(ref)
+            twoFAHotKeyRef = nil
+            print("HotKeyService: Unregistered 2FA HotKey")
+        }
+    }
+
+    /// 加载 2FA 快捷键设置
+    func load2FAHotKey() {
+        let settings = TwoFactorAuthSettings.load()
+        if settings.hotKeyCode != 0 {
+            register2FAHotKey(
+                keyCode: settings.hotKeyCode, modifiers: settings.hotKeyModifiers)
+        }
+    }
+
     // MARK: - 暂停/恢复快捷键（用于录制时）
 
     /// 暂停所有快捷键（录制时使用）
@@ -698,6 +753,54 @@ class HotKeyService: ObservableObject {
         return nil
     }
 
+    /// 检查快捷键冲突（用于高级扩展设置）
+    /// - Parameters:
+    ///   - keyCode: 按键码
+    ///   - modifiers: 修饰键
+    ///   - excludeType: 排除的类型（"bookmark" 或 "2fa"）
+    /// - Returns: 冲突的描述，nil 表示无冲突
+    func checkHotKeyConflict(keyCode: UInt32, modifiers: UInt32, excludeType: String?) -> String? {
+        // 检查与主快捷键的冲突
+        if keyCode == currentKeyCode && modifiers == currentModifiers && !useDoubleTapModifier {
+            return "启动快捷键"
+        }
+
+        // 检查与书签快捷键的冲突
+        if excludeType != "bookmark" {
+            let bookmarkSettings = BookmarkSettings.load()
+            if bookmarkSettings.hotKeyCode == keyCode
+                && bookmarkSettings.hotKeyModifiers == modifiers
+            {
+                return "搜索书签"
+            }
+        }
+
+        // 检查与 2FA 快捷键的冲突
+        if excludeType != "2fa" {
+            let twoFASettings = TwoFactorAuthSettings.load()
+            if twoFASettings.hotKeyCode == keyCode && twoFASettings.hotKeyModifiers == modifiers {
+                return "2FA 短信"
+            }
+        }
+
+        // 检查与工具快捷键的冲突
+        let toolsConfig = ToolsConfig.load()
+        for tool in toolsConfig.tools {
+            if let hotKey = tool.hotKey,
+                hotKey.keyCode == keyCode && hotKey.modifiers == modifiers
+            {
+                return tool.name
+            }
+            if tool.supportsExtension, let extKey = tool.extensionHotKey,
+                extKey.keyCode == keyCode && extKey.modifiers == modifiers
+            {
+                return tool.name + " (进入扩展)"
+            }
+        }
+
+        return nil
+    }
+
     // MARK: - 事件处理
 
     /// 内部事件处理方法
@@ -728,6 +831,14 @@ class HotKeyService: ObservableObject {
             if hotKeyID.id == bookmarkHotKeyId {
                 DispatchQueue.main.async { [weak self] in
                     self?.onBookmarkHotKeyPressed?()
+                }
+                return noErr
+            }
+
+            // 检查是否为 2FA 快捷键
+            if hotKeyID.id == twoFAHotKeyId {
+                DispatchQueue.main.async { [weak self] in
+                    self?.on2FAHotKeyPressed?()
                 }
                 return noErr
             }
