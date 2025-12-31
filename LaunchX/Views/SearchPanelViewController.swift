@@ -665,8 +665,6 @@ class SearchPanelViewController: NSViewController {
         twoFAResults = TwoFactorAuthService.shared.getRecentCodes(
             timeSpanMinutes: settings.timeSpanMinutes)
 
-        print("SearchPanelViewController: loadAll2FACodes, found \(twoFAResults.count) codes")
-
         // 转换为 SearchResult
         results = twoFAResults.map { code in
             SearchResult(
@@ -680,8 +678,6 @@ class SearchPanelViewController: NSViewController {
                 is2FACode: true
             )
         }
-
-        print("SearchPanelViewController: loadAll2FACodes, results count = \(results.count)")
 
         selectedIndex = 0
         tableView.reloadData()
@@ -1371,18 +1367,13 @@ class SearchPanelViewController: NSViewController {
     func focus() {
         view.window?.makeFirstResponder(searchField)
 
-        print("SearchPanelViewController: focus called, isIn2FAMode=\(isIn2FAMode)")
-
         // 每次显示面板时刷新状态，确保设置更改立即生效
         refreshDisplayMode()
     }
 
     /// 刷新显示模式（Simple/Full）
     private func refreshDisplayMode() {
-        print(
-            "SearchPanelViewController: refreshDisplayMode called, isIn2FAMode=\(isIn2FAMode), isInBookmarkMode=\(isInBookmarkMode)"
-        )
-
+        // ⚠️ 重要：添加新的扩展模式时，必须在此处添加检查，否则会覆盖扩展模式的结果
         // 如果在扩展模式中，不要覆盖当前显示的结果
         if isInIDEProjectMode || isInFolderOpenMode || isInWebLinkQueryMode || isInUtilityMode
             || isInBookmarkMode || isIn2FAMode
@@ -1413,9 +1404,7 @@ class SearchPanelViewController: NSViewController {
     }
 
     func resetState() {
-        print(
-            "SearchPanelViewController: resetState called, isIn2FAMode=\(isIn2FAMode), isInBookmarkMode=\(isInBookmarkMode)"
-        )
+        // ⚠️ 重要：添加新的扩展模式时，必须在此处添加清理逻辑，否则面板隐藏后状态不会被重置
 
         // 如果在 IDE 项目模式，先恢复普通模式 UI
         if isInIDEProjectMode {
@@ -3026,6 +3015,7 @@ class SearchPanelViewController: NSViewController {
 
     /// 加载最近使用的项目（支持所有工具类型）
     private func loadRecentApps() {
+        // ⚠️ 重要：添加新的扩展模式时，必须在此处添加检查，否则会在扩展模式下加载最近项目
         // 如果已经在扩展模式中，不加载最近项目
         if isInIDEProjectMode || isInFolderOpenMode || isInWebLinkQueryMode || isInUtilityMode
             || isInBookmarkMode || isIn2FAMode
@@ -3079,6 +3069,7 @@ class SearchPanelViewController: NSViewController {
             }
 
             DispatchQueue.main.async {
+                // ⚠️ 重要：添加新的扩展模式时，必须在此处添加检查，否则异步回调会覆盖扩展模式的结果
                 // 再次检查是否在扩展模式，避免覆盖扩展模式的结果列表
                 guard
                     self?.isInIDEProjectMode != true && self?.isInFolderOpenMode != true
