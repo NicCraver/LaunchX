@@ -97,9 +97,10 @@ class PanelManager: NSObject, NSWindowDelegate {
     func hidePanel(deactivateApp: Bool = false) {
         guard isSetup else { return }
 
-        // Reset state BEFORE hiding
+        print("PanelManager: hidePanel called, onWillHide is \(onWillHide == nil ? "nil" : "set")")
+
+        // Reset state BEFORE hiding (通过回调通知 ViewController)
         onWillHide?()
-        viewController?.resetState()
 
         panel.orderOut(nil)
 
@@ -170,17 +171,15 @@ class PanelManager: NSObject, NSWindowDelegate {
     func showPanelInBookmarkMode() {
         guard isSetup else { return }
 
-        // 先显示面板
+        // 先发送通知进入书签模式（这样 focus() 调用时 isInBookmarkMode 已经是 true）
+        NotificationCenter.default.post(
+            name: .enterBookmarkModeDirectly,
+            object: nil
+        )
+
+        // 再显示面板
         if !panel.isVisible {
             showPanel()
-        }
-
-        // 面板显示后再发送通知进入书签模式
-        DispatchQueue.main.async {
-            NotificationCenter.default.post(
-                name: .enterBookmarkModeDirectly,
-                object: nil
-            )
         }
     }
 
@@ -188,17 +187,15 @@ class PanelManager: NSObject, NSWindowDelegate {
     func showPanelIn2FAMode() {
         guard isSetup else { return }
 
-        // 先显示面板
+        // 先发送通知进入 2FA 模式（这样 focus() 调用时 isIn2FAMode 已经是 true）
+        NotificationCenter.default.post(
+            name: .enter2FAModeDirectly,
+            object: nil
+        )
+
+        // 再显示面板
         if !panel.isVisible {
             showPanel()
-        }
-
-        // 面板显示后再发送通知进入 2FA 模式
-        DispatchQueue.main.async {
-            NotificationCenter.default.post(
-                name: .enter2FAModeDirectly,
-                object: nil
-            )
         }
     }
 

@@ -665,6 +665,8 @@ class SearchPanelViewController: NSViewController {
         twoFAResults = TwoFactorAuthService.shared.getRecentCodes(
             timeSpanMinutes: settings.timeSpanMinutes)
 
+        print("SearchPanelViewController: loadAll2FACodes, found \(twoFAResults.count) codes")
+
         // 转换为 SearchResult
         results = twoFAResults.map { code in
             SearchResult(
@@ -678,6 +680,8 @@ class SearchPanelViewController: NSViewController {
                 is2FACode: true
             )
         }
+
+        print("SearchPanelViewController: loadAll2FACodes, results count = \(results.count)")
 
         selectedIndex = 0
         tableView.reloadData()
@@ -1367,14 +1371,22 @@ class SearchPanelViewController: NSViewController {
     func focus() {
         view.window?.makeFirstResponder(searchField)
 
+        print("SearchPanelViewController: focus called, isIn2FAMode=\(isIn2FAMode)")
+
         // 每次显示面板时刷新状态，确保设置更改立即生效
         refreshDisplayMode()
     }
 
     /// 刷新显示模式（Simple/Full）
     private func refreshDisplayMode() {
-        // 如果在 IDE 项目模式或文件夹模式，不要覆盖当前显示的结果
-        if isInIDEProjectMode || isInFolderOpenMode {
+        print(
+            "SearchPanelViewController: refreshDisplayMode called, isIn2FAMode=\(isIn2FAMode), isInBookmarkMode=\(isInBookmarkMode)"
+        )
+
+        // 如果在扩展模式中，不要覆盖当前显示的结果
+        if isInIDEProjectMode || isInFolderOpenMode || isInWebLinkQueryMode || isInUtilityMode
+            || isInBookmarkMode || isIn2FAMode
+        {
             updateVisibility()
             return
         }
@@ -1386,6 +1398,9 @@ class SearchPanelViewController: NSViewController {
             if defaultWindowMode == "full" && !recentApps.isEmpty {
                 results = recentApps
                 isShowingRecents = true
+                print(
+                    "SearchPanelViewController: refreshDisplayMode set results to recentApps (\(recentApps.count) items)"
+                )
             } else {
                 results = []
                 isShowingRecents = false
@@ -1398,6 +1413,10 @@ class SearchPanelViewController: NSViewController {
     }
 
     func resetState() {
+        print(
+            "SearchPanelViewController: resetState called, isIn2FAMode=\(isIn2FAMode), isInBookmarkMode=\(isInBookmarkMode)"
+        )
+
         // 如果在 IDE 项目模式，先恢复普通模式 UI
         if isInIDEProjectMode {
             isInIDEProjectMode = false
@@ -3008,7 +3027,9 @@ class SearchPanelViewController: NSViewController {
     /// 加载最近使用的项目（支持所有工具类型）
     private func loadRecentApps() {
         // 如果已经在扩展模式中，不加载最近项目
-        if isInIDEProjectMode || isInFolderOpenMode || isInWebLinkQueryMode || isInUtilityMode {
+        if isInIDEProjectMode || isInFolderOpenMode || isInWebLinkQueryMode || isInUtilityMode
+            || isInBookmarkMode || isIn2FAMode
+        {
             return
         }
 
@@ -3058,10 +3079,11 @@ class SearchPanelViewController: NSViewController {
             }
 
             DispatchQueue.main.async {
-                // 再次检查是否在特殊模式，避免覆盖 IDE 项目列表
+                // 再次检查是否在扩展模式，避免覆盖扩展模式的结果列表
                 guard
                     self?.isInIDEProjectMode != true && self?.isInFolderOpenMode != true
                         && self?.isInWebLinkQueryMode != true && self?.isInUtilityMode != true
+                        && self?.isInBookmarkMode != true && self?.isIn2FAMode != true
                 else {
                     return
                 }
