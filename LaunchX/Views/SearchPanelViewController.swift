@@ -435,15 +435,18 @@ class SearchPanelViewController: NSViewController {
     @objc private func handleEnterBookmarkModeDirectly() {
         print("SearchPanelViewController: handleEnterBookmarkModeDirectly called")
 
-        // 如果已经在书签模式中，忽略重复触发
-        if isInBookmarkMode {
-            print("SearchPanelViewController: Already in bookmark mode, ignoring")
-            return
+        // 如果在其他扩展模式中，先清理（包括 2FA 模式等）
+        if isInIDEProjectMode || isInFolderOpenMode || isInWebLinkQueryMode || isInUtilityMode
+            || isIn2FAMode
+        {
+            cleanupAllExtensionModes()
         }
 
-        // 如果在其他扩展模式中，先清理
-        if isInIDEProjectMode || isInFolderOpenMode || isInWebLinkQueryMode || isInUtilityMode {
-            cleanupAllExtensionModes()
+        // 如果已经在书签模式中，刷新数据即可
+        if isInBookmarkMode {
+            print("SearchPanelViewController: Already in bookmark mode, refreshing")
+            loadAllBookmarks()
+            return
         }
 
         // 进入书签模式
@@ -605,17 +608,18 @@ class SearchPanelViewController: NSViewController {
     @objc private func handleEnter2FAModeDirectly() {
         print("SearchPanelViewController: handleEnter2FAModeDirectly called")
 
-        // 如果已经在 2FA 模式中，忽略重复触发
-        if isIn2FAMode {
-            print("SearchPanelViewController: Already in 2FA mode, ignoring")
-            return
-        }
-
-        // 如果在其他扩展模式中，先清理
+        // 如果在其他扩展模式中，先清理（包括书签模式等）
         if isInIDEProjectMode || isInFolderOpenMode || isInWebLinkQueryMode || isInUtilityMode
             || isInBookmarkMode
         {
             cleanupAllExtensionModes()
+        }
+
+        // 如果已经在 2FA 模式中，刷新数据即可
+        if isIn2FAMode {
+            print("SearchPanelViewController: Already in 2FA mode, refreshing")
+            loadAll2FACodes()
+            return
         }
 
         // 进入 2FA 模式
