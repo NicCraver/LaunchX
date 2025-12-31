@@ -1452,6 +1452,14 @@ class SearchPanelViewController: NSViewController {
             setPlaceholder("搜索应用或文档...")
         }
 
+        // 如果在 2FA 模式，先恢复普通模式 UI
+        if isIn2FAMode {
+            isIn2FAMode = false
+            twoFAResults = []
+            restoreNormalModeUI()
+            setPlaceholder("搜索应用或文档...")
+        }
+
         searchField.stringValue = ""
         selectedIndex = 0
 
