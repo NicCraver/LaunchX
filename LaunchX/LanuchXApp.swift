@@ -130,6 +130,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             ToolExecutor.shared.execute(toolId: toolId, isExtension: isExtension)
         }
 
+        // 设置书签快捷键回调
+        HotKeyService.shared.onBookmarkHotKeyPressed = {
+            PanelManager.shared.showPanelInBookmarkMode()
+        }
+
         // 优先从新的 ToolsConfig 加载，否则回退到 CustomItemsConfig
         let toolsConfig = ToolsConfig.load()
         if !toolsConfig.tools.isEmpty {
@@ -140,6 +145,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             HotKeyService.shared.reloadCustomHotKeys(from: config)
             print("LaunchX: Custom hotkeys loaded from CustomItemsConfig")
         }
+
+        // 加载书签快捷键
+        HotKeyService.shared.loadBookmarkHotKey()
     }
 
     private func setupHotKeyAndShowPanel() {

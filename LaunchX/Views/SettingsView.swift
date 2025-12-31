@@ -19,6 +19,11 @@ struct SettingsView: View {
                 .tabItem {
                     Label("工具管理", systemImage: "wrench.and.screwdriver")
                 }
+
+            AdvancedExtensionsView()
+                .tabItem {
+                    Label("高级扩展", systemImage: "sparkles")
+                }
         }
         .frame(width: 700, height: 520)
         .padding()

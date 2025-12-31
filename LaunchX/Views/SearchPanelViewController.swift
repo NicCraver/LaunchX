@@ -44,6 +44,10 @@ class SearchPanelViewController: NSViewController {
     private var currentUtilityIdentifier: String? = nil
     private var currentUtilityResult: SearchResult? = nil
 
+    // 书签搜索模式状态
+    private var isInBookmarkMode: Bool = false
+    private var bookmarkResults: [BookmarkItem] = []
+
     // IP 查询结果
     private var ipQueryResults: [(label: String, ip: String)] = []
 
@@ -186,6 +190,14 @@ class SearchPanelViewController: NSViewController {
             self,
             selector: #selector(handleEnterUtilityModeDirectly(_:)),
             name: .enterUtilityModeDirectly,
+            object: nil
+        )
+
+        // 监听直接进入书签模式的通知（由快捷键触发）
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleEnterBookmarkModeDirectly),
+            name: .enterBookmarkModeDirectly,
             object: nil
         )
 
@@ -405,6 +417,155 @@ class SearchPanelViewController: NSViewController {
         }
 
         print("SearchPanelViewController: Utility mode setup complete")
+    }
+
+    /// 处理直接进入书签模式的通知
+    @objc private func handleEnterBookmarkModeDirectly() {
+        print("SearchPanelViewController: handleEnterBookmarkModeDirectly called")
+
+        // 如果已经在书签模式中，忽略重复触发
+        if isInBookmarkMode {
+            print("SearchPanelViewController: Already in bookmark mode, ignoring")
+            return
+        }
+
+        // 如果在其他扩展模式中，先清理
+        if isInIDEProjectMode || isInFolderOpenMode || isInWebLinkQueryMode || isInUtilityMode {
+            cleanupAllExtensionModes()
+        }
+
+        // 进入书签模式
+        isInBookmarkMode = true
+
+        // 更新 UI
+        updateBookmarkModeUI()
+
+        // 加载所有书签
+        loadAllBookmarks()
+
+        print("SearchPanelViewController: Bookmark mode setup complete")
+    }
+
+    /// 更新书签模式 UI
+    private func updateBookmarkModeUI() {
+        // 显示 IDE Tag View 作为书签标签
+        ideTagView.isHidden = false
+        let bookmarkIcon =
+            NSImage(systemSymbolName: "bookmark.fill", accessibilityDescription: "Bookmark")
+            ?? NSImage()
+        bookmarkIcon.size = NSSize(width: 16, height: 16)
+        ideIconView.image = bookmarkIcon
+        ideNameLabel.stringValue = "搜索书签"
+
+        // 切换 searchField 的 leading 约束（避免与标签重叠）
+        searchFieldLeadingToIcon?.isActive = false
+        searchFieldLeadingToTag?.isActive = true
+
+        // 更新搜索框占位符
+        setPlaceholder("搜索书签...")
+
+        // 清空搜索框
+        searchField.stringValue = ""
+
+        // 聚焦搜索框
+        view.window?.makeFirstResponder(searchField)
+    }
+
+    /// 加载所有书签
+    private func loadAllBookmarks() {
+        bookmarkResults = BookmarkService.shared.getAllBookmarks()
+
+        // 转换为 SearchResult
+        results = bookmarkResults.map { bookmark in
+            SearchResult(
+                name: bookmark.title,
+                path: bookmark.url,
+                icon: bookmark.source.icon,
+                isDirectory: false,
+                displayAlias: bookmark.folderPath.isEmpty ? nil : bookmark.folderPath.last,
+                isBookmark: true,
+                bookmarkSource: bookmark.source.rawValue
+            )
+        }
+
+        selectedIndex = 0
+        tableView.reloadData()
+        updateVisibility()
+
+        if !results.isEmpty {
+            tableView.selectRowIndexes(
+                IndexSet(integer: selectedIndex), byExtendingSelection: false)
+            tableView.scrollRowToVisible(selectedIndex)
+        }
+    }
+
+    /// 书签模式搜索
+    private func performBookmarkSearch(_ query: String) {
+        let filteredBookmarks: [BookmarkItem]
+        if query.isEmpty {
+            filteredBookmarks = bookmarkResults
+        } else {
+            filteredBookmarks = BookmarkService.shared.search(query: query)
+        }
+
+        results = filteredBookmarks.map { bookmark in
+            SearchResult(
+                name: bookmark.title,
+                path: bookmark.url,
+                icon: bookmark.source.icon,
+                isDirectory: false,
+                displayAlias: bookmark.folderPath.isEmpty ? nil : bookmark.folderPath.last,
+                isBookmark: true,
+                bookmarkSource: bookmark.source.rawValue
+            )
+        }
+
+        selectedIndex = 0
+        tableView.reloadData()
+        updateVisibility()
+
+        if !results.isEmpty {
+            tableView.selectRowIndexes(
+                IndexSet(integer: selectedIndex), byExtendingSelection: false)
+            tableView.scrollRowToVisible(selectedIndex)
+        }
+    }
+
+    /// 退出书签模式
+    private func exitBookmarkMode() {
+        guard isInBookmarkMode else { return }
+
+        isInBookmarkMode = false
+        bookmarkResults = []
+
+        // 隐藏标签
+        ideTagView.isHidden = true
+
+        // 恢复占位符
+        setPlaceholder("搜索应用或文档...")
+
+        // 清空结果
+        results = []
+        tableView.reloadData()
+    }
+
+    /// 进入书签模式（通过别名搜索选择）
+    private func enterBookmarkMode() {
+        // 如果在其他扩展模式中，先清理
+        if isInIDEProjectMode || isInFolderOpenMode || isInWebLinkQueryMode || isInUtilityMode {
+            cleanupAllExtensionModes()
+        }
+
+        // 进入书签模式
+        isInBookmarkMode = true
+
+        // 更新 UI
+        updateBookmarkModeUI()
+
+        // 加载所有书签
+        loadAllBookmarks()
+
+        print("SearchPanelViewController: Entered bookmark mode via alias")
     }
 
     // MARK: - Setup
@@ -1112,6 +1273,14 @@ class SearchPanelViewController: NSViewController {
             setPlaceholder("搜索应用或文档...")
         }
 
+        // 如果在书签模式，先恢复普通模式 UI
+        if isInBookmarkMode {
+            isInBookmarkMode = false
+            bookmarkResults = []
+            restoreNormalModeUI()
+            setPlaceholder("搜索应用或文档...")
+        }
+
         searchField.stringValue = ""
         selectedIndex = 0
 
@@ -1178,17 +1347,30 @@ class SearchPanelViewController: NSViewController {
         let existingPaths = Set(searchResults.map { $0.path })
         let filteredDefaultLinks = defaultSearchLinks.filter { !existingPaths.contains($0.path) }
 
+        // 检查是否匹配书签别名（用于显示书签入口）
+        let bookmarkEntryResult = checkBookmarkAliasMatch(query: query)
+
         // 根据 LRU 对搜索结果重新排序（传入查询字符串用于别名匹配优先级）
         let sortedResults = sortSearchResults(searchResults, query: query)
 
-        if sortedResults.isEmpty {
-            // 没有搜索结果时，默认搜索显示在最上面
-            results = filteredDefaultLinks
-        } else {
-            // 有搜索结果时，默认搜索显示在最后面
-            results = sortedResults + filteredDefaultLinks
+        // 构建最终结果
+        var finalResults: [SearchResult] = []
+
+        // 书签入口在最前面（如果匹配别名）
+        if let bookmarkEntry = bookmarkEntryResult {
+            finalResults.append(bookmarkEntry)
         }
 
+        if sortedResults.isEmpty {
+            // 没有搜索结果时，默认搜索显示在最上面
+            finalResults.append(contentsOf: filteredDefaultLinks)
+        } else {
+            // 有搜索结果时，默认搜索显示在最后面
+            finalResults.append(contentsOf: sortedResults)
+            finalResults.append(contentsOf: filteredDefaultLinks)
+        }
+
+        results = finalResults
         selectedIndex = results.isEmpty ? 0 : 0
         tableView.reloadData()
         updateVisibility()
@@ -1198,6 +1380,35 @@ class SearchPanelViewController: NSViewController {
                 IndexSet(integer: selectedIndex), byExtendingSelection: false)
             tableView.scrollRowToVisible(selectedIndex)
         }
+    }
+
+    /// 检查书签别名匹配
+    /// - Parameter query: 搜索查询
+    /// - Returns: 如果匹配，返回书签入口 SearchResult
+    private func checkBookmarkAliasMatch(query: String) -> SearchResult? {
+        let settings = BookmarkSettings.load()
+        guard settings.isEnabled, !settings.alias.isEmpty else { return nil }
+
+        let queryLower = query.lowercased()
+        let aliasLower = settings.alias.lowercased()
+
+        // 检查是否匹配别名（前缀匹配或完全匹配）
+        guard aliasLower.hasPrefix(queryLower) || queryLower == aliasLower else { return nil }
+
+        // 创建书签入口结果
+        let bookmarkIcon =
+            NSImage(systemSymbolName: "bookmark.fill", accessibilityDescription: "Bookmark")
+            ?? NSImage()
+        bookmarkIcon.size = NSSize(width: 32, height: 32)
+
+        return SearchResult(
+            name: "搜索书签",
+            path: "bookmark-entry",
+            icon: bookmarkIcon,
+            isDirectory: false,
+            displayAlias: settings.alias,
+            isBookmarkEntry: true
+        )
     }
 
     /// 对搜索结果排序（别名完全匹配 > LRU > 其他）
@@ -1329,15 +1540,23 @@ class SearchPanelViewController: NSViewController {
                 return nil
             }
             return event
-        case 48:  // Tab - 进入 IDE 项目模式、文件夹打开模式或网页直达 Query 模式
+        case 48:  // Tab - 进入 IDE 项目模式、文件夹打开模式、网页直达 Query 模式或书签模式
             if isComposing { return event }
-            if !isInIDEProjectMode && !isInFolderOpenMode && !isInWebLinkQueryMode {
+            if !isInIDEProjectMode && !isInFolderOpenMode && !isInWebLinkQueryMode
+                && !isInBookmarkMode
+            {
                 // 检查当前选中项是否有扩展功能
                 guard results.indices.contains(selectedIndex) else {
                     // 没有选中任何项目，忽略 Tab 键
                     return nil
                 }
                 let item = results[selectedIndex]
+
+                // 检查是否为书签入口
+                if item.isBookmarkEntry {
+                    enterBookmarkMode()
+                    return nil
+                }
 
                 // 检查是否为 IDE（有项目列表扩展）
                 if let ideType = IDEType.detect(from: item.path) {
@@ -1798,6 +2017,12 @@ class SearchPanelViewController: NSViewController {
             currentUtilityIdentifier = nil
             currentUtilityResult = nil
             cleanupCurrentUtilityModeUI()
+        }
+
+        // 清理书签模式
+        if isInBookmarkMode {
+            isInBookmarkMode = false
+            bookmarkResults = []
         }
 
         // 恢复 UI
@@ -2818,6 +3043,24 @@ class SearchPanelViewController: NSViewController {
             return
         }
 
+        // 书签入口：进入书签搜索模式
+        if item.isBookmarkEntry {
+            enterBookmarkMode()
+            return
+        }
+
+        // 书签：打开书签 URL
+        if item.isBookmark {
+            BookmarkService.shared.open(
+                BookmarkItem(
+                    title: item.name,
+                    url: item.path,
+                    source: item.bookmarkSource == "Chrome" ? .chrome : .safari
+                ))
+            PanelManager.shared.hidePanel()
+            return
+        }
+
         // 普通模式：使用默认应用打开
         let url = URL(fileURLWithPath: item.path)
         NSWorkspace.shared.open(url)
@@ -2869,6 +3112,12 @@ extension SearchPanelViewController: NSTextFieldDelegate {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: workItem)
             }
             // 其他实用工具模式不进行搜索
+            return
+        }
+
+        // 书签模式：搜索书签
+        if isInBookmarkMode {
+            performBookmarkSearch(query)
             return
         }
 
@@ -3237,24 +3486,27 @@ class ResultCellView: NSView {
             statsContainerView.isHidden = true
         }
 
-        // App、网页直达、实用工具、系统命令只显示名称（垂直居中、字体大），文件和文件夹显示路径
+        // App、网页直达、实用工具、系统命令、书签入口只显示名称（垂直居中、字体大），文件和文件夹显示路径
         let isApp = item.path.hasSuffix(".app")
         let isWebLink = item.isWebLink
         let isUtility = item.isUtility
         let isSystemCommand = item.isSystemCommand
+        let isBookmarkEntry = item.isBookmarkEntry
         let showPathLabel =
-            !isApp && !isWebLink && !isUtility && !isSystemCommand && !hasProcessStats
+            !isApp && !isWebLink && !isUtility && !isSystemCommand && !isBookmarkEntry
+            && !hasProcessStats
         pathLabel.isHidden = !showPathLabel
         pathLabel.stringValue = showPathLabel ? item.path : ""
 
-        // 检测是否为支持的 IDE、文件夹、网页直达 Query 扩展或实用工具，显示箭头指示器
+        // 检测是否为支持的 IDE、文件夹、网页直达 Query 扩展、实用工具或书签入口，显示箭头指示器
         // hideArrow 为 true 时强制隐藏（如文件夹打开模式下）
         // 有进程统计信息时也隐藏箭头
         let isIDE = IDEType.detect(from: item.path) != nil
         let isFolder = item.isDirectory && !isApp
         let isQueryWebLink = item.isWebLink && item.supportsQueryExtension
         let showArrow =
-            !hideArrow && !hasProcessStats && (isIDE || isFolder || isQueryWebLink || isUtility)
+            !hideArrow && !hasProcessStats
+            && (isIDE || isFolder || isQueryWebLink || isUtility || isBookmarkEntry)
         arrowIndicator.isHidden = !showArrow
 
         // 切换 nameLabel leading 约束（普通模式）
@@ -3274,8 +3526,9 @@ class ResultCellView: NSView {
             nameLabelTrailingToEdge.isActive = true
         }
 
-        // 切换布局：App、网页直达、实用工具、系统命令、有进程统计的项垂直居中，其他顶部对齐
-        if isApp || isWebLink || isUtility || isSystemCommand || hasProcessStats {
+        // 切换布局：App、网页直达、实用工具、系统命令、书签入口、有进程统计的项垂直居中，其他顶部对齐
+        if isApp || isWebLink || isUtility || isSystemCommand || isBookmarkEntry || hasProcessStats
+        {
             nameLabel.font = .systemFont(ofSize: 14, weight: .medium)
             nameLabelTopConstraint.isActive = false
             nameLabelCenterYConstraint.isActive = true

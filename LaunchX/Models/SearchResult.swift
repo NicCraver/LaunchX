@@ -11,6 +11,9 @@ struct SearchResult: Identifiable, Hashable {
     let isWebLink: Bool  // 是否为网页直达
     let isUtility: Bool  // 是否为实用工具
     let isSystemCommand: Bool  // 是否为系统命令
+    let isBookmark: Bool  // 是否为书签
+    let bookmarkSource: String?  // 书签来源（Safari/Chrome）
+    let isBookmarkEntry: Bool  // 是否为书签搜索入口（通过别名进入）
     let supportsQueryExtension: Bool  // 是否支持 query 扩展
     let defaultUrl: String?  // 默认 URL（用于 query 扩展）
     let isSectionHeader: Bool  // 是否为分组标题
@@ -19,7 +22,8 @@ struct SearchResult: Identifiable, Hashable {
     init(
         id: UUID = UUID(), name: String, path: String, icon: NSImage, isDirectory: Bool,
         displayAlias: String? = nil, isWebLink: Bool = false, isUtility: Bool = false,
-        isSystemCommand: Bool = false,
+        isSystemCommand: Bool = false, isBookmark: Bool = false, bookmarkSource: String? = nil,
+        isBookmarkEntry: Bool = false,
         supportsQueryExtension: Bool = false, defaultUrl: String? = nil,
         isSectionHeader: Bool = false, processStats: String? = nil
     ) {
@@ -32,6 +36,9 @@ struct SearchResult: Identifiable, Hashable {
         self.isWebLink = isWebLink
         self.isUtility = isUtility
         self.isSystemCommand = isSystemCommand
+        self.isBookmark = isBookmark
+        self.bookmarkSource = bookmarkSource
+        self.isBookmarkEntry = isBookmarkEntry
         self.supportsQueryExtension = supportsQueryExtension
         self.defaultUrl = defaultUrl
         self.isSectionHeader = isSectionHeader

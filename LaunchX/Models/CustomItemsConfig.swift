@@ -145,4 +145,5 @@ extension Notification.Name {
     static let enterIDEModeDirectly = Notification.Name("enterIDEModeDirectly")
     static let enterWebLinkQueryModeDirectly = Notification.Name("enterWebLinkQueryModeDirectly")
     static let enterUtilityModeDirectly = Notification.Name("enterUtilityModeDirectly")
+    static let enterBookmarkModeDirectly = Notification.Name("enterBookmarkModeDirectly")
 }

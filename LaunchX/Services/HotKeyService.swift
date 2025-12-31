@@ -90,6 +90,15 @@ class HotKeyService: ObservableObject {
     /// 下一个可用的快捷键 ID（从 100 开始，避免与主快捷键冲突）
     private var nextCustomHotKeyId: UInt32 = 100
 
+    // MARK: - 书签扩展快捷键
+
+    /// 书签快捷键触发回调
+    var onBookmarkHotKeyPressed: (() -> Void)?
+    /// 书签快捷键引用
+    private var bookmarkHotKeyRef: EventHotKeyRef?
+    /// 书签快捷键 ID
+    private let bookmarkHotKeyId: UInt32 = 2
+
     // MARK: - 私有属性
 
     private let hotKeySignature: OSType
@@ -421,6 +430,54 @@ class HotKeyService: ObservableObject {
         customHotKeyConfigs.removeAll()
     }
 
+    // MARK: - 书签快捷键
+
+    /// 注册书签扩展快捷键
+    func registerBookmarkHotKey(keyCode: UInt32, modifiers: UInt32) {
+        // 先注销旧的
+        unregisterBookmarkHotKey()
+
+        guard keyCode != 0 else { return }
+
+        let hotKeyID = EventHotKeyID(signature: hotKeySignature, id: bookmarkHotKeyId)
+        var hotKeyRef: EventHotKeyRef?
+
+        let status = RegisterEventHotKey(
+            keyCode,
+            modifiers,
+            hotKeyID,
+            GetApplicationEventTarget(),
+            0,
+            &hotKeyRef
+        )
+
+        if status == noErr {
+            bookmarkHotKeyRef = hotKeyRef
+            print(
+                "HotKeyService: Registered Bookmark HotKey (Code: \(keyCode), Mods: \(modifiers))")
+        } else {
+            print("HotKeyService: Failed to register bookmark hotkey. Status: \(status)")
+        }
+    }
+
+    /// 注销书签扩展快捷键
+    func unregisterBookmarkHotKey() {
+        if let ref = bookmarkHotKeyRef {
+            UnregisterEventHotKey(ref)
+            bookmarkHotKeyRef = nil
+            print("HotKeyService: Unregistered Bookmark HotKey")
+        }
+    }
+
+    /// 加载书签快捷键设置
+    func loadBookmarkHotKey() {
+        let settings = BookmarkSettings.load()
+        if settings.hotKeyCode != 0 {
+            registerBookmarkHotKey(
+                keyCode: settings.hotKeyCode, modifiers: settings.hotKeyModifiers)
+        }
+    }
+
     // MARK: - 暂停/恢复快捷键（用于录制时）
 
     /// 暂停所有快捷键（录制时使用）
@@ -663,6 +720,14 @@ class HotKeyService: ObservableObject {
             if hotKeyID.id == mainHotKeyId {
                 DispatchQueue.main.async { [weak self] in
                     self?.onHotKeyPressed?()
+                }
+                return noErr
+            }
+
+            // 检查是否为书签快捷键
+            if hotKeyID.id == bookmarkHotKeyId {
+                DispatchQueue.main.async { [weak self] in
+                    self?.onBookmarkHotKeyPressed?()
                 }
                 return noErr
             }

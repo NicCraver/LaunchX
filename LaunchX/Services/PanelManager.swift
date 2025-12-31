@@ -166,6 +166,24 @@ class PanelManager: NSObject, NSWindowDelegate {
         }
     }
 
+    /// 显示面板并直接进入书签搜索模式
+    func showPanelInBookmarkMode() {
+        guard isSetup else { return }
+
+        // 先显示面板
+        if !panel.isVisible {
+            showPanel()
+        }
+
+        // 面板显示后再发送通知进入书签模式
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(
+                name: .enterBookmarkModeDirectly,
+                object: nil
+            )
+        }
+    }
+
     // MARK: - NSWindowDelegate
 
     func windowDidResignKey(_ notification: Notification) {

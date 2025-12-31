@@ -453,7 +453,33 @@ final class SearchEngine: ObservableObject {
             excludedFolderNames: Set(config.excludedFolderNames)
         )
 
-        return items.map { $0.toSearchResult() }
+        var results = items.map { $0.toSearchResult() }
+
+        // 添加书签搜索结果
+        let bookmarkResults = searchBookmarks(query: text)
+        results.append(contentsOf: bookmarkResults)
+
+        return results
+    }
+
+    // MARK: - 书签搜索
+
+    /// 搜索书签
+    private func searchBookmarks(query: String) -> [SearchResult] {
+        let settings = BookmarkSettings.load()
+        guard settings.isEnabled else { return [] }
+
+        let bookmarks = BookmarkService.shared.search(query: query)
+        return bookmarks.prefix(10).map { bookmark in
+            SearchResult(
+                name: bookmark.title,
+                path: bookmark.url,
+                icon: bookmark.source.icon,
+                isDirectory: false,
+                isBookmark: true,
+                bookmarkSource: bookmark.source.rawValue
+            )
+        }
     }
 
     // MARK: - 默认搜索网页直达
