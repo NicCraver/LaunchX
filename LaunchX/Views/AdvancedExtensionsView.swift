@@ -12,23 +12,14 @@ enum AdvancedExtensionType: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
-    var icon: String {
+    /// 资源图标名称
+    var iconImageName: String {
         switch self {
-        case .bookmarkSearch: return "bookmark"
-        case .terminalCommand: return "terminal"
-        case .clipboard: return "doc.on.clipboard"
-        case .twoFactorAuth: return "lock.shield"
-        case .aiTranslate: return "globe"
-        }
-    }
-
-    var iconColor: Color {
-        switch self {
-        case .bookmarkSearch: return .blue
-        case .terminalCommand: return .gray
-        case .clipboard: return .orange
-        case .twoFactorAuth: return .green
-        case .aiTranslate: return .purple
+        case .bookmarkSearch: return "Extension_bookmark"
+        case .terminalCommand: return "Extension_terminal"
+        case .clipboard: return "Extension_clipboard"
+        case .twoFactorAuth: return "Extension_2FA"
+        case .aiTranslate: return "Extension_ai_translate"
         }
     }
 }
@@ -54,26 +45,20 @@ struct AdvancedExtensionsView: View {
     // MARK: - 左侧扩展列表
 
     private var extensionList: some View {
-        VStack(spacing: 0) {
-            List(AdvancedExtensionType.allCases, selection: $selectedExtension) { type in
-                HStack(spacing: 8) {
-                    Image(systemName: type.icon)
-                        .foregroundColor(type.iconColor)
-                        .font(.system(size: 14))
-                        .frame(width: 18)
-
-                    Text(type.rawValue)
-                        .font(.system(size: 13))
-                        .lineLimit(1)
-
-                    Spacer()
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(AdvancedExtensionType.allCases) { type in
+                ExtensionSidebarItem(
+                    iconImageName: type.iconImageName,
+                    title: type.rawValue,
+                    isSelected: selectedExtension == type
+                ) {
+                    selectedExtension = type
                 }
-                .padding(.vertical, 2)
-                .contentShape(Rectangle())
-                .tag(type)
             }
-            .listStyle(.sidebar)
+            Spacer()
         }
+        .padding(.top, 12)
+        .background(Color(nsColor: .controlBackgroundColor))
     }
 
     // MARK: - 右侧扩展设置
@@ -527,6 +512,37 @@ struct BrowserToggleRow: View {
             Spacer()
         }
         .padding(.vertical, 2)
+    }
+}
+
+// MARK: - 扩展侧边栏项
+
+struct ExtensionSidebarItem: View {
+    let iconImageName: String
+    let title: String
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(iconImageName)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 16, height: 16)
+                Text(title)
+                    .foregroundColor(.primary)
+                Spacer()
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .contentShape(Rectangle())
+            .background(isSelected ? Color.accentColor.opacity(0.2) : Color.clear)
+            .cornerRadius(6)
+        }
+        .buttonStyle(.plain)
+        .focusable(false)
+        .padding(.horizontal, 8)
     }
 }
 
