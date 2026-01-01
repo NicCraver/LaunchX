@@ -632,7 +632,7 @@ struct TwoFactorAuthSettingsView: View {
                         .onChange(of: settings.deleteAfterCopy) { _, _ in
                             settings.save()
                         }
-                    Text("将删除该发送者的整个对话")
+                    Text("因苹果限制，做不到无感删除，复制后屏幕上会有2s的自动操作，且该操作将删除该发送者的整个对话！")
                         .font(.caption)
                         .foregroundColor(.orange)
                     Spacer()
