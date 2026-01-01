@@ -1,11 +1,52 @@
 import Cocoa
 
+// MARK: - 搜索框键盘导航代理协议
+
+protocol ClipboardSearchFieldNavigationDelegate: AnyObject {
+    func searchFieldDidPressUpArrow()
+    func searchFieldDidPressDownArrow()
+    func searchFieldDidPressReturn(withCommand: Bool)
+    func searchFieldDidPressEscape()
+    func searchFieldDidPressControlN()
+    func searchFieldDidPressControlP()
+}
+
+// MARK: - 自定义搜索框（支持键盘导航）
+
+class ClipboardSearchField: NSTextField {
+    weak var navigationDelegate: ClipboardSearchFieldNavigationDelegate?
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+
+        // ⌘+Return: 粘贴为纯文本
+        if event.keyCode == 36 && flags.contains(.command) {
+            navigationDelegate?.searchFieldDidPressReturn(withCommand: true)
+            return true
+        }
+
+        // Ctrl+P: 向上移动
+        if event.keyCode == 35 && flags.contains(.control) {
+            navigationDelegate?.searchFieldDidPressControlP()
+            return true
+        }
+
+        // Ctrl+N: 向下移动
+        if event.keyCode == 45 && flags.contains(.control) {
+            navigationDelegate?.searchFieldDidPressControlN()
+            return true
+        }
+
+        return super.performKeyEquivalent(with: event)
+    }
+}
+
 /// 剪贴板面板视图控制器
 class ClipboardPanelViewController: NSViewController {
 
     // MARK: - UI 组件
 
-    private let searchField = NSTextField()
+    private var searchField: ClipboardSearchField!
     private let filterButton = NSButton()
     private let filterMenu = NSMenu()
     private let clearButton = NSButton()
@@ -71,13 +112,15 @@ class ClipboardPanelViewController: NSViewController {
         dragArea.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(dragArea)
 
-        // 搜索框
+        // 搜索框（使用自定义子类支持键盘导航）
+        searchField = ClipboardSearchField()
         searchField.placeholderString = "输入关键词搜索"
         searchField.isBordered = false
         searchField.backgroundColor = .clear
         searchField.focusRingType = .none
         searchField.font = .systemFont(ofSize: 14)
         searchField.delegate = self
+        searchField.navigationDelegate = self
         searchField.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(searchField)
 
@@ -177,6 +220,7 @@ class ClipboardPanelViewController: NSViewController {
         tableView.rowHeight = rowHeight
         tableView.selectionHighlightStyle = .regular
         tableView.allowsMultipleSelection = true
+        tableView.action = #selector(tableViewClicked)
         tableView.doubleAction = #selector(tableViewDoubleClicked)
         tableView.target = self
         tableView.backgroundColor = .clear
@@ -358,6 +402,16 @@ class ClipboardPanelViewController: NSViewController {
         loadItems()
     }
 
+    @objc private func tableViewClicked() {
+        // 单击模式下，点击即粘贴
+        if clickMode == .singleClick {
+            let clickedRow = tableView.clickedRow
+            guard clickedRow >= 0, clickedRow < filteredItems.count else { return }
+            let item = filteredItems[clickedRow]
+            pasteItem(item)
+        }
+    }
+
     @objc private func tableViewDoubleClicked() {
         let clickedRow = tableView.clickedRow
         guard clickedRow >= 0, clickedRow < filteredItems.count else { return }
@@ -366,10 +420,7 @@ class ClipboardPanelViewController: NSViewController {
 
         // 双击粘贴
         if clickMode == .doubleClick {
-            ClipboardService.shared.paste(item)
-            if !ClipboardPanelManager.shared.isPinned {
-                ClipboardPanelManager.shared.hidePanel()
-            }
+            pasteItem(item)
         }
     }
 
@@ -384,10 +435,7 @@ class ClipboardPanelViewController: NSViewController {
                 selectedRow < filteredItems.count
             {
                 let item = filteredItems[selectedRow]
-                ClipboardService.shared.pasteAsPlainText(item)
-                if !ClipboardPanelManager.shared.isPinned {
-                    ClipboardPanelManager.shared.hidePanel()
-                }
+                pasteItemAsPlainText(item)
             }
             return
         }
@@ -398,10 +446,7 @@ class ClipboardPanelViewController: NSViewController {
                 selectedRow < filteredItems.count
             {
                 let item = filteredItems[selectedRow]
-                ClipboardService.shared.paste(item)
-                if !ClipboardPanelManager.shared.isPinned {
-                    ClipboardPanelManager.shared.hidePanel()
-                }
+                pasteItem(item)
             }
             return
         }
@@ -458,6 +503,40 @@ class ClipboardPanelViewController: NSViewController {
         tableView.selectRowIndexes(IndexSet(integer: newIndex), byExtendingSelection: false)
         tableView.scrollRowToVisible(newIndex)
     }
+
+    // MARK: - 粘贴功能
+
+    /// 粘贴项目（保持原始格式）
+    private func pasteItem(_ item: ClipboardItem) {
+        // 先写入剪贴板
+        ClipboardService.shared.copyToClipboard(item)
+
+        // 关闭面板
+        if !ClipboardPanelManager.shared.isPinned {
+            ClipboardPanelManager.shared.forceHidePanel()
+        }
+
+        // 延迟执行粘贴，等待目标窗口获得焦点
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            ClipboardService.shared.simulatePasteCommand()
+        }
+    }
+
+    /// 粘贴项目为纯文本
+    private func pasteItemAsPlainText(_ item: ClipboardItem) {
+        // 先写入剪贴板（纯文本）
+        ClipboardService.shared.copyAsPlainText(item)
+
+        // 关闭面板
+        if !ClipboardPanelManager.shared.isPinned {
+            ClipboardPanelManager.shared.forceHidePanel()
+        }
+
+        // 延迟执行粘贴，等待目标窗口获得焦点
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            ClipboardService.shared.simulatePasteCommand()
+        }
+    }
 }
 
 // MARK: - NSTextFieldDelegate
@@ -465,6 +544,80 @@ class ClipboardPanelViewController: NSViewController {
 extension ClipboardPanelViewController: NSTextFieldDelegate {
     func controlTextDidChange(_ obj: Notification) {
         applyFilter()
+    }
+
+    // 处理搜索框中的特殊按键
+    func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector)
+        -> Bool
+    {
+        // Escape: 关闭面板
+        if commandSelector == #selector(NSResponder.cancelOperation(_:)) {
+            ClipboardPanelManager.shared.forceHidePanel()
+            return true
+        }
+
+        // 上箭头: 向上移动
+        if commandSelector == #selector(NSResponder.moveUp(_:)) {
+            moveSelection(by: -1)
+            return true
+        }
+
+        // 下箭头: 向下移动
+        if commandSelector == #selector(NSResponder.moveDown(_:)) {
+            moveSelection(by: 1)
+            return true
+        }
+
+        // Return: 粘贴
+        if commandSelector == #selector(NSResponder.insertNewline(_:)) {
+            if let selectedRow = tableView.selectedRowIndexes.first,
+                selectedRow < filteredItems.count
+            {
+                let item = filteredItems[selectedRow]
+                pasteItem(item)
+                return true
+            }
+        }
+
+        return false
+    }
+}
+
+// MARK: - ClipboardSearchFieldNavigationDelegate
+
+extension ClipboardPanelViewController: ClipboardSearchFieldNavigationDelegate {
+    func searchFieldDidPressUpArrow() {
+        moveSelection(by: -1)
+    }
+
+    func searchFieldDidPressDownArrow() {
+        moveSelection(by: 1)
+    }
+
+    func searchFieldDidPressControlP() {
+        moveSelection(by: -1)
+    }
+
+    func searchFieldDidPressControlN() {
+        moveSelection(by: 1)
+    }
+
+    func searchFieldDidPressReturn(withCommand: Bool) {
+        guard let selectedRow = tableView.selectedRowIndexes.first,
+            selectedRow < filteredItems.count
+        else { return }
+
+        let item = filteredItems[selectedRow]
+
+        if withCommand {
+            pasteItemAsPlainText(item)
+        } else {
+            pasteItem(item)
+        }
+    }
+
+    func searchFieldDidPressEscape() {
+        ClipboardPanelManager.shared.forceHidePanel()
     }
 }
 
@@ -510,18 +663,8 @@ extension ClipboardPanelViewController: NSTableViewDataSource, NSTableViewDelega
     func tableViewSelectionDidChange(_ notification: Notification) {
         updateStatusLabel()
 
-        // 单击模式下，选中即粘贴
-        if clickMode == .singleClick {
-            if let selectedRow = tableView.selectedRowIndexes.first,
-                selectedRow < filteredItems.count
-            {
-                let item = filteredItems[selectedRow]
-                ClipboardService.shared.paste(item)
-                if !ClipboardPanelManager.shared.isPinned {
-                    ClipboardPanelManager.shared.hidePanel()
-                }
-            }
-        }
+        // 注意：单击模式的粘贴由 tableView 的 action 处理，而不是 selectionDidChange
+        // 这样可以避免键盘导航时意外触发粘贴
     }
 }
 

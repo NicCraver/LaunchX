@@ -400,6 +400,11 @@ final class ClipboardService: ObservableObject {
         lastChangeCount = pasteboard.changeCount
     }
 
+    /// 模拟 Cmd+V 粘贴（公开方法）
+    func simulatePasteCommand() {
+        simulatePaste()
+    }
+
     /// 模拟 Cmd+V 粘贴
     private func simulatePaste() {
         let source = CGEventSource(stateID: .hidSystemState)
