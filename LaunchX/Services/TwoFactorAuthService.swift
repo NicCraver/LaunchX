@@ -344,13 +344,13 @@ final class TwoFactorAuthService {
                     keystroke "f" using command down
                     delay 0.3
                     keystroke "\(chatIdentifier)"
-                    delay 1.0
+                    delay 0.8
 
-                    -- 用方向键下选中搜索结果，然后回车进入对话
-                    key code 125 -- Down arrow
+                    -- 按方向键下选中下拉菜单中的第一个对话，再回车进入
+                    key code 125 -- Down arrow (选中第一个结果)
                     delay 0.2
-                    key code 36 -- Return
-                    delay 0.5
+                    key code 36 -- Return (进入对话)
+                    delay 0.3
 
                     -- 使用菜单删除对话（中文系统）
                     try
@@ -373,11 +373,17 @@ final class TwoFactorAuthService {
                     end try
 
                     -- 关闭搜索
-                    delay 0.2
+                    delay 0.1
                     key code 53 -- Escape
                 end tell
             end tell
             """
+
+        // 留个记录，下面这段脚本是处理第一次搜索之后，第二次搜索的时候需要先回车，再按方向键
+        // 但是！加上这段，上面的代码就无效了，message app的搜索交互逻辑不统一，暂时先按上面逻辑走吧
+        // -- 先回车确认搜索，再按方向键下选中第一个结果，再回车进入对话
+        // key code 36 -- Return (确认搜索)
+        // delay 0.3
 
         var error: NSDictionary?
         if let scriptObject = NSAppleScript(source: script) {
