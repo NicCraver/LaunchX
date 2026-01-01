@@ -6,7 +6,8 @@ class ClipboardPanelViewController: NSViewController {
     // MARK: - UI 组件
 
     private let searchField = NSTextField()
-    private let filterButton = NSPopUpButton()
+    private let filterButton = NSButton()
+    private let filterMenu = NSMenu()
     private let clearButton = NSButton()
     private let pinButton = NSButton()
     private let dragArea = DraggableView()
@@ -79,17 +80,18 @@ class ClipboardPanelViewController: NSViewController {
         searchField.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(searchField)
 
-        // 过滤按钮
+        // 过滤按钮（图标样式）
         setupFilterButton()
 
         // 清空按钮（扫把图标）
         clearButton.image = NSImage(
-            systemSymbolName: "paintbrush.pointed", accessibilityDescription: "清空")
+            systemSymbolName: "trash", accessibilityDescription: "清空")
         clearButton.bezelStyle = .inline
         clearButton.isBordered = false
         clearButton.target = self
         clearButton.action = #selector(clearHistory)
         clearButton.toolTip = "清空剪贴板历史"
+        clearButton.contentTintColor = .secondaryLabelColor
         clearButton.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(clearButton)
 
@@ -100,6 +102,7 @@ class ClipboardPanelViewController: NSViewController {
         pinButton.target = self
         pinButton.action = #selector(togglePin)
         pinButton.toolTip = "固定窗口"
+        pinButton.contentTintColor = .secondaryLabelColor
         pinButton.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(pinButton)
 
@@ -120,26 +123,45 @@ class ClipboardPanelViewController: NSViewController {
     }
 
     private func setupFilterButton() {
+        // 使用普通按钮 + 菜单，避免下拉箭头
         filterButton.bezelStyle = .inline
         filterButton.isBordered = false
-        filterButton.pullsDown = false
+        filterButton.image = NSImage(
+            systemSymbolName: "line.3.horizontal.decrease.circle", accessibilityDescription: "过滤")
         filterButton.target = self
-        filterButton.action = #selector(filterChanged(_:))
+        filterButton.action = #selector(showFilterMenu)
+        filterButton.contentTintColor = .secondaryLabelColor
         filterButton.translatesAutoresizingMaskIntoConstraints = false
 
-        // 添加菜单项
-        filterButton.removeAllItems()
-        filterButton.addItem(withTitle: "全部")
-        filterButton.menu?.addItem(NSMenuItem.separator())
+        // 设置菜单
+        let allItem = NSMenuItem(
+            title: "全部", action: #selector(selectFilter(_:)), keyEquivalent: "")
+        allItem.target = self
+        allItem.tag = -1
+        allItem.state = .on
+        filterMenu.addItem(allItem)
 
-        for type in ClipboardContentType.allCases {
-            let item = NSMenuItem(title: type.displayName, action: nil, keyEquivalent: "")
+        filterMenu.addItem(NSMenuItem.separator())
+
+        for (index, type) in ClipboardContentType.allCases.enumerated() {
+            let item = NSMenuItem(
+                title: type.displayName, action: #selector(selectFilter(_:)), keyEquivalent: "")
+            item.target = self
+            item.tag = index
             item.image = NSImage(systemSymbolName: type.iconName, accessibilityDescription: nil)
             item.image?.size = NSSize(width: 14, height: 14)
-            filterButton.menu?.addItem(item)
+            filterMenu.addItem(item)
         }
 
         view.addSubview(filterButton)
+    }
+
+    @objc private func showFilterMenu() {
+        let buttonFrame = filterButton.convert(filterButton.bounds, to: nil)
+        let screenPoint =
+            view.window?.convertPoint(toScreen: NSPoint(x: buttonFrame.minX, y: buttonFrame.minY))
+            ?? .zero
+        filterMenu.popUp(positioning: nil, at: NSPoint(x: screenPoint.x, y: screenPoint.y), in: nil)
     }
 
     private func setupTableView() {
@@ -190,11 +212,11 @@ class ClipboardPanelViewController: NSViewController {
                 equalTo: filterButton.leadingAnchor, constant: -8),
             searchField.heightAnchor.constraint(equalToConstant: 24),
 
-            // 过滤按钮（增加宽度以显示完整文本）
+            // 过滤按钮（图标样式）
             filterButton.centerYAnchor.constraint(equalTo: searchField.centerYAnchor),
             filterButton.trailingAnchor.constraint(
                 equalTo: clearButton.leadingAnchor, constant: -4),
-            filterButton.widthAnchor.constraint(equalToConstant: 72),
+            filterButton.widthAnchor.constraint(equalToConstant: 32),
 
             // 清空按钮
             clearButton.centerYAnchor.constraint(equalTo: searchField.centerYAnchor),
@@ -274,6 +296,7 @@ class ClipboardPanelViewController: NSViewController {
     func updatePinnedState(_ isPinned: Bool) {
         let iconName = isPinned ? "pin.fill" : "pin"
         pinButton.image = NSImage(systemSymbolName: iconName, accessibilityDescription: "固定")
+        pinButton.contentTintColor = isPinned ? .systemBlue : .secondaryLabelColor
     }
 
     func getSelectedItems() -> [ClipboardItem] {
@@ -285,17 +308,23 @@ class ClipboardPanelViewController: NSViewController {
 
     // MARK: - 事件处理
 
-    @objc private func filterChanged(_ sender: NSPopUpButton) {
-        let index = sender.indexOfSelectedItem
-        if index == 0 {
-            selectedFilter = nil
-        } else if index >= 2 {
-            // 跳过分隔符
-            let typeIndex = index - 2
-            if typeIndex < ClipboardContentType.allCases.count {
-                selectedFilter = ClipboardContentType.allCases[typeIndex]
-            }
+    @objc private func selectFilter(_ sender: NSMenuItem) {
+        // 更新菜单项状态
+        for item in filterMenu.items {
+            item.state = .off
         }
+        sender.state = .on
+
+        // 设置过滤器
+        let tag = sender.tag
+        if tag == -1 {
+            selectedFilter = nil
+            filterButton.contentTintColor = .secondaryLabelColor
+        } else if tag >= 0 && tag < ClipboardContentType.allCases.count {
+            selectedFilter = ClipboardContentType.allCases[tag]
+            filterButton.contentTintColor = .systemBlue
+        }
+
         applyFilter()
     }
 
@@ -627,18 +656,13 @@ class DraggableView: NSView {
 
         window.setFrameOrigin(newOrigin)
     }
-
-    override func resetCursorRects() {
-        super.resetCursorRects()
-        addCursorRect(bounds, cursor: .openHand)
-    }
 }
 
 // MARK: - 可调整大小的容器视图（处理左右边缘拖拽）
 
 class ResizableContainerView: NSView {
 
-    private let resizeEdgeWidth: CGFloat = 8
+    private let resizeEdgeWidth: CGFloat = 10
     private let panelMinWidth: CGFloat = 280
     private let panelMaxWidth: CGFloat = 600
 
@@ -651,6 +675,19 @@ class ResizableContainerView: NSView {
         case none, left, right
     }
 
+    // 重写 hitTest 让边缘区域的事件由自己处理
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        let localPoint = convert(point, from: superview)
+
+        // 如果在左右边缘，返回自己来处理事件
+        if localPoint.x < resizeEdgeWidth || localPoint.x > bounds.width - resizeEdgeWidth {
+            return self
+        }
+
+        // 否则正常传递给子视图
+        return super.hitTest(point)
+    }
+
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
 
@@ -659,24 +696,38 @@ class ResizableContainerView: NSView {
             removeTrackingArea(area)
         }
 
-        // 添加新的追踪区域
-        let options: NSTrackingArea.Options = [.mouseEnteredAndExited, .mouseMoved, .activeAlways]
-        let trackingArea = NSTrackingArea(rect: bounds, options: options, owner: self, userInfo: nil)
-        addTrackingArea(trackingArea)
+        // 左边缘追踪区域
+        let leftEdgeRect = NSRect(x: 0, y: 0, width: resizeEdgeWidth, height: bounds.height)
+        let leftOptions: NSTrackingArea.Options = [
+            .mouseEnteredAndExited, .activeAlways, .cursorUpdate,
+        ]
+        let leftTrackingArea = NSTrackingArea(
+            rect: leftEdgeRect, options: leftOptions, owner: self, userInfo: ["edge": "left"])
+        addTrackingArea(leftTrackingArea)
+
+        // 右边缘追踪区域
+        let rightEdgeRect = NSRect(
+            x: bounds.width - resizeEdgeWidth, y: 0, width: resizeEdgeWidth, height: bounds.height)
+        let rightTrackingArea = NSTrackingArea(
+            rect: rightEdgeRect, options: leftOptions, owner: self, userInfo: ["edge": "right"])
+        addTrackingArea(rightTrackingArea)
     }
 
-    override func mouseMoved(with event: NSEvent) {
+    override func cursorUpdate(with event: NSEvent) {
         let location = convert(event.locationInWindow, from: nil)
-
         if location.x < resizeEdgeWidth || location.x > bounds.width - resizeEdgeWidth {
             NSCursor.resizeLeftRight.set()
-        } else {
-            NSCursor.arrow.set()
         }
     }
 
+    override func mouseEntered(with event: NSEvent) {
+        NSCursor.resizeLeftRight.set()
+    }
+
     override func mouseExited(with event: NSEvent) {
-        NSCursor.arrow.set()
+        if !isResizing {
+            NSCursor.arrow.set()
+        }
     }
 
     override func mouseDown(with event: NSEvent) {
