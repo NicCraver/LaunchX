@@ -722,8 +722,8 @@ class DraggableView: NSView {
 class ResizableContainerView: NSView {
 
     private let resizeEdgeWidth: CGFloat = 10
-    private let panelMinWidth: CGFloat = 280
-    private let panelMaxWidth: CGFloat = 600
+    private let panelMinWidth: CGFloat = 430
+    private let panelMaxWidth: CGFloat = 800
 
     private var isResizing = false
     private var resizeEdge: ResizeEdge = .none
@@ -736,7 +736,14 @@ class ResizableContainerView: NSView {
 
     // 重写 hitTest 让边缘区域的事件由自己处理
     override func hitTest(_ point: NSPoint) -> NSView? {
-        let localPoint = convert(point, from: superview)
+        // 如果不在窗口内，不处理
+        guard let window = window else { return super.hitTest(point) }
+
+        let windowPoint = window.convertPoint(fromScreen: NSEvent.mouseLocation)
+        let localPoint = convert(windowPoint, from: nil)
+
+        // 检查是否在视图范围内
+        guard bounds.contains(localPoint) else { return nil }
 
         // 如果在左右边缘，返回自己来处理事件
         if localPoint.x < resizeEdgeWidth || localPoint.x > bounds.width - resizeEdgeWidth {
@@ -867,6 +874,7 @@ class ResizableContainerView: NSView {
 class ShortcutHintView: NSView {
 
     private let stackView = NSStackView()
+    private let keySize: CGFloat = 18
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -881,7 +889,7 @@ class ShortcutHintView: NSView {
     private func setupUI() {
         stackView.orientation = .vertical
         stackView.alignment = .trailing
-        stackView.spacing = 2
+        stackView.spacing = 4
         stackView.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stackView)
 
@@ -907,10 +915,12 @@ class ShortcutHintView: NSView {
         rowStack.spacing = 4
         rowStack.alignment = .centerY
 
-        // 文字标签
+        // 文字标签（右对齐）
         let label = NSTextField(labelWithString: text)
         label.font = .systemFont(ofSize: 10)
         label.textColor = .tertiaryLabelColor
+        label.alignment = .right
+        label.setContentHuggingPriority(.defaultLow, for: .horizontal)
         rowStack.addArrangedSubview(label)
 
         // 按键图标
@@ -931,18 +941,15 @@ class ShortcutHintView: NSView {
         let label = NSTextField(labelWithString: key)
         label.font = .systemFont(ofSize: 10, weight: .medium)
         label.textColor = .secondaryLabelColor
+        label.alignment = .center
         label.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(label)
 
         NSLayoutConstraint.activate([
             label.centerXAnchor.constraint(equalTo: container.centerXAnchor),
             label.centerYAnchor.constraint(equalTo: container.centerYAnchor),
-            container.widthAnchor.constraint(greaterThanOrEqualToConstant: 18),
-            container.heightAnchor.constraint(equalToConstant: 16),
-            label.leadingAnchor.constraint(
-                greaterThanOrEqualTo: container.leadingAnchor, constant: 4),
-            label.trailingAnchor.constraint(
-                lessThanOrEqualTo: container.trailingAnchor, constant: -4),
+            container.widthAnchor.constraint(equalToConstant: keySize),
+            container.heightAnchor.constraint(equalToConstant: keySize),
         ])
 
         return container
