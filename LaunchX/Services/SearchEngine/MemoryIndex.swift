@@ -126,6 +126,11 @@ final class MemoryIndex {
         private var _displayAlias: String?
         var displayAlias: String? { _displayAlias }
 
+        /// 设置显示别名
+        func setDisplayAlias(_ alias: String?) {
+            _displayAlias = alias
+        }
+
         /// Generate acronym from first letter of each word
         /// "Visual Studio Code" -> "vsc", "Activity Monitor" -> "am"
         private static func generateWordAcronym(from name: String) -> String? {
@@ -837,6 +842,8 @@ final class MemoryIndex {
         // 精确匹配
         if let path = aliasMap[lowerQuery] {
             if let item = allItems[path] {
+                // 为文件系统项目设置显示别名
+                item.setDisplayAlias(lowerQuery)
                 results.append(item)
             } else if let toolInfo = aliasToolMap[lowerQuery] {
                 // 为网页直达、系统命令等创建临时 SearchItem
@@ -855,10 +862,26 @@ final class MemoryIndex {
             }
         }
 
-        // 前缀匹配
-        if let items = searchTrie(aliasTrie, prefix: lowerQuery) {
-            for item in items {
+        // 前缀匹配 - 查找所有匹配的别名并设置
+        for (alias, path) in aliasMap where alias.hasPrefix(lowerQuery) && alias != lowerQuery {
+            if let item = allItems[path] {
                 if !results.contains(where: { $0.path == item.path }) {
+                    item.setDisplayAlias(alias)
+                    results.append(item)
+                }
+            } else if let toolInfo = aliasToolMap[alias] {
+                if !results.contains(where: { $0.path == toolInfo.path }) {
+                    let item = SearchItem(
+                        name: toolInfo.name,
+                        path: toolInfo.path,
+                        isWebLink: toolInfo.isWebLink,
+                        isUtility: toolInfo.isUtility,
+                        isSystemCommand: toolInfo.isSystemCommand,
+                        iconData: toolInfo.iconData,
+                        alias: toolInfo.alias,
+                        supportsQuery: toolInfo.supportsQuery,
+                        defaultUrl: toolInfo.defaultUrl
+                    )
                     results.append(item)
                 }
             }

@@ -12,6 +12,7 @@ struct SearchConfig: Codable, Equatable {
     static let defaultAppScopes: [String] = [
         "/Applications",
         "/System/Applications",
+        "/System/Applications/Utilities",  // Terminal, Activity Monitor, etc.
         "/System/Library/CoreServices",  // Finder
         "/System/Volumes/Preboot/Cryptexes/App/System/Applications",  // Safari
     ]
@@ -78,10 +79,18 @@ struct SearchConfig: Codable, Equatable {
 
     static func load() -> SearchConfig {
         guard let data = UserDefaults.standard.data(forKey: configKey),
-            let config = try? JSONDecoder().decode(SearchConfig.self, from: data)
+            var config = try? JSONDecoder().decode(SearchConfig.self, from: data)
         else {
             return SearchConfig()
         }
+
+        // 迁移：确保 /System/Applications/Utilities 在 appScopes 中
+        let utilitiesPath = "/System/Applications/Utilities"
+        if !config.appScopes.contains(utilitiesPath) {
+            config.appScopes.append(utilitiesPath)
+            config.save()
+        }
+
         return config
     }
 
