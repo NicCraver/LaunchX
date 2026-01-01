@@ -4,11 +4,11 @@ import SwiftUI
 // MARK: - 高级扩展类型
 
 enum AdvancedExtensionType: String, CaseIterable, Identifiable {
+    case clipboard = "剪贴板与 Snippet"
+    case aiTranslate = "AI 翻译"
     case bookmarkSearch = "搜索书签"
     // case terminalCommand = "执行终端命令"
-    case clipboard = "剪贴板与 Snippet"
     case twoFactorAuth = "2FA 短信"
-    case aiTranslate = "AI 翻译"
 
     var id: String { rawValue }
 
@@ -27,7 +27,7 @@ enum AdvancedExtensionType: String, CaseIterable, Identifiable {
 // MARK: - 高级扩展设置视图
 
 struct AdvancedExtensionsView: View {
-    @State private var selectedExtension: AdvancedExtensionType = .bookmarkSearch
+    @State private var selectedExtension: AdvancedExtensionType = .clipboard
 
     var body: some View {
         HSplitView {
