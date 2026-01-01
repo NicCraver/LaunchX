@@ -60,8 +60,12 @@ struct TwoFactorAuthSettings: Codable {
 
     static func load() -> TwoFactorAuthSettings {
         if let data = UserDefaults.standard.data(forKey: "twoFactorAuthSettings"),
-            let settings = try? JSONDecoder().decode(TwoFactorAuthSettings.self, from: data)
+            var settings = try? JSONDecoder().decode(TwoFactorAuthSettings.self, from: data)
         {
+            // 时间范围只支持 5、10、30 分钟，其他值重置为 5
+            if ![5, 10, 30].contains(settings.timeSpanMinutes) {
+                settings.timeSpanMinutes = 5
+            }
             return settings
         }
         return .default
