@@ -14,6 +14,7 @@ class ClipboardPanelViewController: NSViewController {
     private let tableView = NSTableView()
     private let scrollView = NSScrollView()
     private let statusLabel = NSTextField()
+    private let shortcutHintView = ShortcutHintView()
 
     // MARK: - 状态
 
@@ -117,6 +118,10 @@ class ClipboardPanelViewController: NSViewController {
         statusLabel.textColor = .secondaryLabelColor
         statusLabel.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(statusLabel)
+
+        // 快捷键提示
+        shortcutHintView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(shortcutHintView)
 
         // 布局约束
         setupConstraints()
@@ -238,6 +243,10 @@ class ClipboardPanelViewController: NSViewController {
             // 状态标签
             statusLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
             statusLabel.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -8),
+
+            // 快捷键提示
+            shortcutHintView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12),
+            shortcutHintView.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -6),
         ])
     }
 
@@ -367,9 +376,24 @@ class ClipboardPanelViewController: NSViewController {
     // MARK: - 键盘事件
 
     override func keyDown(with event: NSEvent) {
-        // Enter 键粘贴
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+
+        // ⌘+Return: 粘贴为纯文本
+        if event.keyCode == 36 && flags.contains(.command) {
+            if let selectedRow = tableView.selectedRowIndexes.first,
+                selectedRow < filteredItems.count
+            {
+                let item = filteredItems[selectedRow]
+                ClipboardService.shared.pasteAsPlainText(item)
+                if !ClipboardPanelManager.shared.isPinned {
+                    ClipboardPanelManager.shared.hidePanel()
+                }
+            }
+            return
+        }
+
+        // Return: 粘贴原始格式
         if event.keyCode == 36 {
-            // Return key
             if let selectedRow = tableView.selectedRowIndexes.first,
                 selectedRow < filteredItems.count
             {
@@ -382,13 +406,13 @@ class ClipboardPanelViewController: NSViewController {
             return
         }
 
-        // Escape 键关闭
+        // Escape: 关闭面板
         if event.keyCode == 53 {
             ClipboardPanelManager.shared.forceHidePanel()
             return
         }
 
-        // Delete 键删除选中项
+        // Delete: 删除选中项
         if event.keyCode == 51 {
             let selectedItems = getSelectedItems()
             if !selectedItems.isEmpty {
@@ -397,7 +421,42 @@ class ClipboardPanelViewController: NSViewController {
             return
         }
 
+        // 上箭头 或 Ctrl+P: 向上移动
+        if event.keyCode == 126 || (event.keyCode == 35 && flags.contains(.control)) {
+            moveSelection(by: -1)
+            return
+        }
+
+        // 下箭头 或 Ctrl+N: 向下移动
+        if event.keyCode == 125 || (event.keyCode == 45 && flags.contains(.control)) {
+            moveSelection(by: 1)
+            return
+        }
+
         super.keyDown(with: event)
+    }
+
+    private func moveSelection(by delta: Int) {
+        guard !filteredItems.isEmpty else { return }
+
+        let currentIndex = tableView.selectedRow
+        var newIndex: Int
+
+        if currentIndex == -1 {
+            // 没有选中项，选择第一项或最后一项
+            newIndex = delta > 0 ? 0 : filteredItems.count - 1
+        } else {
+            newIndex = currentIndex + delta
+            // 边界处理
+            if newIndex < 0 {
+                newIndex = 0
+            } else if newIndex >= filteredItems.count {
+                newIndex = filteredItems.count - 1
+            }
+        }
+
+        tableView.selectRowIndexes(IndexSet(integer: newIndex), byExtendingSelection: false)
+        tableView.scrollRowToVisible(newIndex)
     }
 }
 
@@ -765,16 +824,17 @@ class ResizableContainerView: NSView {
 
         switch resizeEdge {
         case .left:
-            let newWidth = initialFrame.width - deltaX
-            if newWidth >= panelMinWidth && newWidth <= panelMaxWidth {
-                newFrame.origin.x = initialFrame.origin.x + deltaX
-                newFrame.size.width = newWidth
-            }
+            var newWidth = initialFrame.width - deltaX
+            // 限制在边界内
+            newWidth = max(panelMinWidth, min(panelMaxWidth, newWidth))
+            let actualDelta = initialFrame.width - newWidth
+            newFrame.origin.x = initialFrame.origin.x + actualDelta
+            newFrame.size.width = newWidth
         case .right:
-            let newWidth = initialFrame.width + deltaX
-            if newWidth >= panelMinWidth && newWidth <= panelMaxWidth {
-                newFrame.size.width = newWidth
-            }
+            var newWidth = initialFrame.width + deltaX
+            // 限制在边界内
+            newWidth = max(panelMinWidth, min(panelMaxWidth, newWidth))
+            newFrame.size.width = newWidth
         case .none:
             break
         }
@@ -799,5 +859,92 @@ class ResizableContainerView: NSView {
         } else {
             super.mouseUp(with: event)
         }
+    }
+}
+
+// MARK: - 快捷键提示视图
+
+class ShortcutHintView: NSView {
+
+    private let stackView = NSStackView()
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        setupUI()
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        setupUI()
+    }
+
+    private func setupUI() {
+        stackView.orientation = .vertical
+        stackView.alignment = .trailing
+        stackView.spacing = 2
+        stackView.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(stackView)
+
+        // 粘贴选中行
+        let pasteRow = createHintRow(text: "粘贴选中行", keys: ["↵"])
+        stackView.addArrangedSubview(pasteRow)
+
+        // 粘贴为纯文本
+        let plainTextRow = createHintRow(text: "粘贴选中行为纯文本", keys: ["⌘", "↵"])
+        stackView.addArrangedSubview(plainTextRow)
+
+        NSLayoutConstraint.activate([
+            stackView.topAnchor.constraint(equalTo: topAnchor),
+            stackView.bottomAnchor.constraint(equalTo: bottomAnchor),
+            stackView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            stackView.trailingAnchor.constraint(equalTo: trailingAnchor),
+        ])
+    }
+
+    private func createHintRow(text: String, keys: [String]) -> NSView {
+        let rowStack = NSStackView()
+        rowStack.orientation = .horizontal
+        rowStack.spacing = 4
+        rowStack.alignment = .centerY
+
+        // 文字标签
+        let label = NSTextField(labelWithString: text)
+        label.font = .systemFont(ofSize: 10)
+        label.textColor = .tertiaryLabelColor
+        rowStack.addArrangedSubview(label)
+
+        // 按键图标
+        for key in keys {
+            let keyView = createKeyView(key)
+            rowStack.addArrangedSubview(keyView)
+        }
+
+        return rowStack
+    }
+
+    private func createKeyView(_ key: String) -> NSView {
+        let container = NSView()
+        container.wantsLayer = true
+        container.layer?.backgroundColor = NSColor.quaternaryLabelColor.cgColor
+        container.layer?.cornerRadius = 3
+
+        let label = NSTextField(labelWithString: key)
+        label.font = .systemFont(ofSize: 10, weight: .medium)
+        label.textColor = .secondaryLabelColor
+        label.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(label)
+
+        NSLayoutConstraint.activate([
+            label.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+            label.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+            container.widthAnchor.constraint(greaterThanOrEqualToConstant: 18),
+            container.heightAnchor.constraint(equalToConstant: 16),
+            label.leadingAnchor.constraint(
+                greaterThanOrEqualTo: container.leadingAnchor, constant: 4),
+            label.trailingAnchor.constraint(
+                lessThanOrEqualTo: container.trailingAnchor, constant: -4),
+        ])
+
+        return container
     }
 }
