@@ -607,11 +607,9 @@ struct TwoFactorAuthSettingsView: View {
                     Text("搜索时间范围:")
                         .frame(width: labelWidth, alignment: .trailing)
                     Picker("", selection: $settings.timeSpanMinutes) {
-                        Text("最近 15 分钟").tag(15)
+                        Text("最近 5 分钟").tag(5)
+                        Text("最近 10 分钟").tag(10)
                         Text("最近 30 分钟").tag(30)
-                        Text("最近 1 小时").tag(60)
-                        Text("最近 2 小时").tag(120)
-                        Text("最近 24 小时").tag(1440)
                     }
                     .labelsHidden()
                     .pickerStyle(.menu)

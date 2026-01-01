@@ -53,7 +53,7 @@ struct TwoFactorAuthSettings: Codable {
         isEnabled: true,
         alias: "2fa",
         deleteAfterCopy: false,
-        timeSpanMinutes: 60,  // 默认最近 1 小时
+        timeSpanMinutes: 5,  // 默认最近 5 分钟
         hotKeyCode: 0,
         hotKeyModifiers: 0
     )
@@ -110,7 +110,7 @@ final class TwoFactorAuthService {
     // MARK: - 获取验证码
 
     /// 获取最近的 2FA 验证码
-    func getRecentCodes(timeSpanMinutes: Int = 60) -> [TwoFactorCodeItem] {
+    func getRecentCodes(timeSpanMinutes: Int = 5) -> [TwoFactorCodeItem] {
         guard openDatabase() else {
             print("[TwoFactorAuthService] Failed to open database")
             return []
