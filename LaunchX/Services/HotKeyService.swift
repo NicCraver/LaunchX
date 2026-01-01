@@ -106,6 +106,21 @@ class HotKeyService: ObservableObject {
     /// 2FA 快捷键 ID
     private let twoFAHotKeyId: UInt32 = 3
 
+    // MARK: - 剪贴板扩展快捷键
+
+    /// 剪贴板快捷键触发回调
+    var onClipboardHotKeyPressed: (() -> Void)?
+    /// 纯文本粘贴快捷键触发回调
+    var onPlainTextPasteHotKeyPressed: (() -> Void)?
+    /// 剪贴板快捷键引用
+    private var clipboardHotKeyRef: EventHotKeyRef?
+    /// 纯文本粘贴快捷键引用
+    private var plainTextPasteHotKeyRef: EventHotKeyRef?
+    /// 剪贴板快捷键 ID
+    private let clipboardHotKeyId: UInt32 = 4
+    /// 纯文本粘贴快捷键 ID
+    private let plainTextPasteHotKeyId: UInt32 = 5
+
     // MARK: - 私有属性
 
     private let hotKeySignature: OSType
@@ -533,6 +548,97 @@ class HotKeyService: ObservableObject {
         }
     }
 
+    // MARK: - 剪贴板快捷键
+
+    /// 注册剪贴板快捷键
+    func registerClipboardHotKey(keyCode: UInt32, modifiers: UInt32) {
+        unregisterClipboardHotKey()
+        guard keyCode != 0 else { return }
+
+        let hotKeyID = EventHotKeyID(signature: hotKeySignature, id: clipboardHotKeyId)
+        var hotKeyRef: EventHotKeyRef?
+
+        let status = RegisterEventHotKey(
+            keyCode,
+            modifiers,
+            hotKeyID,
+            GetApplicationEventTarget(),
+            0,
+            &hotKeyRef
+        )
+
+        if status == noErr {
+            clipboardHotKeyRef = hotKeyRef
+            print(
+                "HotKeyService: Registered Clipboard HotKey (Code: \(keyCode), Mods: \(modifiers))")
+        } else {
+            print("HotKeyService: Failed to register clipboard hotkey. Status: \(status)")
+        }
+    }
+
+    /// 注销剪贴板快捷键
+    func unregisterClipboardHotKey() {
+        if let ref = clipboardHotKeyRef {
+            UnregisterEventHotKey(ref)
+            clipboardHotKeyRef = nil
+            print("HotKeyService: Unregistered Clipboard HotKey")
+        }
+    }
+
+    /// 加载剪贴板快捷键设置
+    func loadClipboardHotKey() {
+        let settings = ClipboardSettings.load()
+        if settings.hotKeyCode != 0 {
+            registerClipboardHotKey(
+                keyCode: settings.hotKeyCode, modifiers: settings.hotKeyModifiers)
+        }
+    }
+
+    /// 注册纯文本粘贴快捷键
+    func registerPlainTextPasteHotKey(keyCode: UInt32, modifiers: UInt32) {
+        unregisterPlainTextPasteHotKey()
+        guard keyCode != 0 else { return }
+
+        let hotKeyID = EventHotKeyID(signature: hotKeySignature, id: plainTextPasteHotKeyId)
+        var hotKeyRef: EventHotKeyRef?
+
+        let status = RegisterEventHotKey(
+            keyCode,
+            modifiers,
+            hotKeyID,
+            GetApplicationEventTarget(),
+            0,
+            &hotKeyRef
+        )
+
+        if status == noErr {
+            plainTextPasteHotKeyRef = hotKeyRef
+            print(
+                "HotKeyService: Registered PlainTextPaste HotKey (Code: \(keyCode), Mods: \(modifiers))"
+            )
+        } else {
+            print("HotKeyService: Failed to register plainTextPaste hotkey. Status: \(status)")
+        }
+    }
+
+    /// 注销纯文本粘贴快捷键
+    func unregisterPlainTextPasteHotKey() {
+        if let ref = plainTextPasteHotKeyRef {
+            UnregisterEventHotKey(ref)
+            plainTextPasteHotKeyRef = nil
+            print("HotKeyService: Unregistered PlainTextPaste HotKey")
+        }
+    }
+
+    /// 加载纯文本粘贴快捷键设置
+    func loadPlainTextPasteHotKey() {
+        let settings = ClipboardSettings.load()
+        if settings.plainTextHotKeyCode != 0 {
+            registerPlainTextPasteHotKey(
+                keyCode: settings.plainTextHotKeyCode, modifiers: settings.plainTextHotKeyModifiers)
+        }
+    }
+
     // MARK: - 暂停/恢复快捷键（用于录制时）
 
     /// 暂停所有快捷键（录制时使用）
@@ -783,6 +889,26 @@ class HotKeyService: ObservableObject {
             }
         }
 
+        // 检查与剪贴板快捷键的冲突
+        if excludeType != "clipboard" {
+            let clipboardSettings = ClipboardSettings.load()
+            if clipboardSettings.hotKeyCode == keyCode
+                && clipboardSettings.hotKeyModifiers == modifiers
+            {
+                return "剪贴板"
+            }
+        }
+
+        // 检查与纯文本粘贴快捷键的冲突
+        if excludeType != "plainTextPaste" {
+            let clipboardSettings = ClipboardSettings.load()
+            if clipboardSettings.plainTextHotKeyCode == keyCode
+                && clipboardSettings.plainTextHotKeyModifiers == modifiers
+            {
+                return "纯文本粘贴"
+            }
+        }
+
         // 检查与工具快捷键的冲突
         let toolsConfig = ToolsConfig.load()
         for tool in toolsConfig.tools {
@@ -839,6 +965,22 @@ class HotKeyService: ObservableObject {
             if hotKeyID.id == twoFAHotKeyId {
                 DispatchQueue.main.async { [weak self] in
                     self?.on2FAHotKeyPressed?()
+                }
+                return noErr
+            }
+
+            // 检查是否为剪贴板快捷键
+            if hotKeyID.id == clipboardHotKeyId {
+                DispatchQueue.main.async { [weak self] in
+                    self?.onClipboardHotKeyPressed?()
+                }
+                return noErr
+            }
+
+            // 检查是否为纯文本粘贴快捷键
+            if hotKeyID.id == plainTextPasteHotKeyId {
+                DispatchQueue.main.async { [weak self] in
+                    self?.onPlainTextPasteHotKeyPressed?()
                 }
                 return noErr
             }

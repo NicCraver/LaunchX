@@ -147,4 +147,5 @@ extension Notification.Name {
     static let enterUtilityModeDirectly = Notification.Name("enterUtilityModeDirectly")
     static let enterBookmarkModeDirectly = Notification.Name("enterBookmarkModeDirectly")
     static let enter2FAModeDirectly = Notification.Name("enter2FAModeDirectly")
+    static let enterClipboardModeDirectly = Notification.Name("enterClipboardModeDirectly")
 }

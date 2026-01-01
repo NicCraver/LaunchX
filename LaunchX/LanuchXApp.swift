@@ -146,6 +146,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             PanelManager.shared.showPanelIn2FAMode()
         }
 
+        // 设置剪贴板快捷键回调
+        HotKeyService.shared.onClipboardHotKeyPressed = {
+            // 检查剪贴板功能是否启用
+            let settings = ClipboardSettings.load()
+            guard settings.isEnabled else { return }
+            ClipboardPanelManager.shared.togglePanel()
+        }
+
+        // 设置纯文本粘贴快捷键回调
+        HotKeyService.shared.onPlainTextPasteHotKeyPressed = {
+            // 获取当前剪贴板面板选中项，粘贴为纯文本
+            ClipboardPanelManager.shared.pasteSelectedAsPlainText()
+        }
+
         // 优先从新的 ToolsConfig 加载，否则回退到 CustomItemsConfig
         let toolsConfig = ToolsConfig.load()
         if !toolsConfig.tools.isEmpty {
@@ -162,6 +176,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // 加载 2FA 快捷键
         HotKeyService.shared.load2FAHotKey()
+
+        // 加载剪贴板快捷键
+        HotKeyService.shared.loadClipboardHotKey()
+        HotKeyService.shared.loadPlainTextPasteHotKey()
+
+        // 启动剪贴板监听
+        ClipboardService.shared.startMonitoring()
     }
 
     private func setupHotKeyAndShowPanel() {

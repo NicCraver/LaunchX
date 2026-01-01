@@ -74,7 +74,7 @@ struct AdvancedExtensionsView: View {
         // case .terminalCommand:
         //     ComingSoonView(title: "执行终端命令", description: "快速执行常用终端命令")
         case .clipboard:
-            ComingSoonView(title: "剪贴板", description: "管理剪贴板历史")
+            ClipboardSettingsView()
         case .snippet:
             ComingSoonView(title: "Snippet", description: "管理代码片段")
         case .twoFactorAuth:

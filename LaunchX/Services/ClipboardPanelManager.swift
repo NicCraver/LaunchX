@@ -1,0 +1,143 @@
+import Cocoa
+
+/// 剪贴板面板管理器
+class ClipboardPanelManager: NSObject, NSWindowDelegate {
+    static let shared = ClipboardPanelManager()
+
+    private var panel: ClipboardPanel?
+    private var viewController: ClipboardPanelViewController?
+    private(set) var isPinned: Bool = false
+    private(set) var isPanelVisible: Bool = false
+
+    private override init() {
+        super.init()
+    }
+
+    // MARK: - 面板控制
+
+    /// 显示面板（在光标附近）
+    func showPanel() {
+        if panel == nil {
+            setupPanel()
+        }
+
+        guard let panel = panel else { return }
+
+        // 计算位置（光标附近，确保不超出屏幕）
+        let mouseLocation = NSEvent.mouseLocation
+        let settings = ClipboardSettings.load()
+        let panelSize = NSSize(width: settings.panelWidth, height: settings.panelHeight)
+
+        var origin = NSPoint(
+            x: mouseLocation.x - panelSize.width / 2,
+            y: mouseLocation.y - panelSize.height - 20  // 在光标下方
+        )
+
+        // 确保不超出屏幕边界
+        if let screen = NSScreen.main {
+            let screenFrame = screen.visibleFrame
+
+            // 左边界
+            if origin.x < screenFrame.minX {
+                origin.x = screenFrame.minX + 10
+            }
+            // 右边界
+            if origin.x + panelSize.width > screenFrame.maxX {
+                origin.x = screenFrame.maxX - panelSize.width - 10
+            }
+            // 下边界（如果下方空间不足，显示在光标上方）
+            if origin.y < screenFrame.minY {
+                origin.y = mouseLocation.y + 20
+            }
+            // 上边界
+            if origin.y + panelSize.height > screenFrame.maxY {
+                origin.y = screenFrame.maxY - panelSize.height - 10
+            }
+        }
+
+        panel.setFrame(NSRect(origin: origin, size: panelSize), display: true)
+        panel.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+
+        isPanelVisible = true
+        viewController?.focus()
+        viewController?.reloadData()
+    }
+
+    /// 隐藏面板
+    func hidePanel() {
+        guard !isPinned else { return }  // 固定时不隐藏
+        panel?.orderOut(nil)
+        isPanelVisible = false
+    }
+
+    /// 强制隐藏面板（忽略固定状态）
+    func forceHidePanel() {
+        panel?.orderOut(nil)
+        isPanelVisible = false
+    }
+
+    /// 切换面板显示
+    func togglePanel() {
+        if panel?.isVisible == true && isPanelVisible {
+            if isPinned {
+                forceHidePanel()
+            } else {
+                hidePanel()
+            }
+        } else {
+            showPanel()
+        }
+    }
+
+    /// 切换固定状态
+    func togglePinned() {
+        isPinned.toggle()
+        viewController?.updatePinnedState(isPinned)
+    }
+
+    /// 设置固定状态
+    func setPinned(_ pinned: Bool) {
+        isPinned = pinned
+        viewController?.updatePinnedState(isPinned)
+    }
+
+    // MARK: - 设置
+
+    private func setupPanel() {
+        let settings = ClipboardSettings.load()
+        let rect = NSRect(x: 0, y: 0, width: settings.panelWidth, height: settings.panelHeight)
+
+        panel = ClipboardPanel(contentRect: rect)
+        panel?.delegate = self
+
+        viewController = ClipboardPanelViewController()
+        panel?.contentView = viewController?.view
+    }
+
+    // MARK: - NSWindowDelegate
+
+    func windowDidResignKey(_ notification: Notification) {
+        if !isPinned {
+            hidePanel()
+        }
+    }
+
+    // MARK: - 外部访问
+
+    /// 获取当前选中的项目
+    func getSelectedItems() -> [ClipboardItem] {
+        return viewController?.getSelectedItems() ?? []
+    }
+
+    /// 粘贴当前选中项为纯文本
+    func pasteSelectedAsPlainText() {
+        guard let items = viewController?.getSelectedItems(), let first = items.first else {
+            return
+        }
+        ClipboardService.shared.pasteAsPlainText(first)
+        if !isPinned {
+            hidePanel()
+        }
+    }
+}
