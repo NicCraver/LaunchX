@@ -10,6 +10,9 @@ class ClipboardPanel: NSPanel {
     private let panelMinSize = NSSize(width: 280, height: 300)
     private let panelMaxSize = NSSize(width: 600, height: 800)
 
+    /// 圆角半径
+    private let cornerRadius: CGFloat = 12
+
     /// 拖拽状态
     private var isResizing = false
     private var resizeEdge: ResizeEdge = .none
@@ -50,6 +53,20 @@ class ClipboardPanel: NSPanel {
         self.isMovableByWindowBackground = false
         self.animationBehavior = .none
         self.isRestorable = false
+
+        // 启用鼠标移动事件（用于边缘光标变化）
+        self.acceptsMouseMovedEvents = true
+    }
+
+    override var contentView: NSView? {
+        didSet {
+            // 确保内容视图有圆角
+            if let view = contentView {
+                view.wantsLayer = true
+                view.layer?.cornerRadius = cornerRadius
+                view.layer?.masksToBounds = true
+            }
+        }
     }
 
     override var canBecomeKey: Bool { true }

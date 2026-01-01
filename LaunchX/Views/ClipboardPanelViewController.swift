@@ -8,9 +8,8 @@ class ClipboardPanelViewController: NSViewController {
     private let searchField = NSTextField()
     private let filterButton = NSPopUpButton()
     private let clearButton = NSButton()
-    private let settingsButton = NSButton()
     private let pinButton = NSButton()
-    private let dragArea = NSView()
+    private let dragArea = DraggableView()
     private let tableView = NSTableView()
     private let scrollView = NSScrollView()
     private let statusLabel = NSTextField()
@@ -30,14 +29,29 @@ class ClipboardPanelViewController: NSViewController {
     // MARK: - 生命周期
 
     override func loadView() {
+        // 创建可调整大小的容器视图
+        let containerView = ResizableContainerView()
+        containerView.wantsLayer = true
+        containerView.layer?.cornerRadius = 12
+        containerView.layer?.masksToBounds = true
+
+        // 创建毛玻璃效果视图
         let visualEffectView = NSVisualEffectView()
-        visualEffectView.material = .sidebar
+        visualEffectView.material = .hudWindow
         visualEffectView.blendingMode = .behindWindow
         visualEffectView.state = .active
-        visualEffectView.wantsLayer = true
-        visualEffectView.layer?.cornerRadius = 12
-        visualEffectView.layer?.masksToBounds = true
-        self.view = visualEffectView
+        visualEffectView.translatesAutoresizingMaskIntoConstraints = false
+        containerView.addSubview(visualEffectView)
+
+        // 让毛玻璃视图填充容器
+        NSLayoutConstraint.activate([
+            visualEffectView.topAnchor.constraint(equalTo: containerView.topAnchor),
+            visualEffectView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor),
+            visualEffectView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
+            visualEffectView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
+        ])
+
+        self.view = containerView
     }
 
     override func viewDidLoad() {
@@ -51,10 +65,7 @@ class ClipboardPanelViewController: NSViewController {
     // MARK: - UI 设置
 
     private func setupUI() {
-        // 可拖拽区域（顶部居中）
-        dragArea.wantsLayer = true
-        dragArea.layer?.backgroundColor = NSColor.separatorColor.cgColor
-        dragArea.layer?.cornerRadius = 2
+        // 可拖拽区域（顶部居中，热区比可见横杠大）
         dragArea.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(dragArea)
 
@@ -71,9 +82,9 @@ class ClipboardPanelViewController: NSViewController {
         // 过滤按钮
         setupFilterButton()
 
-        // 清空按钮
+        // 清空按钮（扫把图标）
         clearButton.image = NSImage(
-            systemSymbolName: "trash", accessibilityDescription: "清空")
+            systemSymbolName: "paintbrush.pointed", accessibilityDescription: "清空")
         clearButton.bezelStyle = .inline
         clearButton.isBordered = false
         clearButton.target = self
@@ -81,17 +92,6 @@ class ClipboardPanelViewController: NSViewController {
         clearButton.toolTip = "清空剪贴板历史"
         clearButton.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(clearButton)
-
-        // 设置按钮
-        settingsButton.image = NSImage(
-            systemSymbolName: "gearshape", accessibilityDescription: "设置")
-        settingsButton.bezelStyle = .inline
-        settingsButton.isBordered = false
-        settingsButton.target = self
-        settingsButton.action = #selector(openSettings)
-        settingsButton.toolTip = "打开设置"
-        settingsButton.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(settingsButton)
 
         // 固定按钮
         pinButton.image = NSImage(systemSymbolName: "pin", accessibilityDescription: "固定")
@@ -153,11 +153,16 @@ class ClipboardPanelViewController: NSViewController {
         tableView.doubleAction = #selector(tableViewDoubleClicked)
         tableView.target = self
         tableView.backgroundColor = .clear
+        tableView.usesAutomaticRowHeights = false
 
-        // 添加列
+        // 添加列（自动调整宽度）
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("ClipboardColumn"))
-        column.width = 400
+        column.resizingMask = .autoresizingMask
         tableView.addTableColumn(column)
+
+        // 让表格列宽跟随表格宽度
+        tableView.columnAutoresizingStyle = .uniformColumnAutoresizingStyle
+        tableView.sizeLastColumnToFit()
 
         // 配置滚动视图
         scrollView.documentView = tableView
@@ -165,42 +170,37 @@ class ClipboardPanelViewController: NSViewController {
         scrollView.hasHorizontalScroller = false
         scrollView.autohidesScrollers = true
         scrollView.drawsBackground = false
+        scrollView.horizontalScrollElasticity = .none
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(scrollView)
     }
 
     private func setupConstraints() {
         NSLayoutConstraint.activate([
-            // 拖拽区域
-            dragArea.topAnchor.constraint(equalTo: view.topAnchor, constant: 8),
+            // 拖拽区域（增大热区方便拖拽）
+            dragArea.topAnchor.constraint(equalTo: view.topAnchor, constant: 6),
             dragArea.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            dragArea.widthAnchor.constraint(equalToConstant: 36),
-            dragArea.heightAnchor.constraint(equalToConstant: 4),
+            dragArea.widthAnchor.constraint(equalToConstant: 48),
+            dragArea.heightAnchor.constraint(equalToConstant: 16),
 
             // 搜索框
-            searchField.topAnchor.constraint(equalTo: dragArea.bottomAnchor, constant: 12),
+            searchField.topAnchor.constraint(equalTo: dragArea.bottomAnchor, constant: 8),
             searchField.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
             searchField.trailingAnchor.constraint(
                 equalTo: filterButton.leadingAnchor, constant: -8),
             searchField.heightAnchor.constraint(equalToConstant: 24),
 
-            // 过滤按钮
+            // 过滤按钮（增加宽度以显示完整文本）
             filterButton.centerYAnchor.constraint(equalTo: searchField.centerYAnchor),
             filterButton.trailingAnchor.constraint(
                 equalTo: clearButton.leadingAnchor, constant: -4),
-            filterButton.widthAnchor.constraint(equalToConstant: 60),
+            filterButton.widthAnchor.constraint(equalToConstant: 72),
 
             // 清空按钮
             clearButton.centerYAnchor.constraint(equalTo: searchField.centerYAnchor),
             clearButton.trailingAnchor.constraint(
-                equalTo: settingsButton.leadingAnchor, constant: -4),
-            clearButton.widthAnchor.constraint(equalToConstant: 24),
-
-            // 设置按钮
-            settingsButton.centerYAnchor.constraint(equalTo: searchField.centerYAnchor),
-            settingsButton.trailingAnchor.constraint(
                 equalTo: pinButton.leadingAnchor, constant: -4),
-            settingsButton.widthAnchor.constraint(equalToConstant: 24),
+            clearButton.widthAnchor.constraint(equalToConstant: 24),
 
             // 固定按钮
             pinButton.centerYAnchor.constraint(equalTo: searchField.centerYAnchor),
@@ -310,12 +310,6 @@ class ClipboardPanelViewController: NSViewController {
         if alert.runModal() == .alertFirstButtonReturn {
             ClipboardService.shared.clearHistory()
         }
-    }
-
-    @objc private func openSettings() {
-        ClipboardPanelManager.shared.forceHidePanel()
-        // 打开设置窗口
-        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
     }
 
     @objc private func togglePin() {
@@ -576,6 +570,183 @@ class ClipboardCellView: NSTableCellView {
             iconView.image = item.icon
             titleLabel.stringValue = item.displayTitle
             subtitleLabel.stringValue = item.displaySubtitle
+        }
+    }
+}
+
+// MARK: - 可拖拽视图（用于窗口拖拽）
+
+class DraggableView: NSView {
+
+    private var initialMouseLocation: NSPoint = .zero
+    private var initialWindowOrigin: NSPoint = .zero
+    private let handleView = NSView()
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        setupHandle()
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        setupHandle()
+    }
+
+    private func setupHandle() {
+        // 小横杠视觉指示器
+        handleView.wantsLayer = true
+        handleView.layer?.backgroundColor = NSColor.separatorColor.cgColor
+        handleView.layer?.cornerRadius = 2
+        handleView.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(handleView)
+
+        NSLayoutConstraint.activate([
+            handleView.centerXAnchor.constraint(equalTo: centerXAnchor),
+            handleView.centerYAnchor.constraint(equalTo: centerYAnchor),
+            handleView.widthAnchor.constraint(equalToConstant: 36),
+            handleView.heightAnchor.constraint(equalToConstant: 4),
+        ])
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        initialMouseLocation = NSEvent.mouseLocation
+        initialWindowOrigin = window?.frame.origin ?? .zero
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        guard let window = window else { return }
+
+        let currentLocation = NSEvent.mouseLocation
+        let deltaX = currentLocation.x - initialMouseLocation.x
+        let deltaY = currentLocation.y - initialMouseLocation.y
+
+        let newOrigin = NSPoint(
+            x: initialWindowOrigin.x + deltaX,
+            y: initialWindowOrigin.y + deltaY
+        )
+
+        window.setFrameOrigin(newOrigin)
+    }
+
+    override func resetCursorRects() {
+        super.resetCursorRects()
+        addCursorRect(bounds, cursor: .openHand)
+    }
+}
+
+// MARK: - 可调整大小的容器视图（处理左右边缘拖拽）
+
+class ResizableContainerView: NSView {
+
+    private let resizeEdgeWidth: CGFloat = 8
+    private let panelMinWidth: CGFloat = 280
+    private let panelMaxWidth: CGFloat = 600
+
+    private var isResizing = false
+    private var resizeEdge: ResizeEdge = .none
+    private var initialFrame: NSRect = .zero
+    private var initialMouseLocation: NSPoint = .zero
+
+    enum ResizeEdge {
+        case none, left, right
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+
+        // 移除旧的追踪区域
+        for area in trackingAreas {
+            removeTrackingArea(area)
+        }
+
+        // 添加新的追踪区域
+        let options: NSTrackingArea.Options = [.mouseEnteredAndExited, .mouseMoved, .activeAlways]
+        let trackingArea = NSTrackingArea(rect: bounds, options: options, owner: self, userInfo: nil)
+        addTrackingArea(trackingArea)
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        let location = convert(event.locationInWindow, from: nil)
+
+        if location.x < resizeEdgeWidth || location.x > bounds.width - resizeEdgeWidth {
+            NSCursor.resizeLeftRight.set()
+        } else {
+            NSCursor.arrow.set()
+        }
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        NSCursor.arrow.set()
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        let location = convert(event.locationInWindow, from: nil)
+
+        if location.x < resizeEdgeWidth {
+            resizeEdge = .left
+            isResizing = true
+        } else if location.x > bounds.width - resizeEdgeWidth {
+            resizeEdge = .right
+            isResizing = true
+        } else {
+            resizeEdge = .none
+            isResizing = false
+            super.mouseDown(with: event)
+            return
+        }
+
+        if isResizing {
+            initialFrame = window?.frame ?? .zero
+            initialMouseLocation = NSEvent.mouseLocation
+        }
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        guard isResizing, let window = window else {
+            super.mouseDragged(with: event)
+            return
+        }
+
+        let currentLocation = NSEvent.mouseLocation
+        let deltaX = currentLocation.x - initialMouseLocation.x
+
+        var newFrame = initialFrame
+
+        switch resizeEdge {
+        case .left:
+            let newWidth = initialFrame.width - deltaX
+            if newWidth >= panelMinWidth && newWidth <= panelMaxWidth {
+                newFrame.origin.x = initialFrame.origin.x + deltaX
+                newFrame.size.width = newWidth
+            }
+        case .right:
+            let newWidth = initialFrame.width + deltaX
+            if newWidth >= panelMinWidth && newWidth <= panelMaxWidth {
+                newFrame.size.width = newWidth
+            }
+        case .none:
+            break
+        }
+
+        window.setFrame(newFrame, display: true)
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        if isResizing {
+            isResizing = false
+            resizeEdge = .none
+
+            // 保存新尺寸
+            if let window = window {
+                var settings = ClipboardSettings.load()
+                settings.panelWidth = window.frame.width
+                settings.panelHeight = window.frame.height
+                settings.save()
+            }
+
+            NSCursor.arrow.set()
+        } else {
+            super.mouseUp(with: event)
         }
     }
 }
