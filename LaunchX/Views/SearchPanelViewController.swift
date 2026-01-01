@@ -3349,14 +3349,17 @@ class SearchPanelViewController: NSViewController {
 
         // 普通模式：使用默认应用打开
         let url = URL(fileURLWithPath: item.path)
-        NSWorkspace.shared.open(url)
 
         // 记录到 LRU 缓存（仅记录 .app 应用）
         if item.path.hasSuffix(".app") {
             RecentAppsManager.shared.recordAppOpen(path: item.path)
         }
 
+        // 先隐藏面板，再异步打开 app（避免权限弹窗阻塞面板关闭）
         PanelManager.shared.hidePanel()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            NSWorkspace.shared.open(url)
+        }
     }
 }
 
