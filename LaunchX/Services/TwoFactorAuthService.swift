@@ -127,7 +127,7 @@ final class TwoFactorAuthService {
 
         // 查询最近的短信（SMS，非 iMessage）
         // is_from_me = 0 表示收到的消息
-        // service = 'SMS' 表示短信
+        // 通过 JOIN chat_message_join 确保消息未被删除（删除的消息会从该表移除）
         let query = """
             SELECT
                 m.ROWID,
@@ -137,6 +137,7 @@ final class TwoFactorAuthService {
                 h.id as sender
             FROM message m
             LEFT JOIN handle h ON m.handle_id = h.ROWID
+            INNER JOIN chat_message_join cmj ON m.ROWID = cmj.message_id
             WHERE m.is_from_me = 0
                 AND m.date > ?
             ORDER BY m.date DESC
