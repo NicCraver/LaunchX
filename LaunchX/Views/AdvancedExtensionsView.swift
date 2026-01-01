@@ -4,7 +4,8 @@ import SwiftUI
 // MARK: - 高级扩展类型
 
 enum AdvancedExtensionType: String, CaseIterable, Identifiable {
-    case clipboard = "剪贴板与 Snippet"
+    case clipboard = "剪贴板"
+    case snippet = "Snippet"
     case aiTranslate = "AI 翻译"
     case bookmarkSearch = "搜索书签"
     // case terminalCommand = "执行终端命令"
@@ -18,6 +19,7 @@ enum AdvancedExtensionType: String, CaseIterable, Identifiable {
         case .bookmarkSearch: return "Extension_bookmark"
         // case .terminalCommand: return "Extension_terminal"
         case .clipboard: return "Extension_clipboard"
+        case .snippet: return "Extension_snippet"
         case .twoFactorAuth: return "Extension_2FA"
         case .aiTranslate: return "Extension_ai_translate"
         }
@@ -72,7 +74,9 @@ struct AdvancedExtensionsView: View {
         // case .terminalCommand:
         //     ComingSoonView(title: "执行终端命令", description: "快速执行常用终端命令")
         case .clipboard:
-            ComingSoonView(title: "剪贴板与 Snippet", description: "管理剪贴板历史和代码片段")
+            ComingSoonView(title: "剪贴板", description: "管理剪贴板历史")
+        case .snippet:
+            ComingSoonView(title: "Snippet", description: "管理代码片段")
         case .twoFactorAuth:
             TwoFactorAuthSettingsView()
         case .aiTranslate:
