@@ -217,6 +217,8 @@ final class TwoFactorAuthService {
             return false
         }
 
+        print("[TwoFactorAuthService] Deleting conversation for chatIdentifier: \(chatIdentifier)")
+
         // 使用 AppleScript 删除对话
         return deleteConversation(chatIdentifier: chatIdentifier)
     }
@@ -288,7 +290,7 @@ final class TwoFactorAuthService {
                 }
                 return result.booleanValue
             }
-            print("[TwoFactorAuthService] AppleScript error: \(error ?? [:])")
+            print("[TwoFactorAuthService] AppleScript failed, trying UI script method")
             // 如果标准方法失败，尝试 UI 脚本方法
             return deleteConversationViaUI(chatIdentifier: chatIdentifier, wasRunning: wasRunning)
         }
@@ -340,11 +342,15 @@ final class TwoFactorAuthService {
                 tell process "Messages"
                     -- 搜索对话
                     keystroke "f" using command down
-                    delay 0.2
-                    keystroke "\(chatIdentifier)"
-                    delay 0.5
-                    key code 36 -- Return
                     delay 0.3
+                    keystroke "\(chatIdentifier)"
+                    delay 1.0
+
+                    -- 用方向键下选中搜索结果，然后回车进入对话
+                    key code 125 -- Down arrow
+                    delay 0.2
+                    key code 36 -- Return
+                    delay 0.5
 
                     -- 使用菜单删除对话（中文系统）
                     try
