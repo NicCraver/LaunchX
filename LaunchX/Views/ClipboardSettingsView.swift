@@ -475,10 +475,11 @@ struct AppPickerSheet: View {
     @Environment(\.dismiss) private var dismiss
     let onSelect: (String) -> Void
 
-    @State private var apps: [RunningAppInfo] = []
+    @State private var apps: [InstalledAppInfo] = []
     @State private var searchText = ""
+    @State private var isLoading = true
 
-    var filteredApps: [RunningAppInfo] {
+    var filteredApps: [InstalledAppInfo] {
         if searchText.isEmpty {
             return apps
         }
@@ -504,51 +505,97 @@ struct AppPickerSheet: View {
                 .padding(.horizontal)
 
             // 应用列表
-            List(filteredApps, id: \.bundleId) { app in
-                Button(action: {
-                    onSelect(app.bundleId)
-                    dismiss()
-                }) {
-                    HStack {
-                        Image(nsImage: app.icon)
-                            .resizable()
-                            .frame(width: 32, height: 32)
-                        Text(app.name)
-                        Spacer()
+            if isLoading {
+                Spacer()
+                ProgressView("加载应用列表...")
+                Spacer()
+            } else {
+                List(filteredApps, id: \.bundleId) { app in
+                    Button(action: {
+                        onSelect(app.bundleId)
+                        dismiss()
+                    }) {
+                        HStack {
+                            Image(nsImage: app.icon)
+                                .resizable()
+                                .frame(width: 32, height: 32)
+                            Text(app.name)
+                            Spacer()
+                        }
+                        .contentShape(Rectangle())
                     }
-                    .contentShape(Rectangle())
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
         }
         .frame(width: 400, height: 500)
         .onAppear {
-            loadApps()
+            loadAllInstalledApps()
         }
     }
 
-    private func loadApps() {
-        let runningApps = NSWorkspace.shared.runningApplications
-        var seenBundleIds = Set<String>()
+    private func loadAllInstalledApps() {
+        isLoading = true
 
-        apps = runningApps.compactMap { app -> RunningAppInfo? in
-            guard app.activationPolicy == .regular,
-                let bundleId = app.bundleIdentifier,
-                let name = app.localizedName,
-                !name.isEmpty,
-                !seenBundleIds.contains(bundleId)
-            else {
-                return nil
+        DispatchQueue.global(qos: .userInitiated).async {
+            var allApps: [InstalledAppInfo] = []
+            var seenBundleIds = Set<String>()
+
+            // 扫描的目录
+            let appDirectories = [
+                "/Applications",
+                "/System/Applications",
+                NSHomeDirectory() + "/Applications",
+            ]
+
+            let fileManager = FileManager.default
+
+            for directory in appDirectories {
+                guard let contents = try? fileManager.contentsOfDirectory(atPath: directory) else {
+                    continue
+                }
+
+                for item in contents {
+                    guard item.hasSuffix(".app") else { continue }
+
+                    let appPath = (directory as NSString).appendingPathComponent(item)
+                    let appURL = URL(fileURLWithPath: appPath)
+
+                    // 获取 bundle 信息
+                    guard let bundle = Bundle(url: appURL),
+                        let bundleId = bundle.bundleIdentifier,
+                        !seenBundleIds.contains(bundleId)
+                    else {
+                        continue
+                    }
+
+                    seenBundleIds.insert(bundleId)
+
+                    // 获取应用名称
+                    let name =
+                        bundle.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String
+                        ?? bundle.object(forInfoDictionaryKey: "CFBundleName") as? String
+                        ?? (item as NSString).deletingPathExtension
+
+                    // 获取图标
+                    let icon = NSWorkspace.shared.icon(forFile: appPath)
+
+                    allApps.append(InstalledAppInfo(bundleId: bundleId, name: name, icon: icon))
+                }
             }
 
-            seenBundleIds.insert(bundleId)
-            let icon = app.icon ?? NSImage()
-            return RunningAppInfo(bundleId: bundleId, name: name, icon: icon)
-        }.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+            // 按名称排序
+            allApps.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+
+            DispatchQueue.main.async {
+                self.apps = allApps
+                self.isLoading = false
+            }
+        }
     }
 }
 
-struct RunningAppInfo {
+struct InstalledAppInfo {
     let bundleId: String
     let name: String
     let icon: NSImage
