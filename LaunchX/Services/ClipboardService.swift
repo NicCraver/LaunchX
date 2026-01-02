@@ -342,11 +342,43 @@ final class ClipboardService: ObservableObject {
     /// 复制指定项目到剪贴板（保持原始格式）
     func copyToClipboard(_ item: ClipboardItem) {
         writeToClipboard(item, asPlainText: false)
+        moveItemToFront(item)
     }
 
     /// 复制为纯文本到剪贴板
     func copyAsPlainText(_ item: ClipboardItem) {
         writeToClipboard(item, asPlainText: true)
+        moveItemToFront(item)
+    }
+
+    /// 将项目移到最前面（LRU行为）
+    private func moveItemToFront(_ item: ClipboardItem) {
+        guard let index = items.firstIndex(where: { $0.id == item.id }) else { return }
+
+        // 如果已经在最前面，不需要移动
+        if index == 0 { return }
+
+        // 移除原位置，插入到最前面
+        var movedItem = items.remove(at: index)
+        // 更新时间
+        movedItem = ClipboardItem(
+            id: movedItem.id,
+            contentType: movedItem.contentType,
+            createdAt: Date(),
+            isPinned: movedItem.isPinned,
+            textContent: movedItem.textContent,
+            imageData: movedItem.imageData,
+            filePaths: movedItem.filePaths,
+            colorHex: movedItem.colorHex,
+            sourceAppBundleId: movedItem.sourceAppBundleId,
+            sourceAppName: movedItem.sourceAppName
+        )
+        items.insert(movedItem, at: 0)
+
+        // 保存并通知更新
+        saveItems()
+        NotificationCenter.default.post(
+            name: NSNotification.Name("ClipboardItemsDidChange"), object: nil)
     }
 
     /// 粘贴指定项目（保持原始格式）
