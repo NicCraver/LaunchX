@@ -709,6 +709,12 @@ extension ClipboardPanelViewController: NSTableViewDataSource, NSTableViewDelega
         return rowHeight
     }
 
+    func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
+        // 使用自定义 rowView，始终保持蓝色高亮（即使窗口不是 key window）
+        let rowView = EmphasizedTableRowView()
+        return rowView
+    }
+
     func tableViewSelectionDidChange(_ notification: Notification) {
         updateStatusLabel()
 
@@ -851,6 +857,17 @@ class ClipboardCellView: NSTableCellView {
             titleLabel.stringValue = item.displayTitle
             subtitleLabel.stringValue = item.displaySubtitle
         }
+    }
+}
+
+// MARK: - 自定义 TableRowView（始终保持蓝色高亮）
+
+class EmphasizedTableRowView: NSTableRowView {
+    // 重写 isEmphasized 属性，始终返回 true
+    // 这样即使窗口不是 key window，选中高亮也会保持蓝色
+    override var isEmphasized: Bool {
+        get { return true }
+        set {}
     }
 }
 
