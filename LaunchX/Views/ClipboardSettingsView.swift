@@ -79,8 +79,6 @@ struct ClipboardSettingsView: View {
                     }
                 }
 
-                Divider()
-
                 // 行为设置
                 Group {
                     HStack {
