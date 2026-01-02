@@ -501,7 +501,36 @@ class ClipboardPanelViewController: NSViewController {
         }
 
         tableView.selectRowIndexes(IndexSet(integer: newIndex), byExtendingSelection: false)
-        tableView.scrollRowToVisible(newIndex)
+        scrollToKeepSelectionCentered()
+    }
+
+    /// 滚动使选中行保持在中间位置（参考主搜索列表实现）
+    private func scrollToKeepSelectionCentered() {
+        let visibleRect = scrollView.contentView.bounds
+        let selectedRow = tableView.selectedRow
+        guard selectedRow >= 0 else { return }
+
+        // 计算可视区域能显示多少行
+        let visibleRows = Int(visibleRect.height / rowHeight)
+        let middleOffset = visibleRows / 2
+
+        // 计算目标滚动位置，使选中行在中间
+        let targetRow = max(0, selectedRow - middleOffset)
+        let targetRect = tableView.rect(ofRow: targetRow)
+
+        // 如果选中行在前几行，不需要居中（保持在顶部）
+        if selectedRow < middleOffset {
+            tableView.scrollRowToVisible(0)
+        }
+        // 如果选中行在最后几行，不需要居中（保持在底部）
+        else if selectedRow >= filteredItems.count - middleOffset {
+            tableView.scrollRowToVisible(filteredItems.count - 1)
+        }
+        // 否则滚动使选中行居中
+        else {
+            scrollView.contentView.scroll(to: NSPoint(x: 0, y: targetRect.origin.y))
+            scrollView.reflectScrolledClipView(scrollView.contentView)
+        }
     }
 
     // MARK: - 粘贴功能
@@ -511,14 +540,14 @@ class ClipboardPanelViewController: NSViewController {
         // 先写入剪贴板
         ClipboardService.shared.copyToClipboard(item)
 
-        // 关闭面板
+        // 隐藏面板并激活之前的应用
         if !ClipboardPanelManager.shared.isPinned {
-            ClipboardPanelManager.shared.forceHidePanel()
+            ClipboardPanelManager.shared.hidePanelAndActivatePreviousApp()
         }
 
         // 延迟执行粘贴，等待目标窗口获得焦点
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            ClipboardService.shared.simulatePasteCommand()
+            self.performPaste()
         }
     }
 
@@ -527,14 +556,34 @@ class ClipboardPanelViewController: NSViewController {
         // 先写入剪贴板（纯文本）
         ClipboardService.shared.copyAsPlainText(item)
 
-        // 关闭面板
+        // 隐藏面板并激活之前的应用
         if !ClipboardPanelManager.shared.isPinned {
-            ClipboardPanelManager.shared.forceHidePanel()
+            ClipboardPanelManager.shared.hidePanelAndActivatePreviousApp()
         }
 
         // 延迟执行粘贴，等待目标窗口获得焦点
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            ClipboardService.shared.simulatePasteCommand()
+            self.performPaste()
+        }
+    }
+
+    /// 执行粘贴操作
+    private func performPaste() {
+        // 使用 AppleScript 来执行粘贴，更可靠
+        let script = """
+            tell application "System Events"
+                keystroke "v" using command down
+            end tell
+            """
+
+        if let appleScript = NSAppleScript(source: script) {
+            var error: NSDictionary?
+            appleScript.executeAndReturnError(&error)
+            if let error = error {
+                print("[ClipboardService] AppleScript error: \(error)")
+                // 如果 AppleScript 失败，尝试使用 CGEvent
+                ClipboardService.shared.simulatePasteCommand()
+            }
         }
     }
 }

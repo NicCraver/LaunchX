@@ -9,6 +9,9 @@ class ClipboardPanelManager: NSObject, NSWindowDelegate {
     private(set) var isPinned: Bool = false
     private(set) var isPanelVisible: Bool = false
 
+    /// 记住打开面板前的前台应用，用于粘贴后恢复焦点
+    private var previousApp: NSRunningApplication?
+
     private override init() {
         super.init()
     }
@@ -17,6 +20,13 @@ class ClipboardPanelManager: NSObject, NSWindowDelegate {
 
     /// 显示面板（在光标附近）
     func showPanel() {
+        // 记住当前前台应用（在激活 LaunchX 之前）
+        if let frontApp = NSWorkspace.shared.frontmostApplication,
+            frontApp.bundleIdentifier != Bundle.main.bundleIdentifier
+        {
+            previousApp = frontApp
+        }
+
         if panel == nil {
             setupPanel()
         }
@@ -75,6 +85,17 @@ class ClipboardPanelManager: NSObject, NSWindowDelegate {
     func forceHidePanel() {
         panel?.orderOut(nil)
         isPanelVisible = false
+    }
+
+    /// 隐藏面板并激活之前的应用（用于粘贴）
+    func hidePanelAndActivatePreviousApp() {
+        panel?.orderOut(nil)
+        isPanelVisible = false
+
+        // 激活之前的前台应用
+        if let app = previousApp {
+            app.activate()
+        }
     }
 
     /// 切换面板显示
