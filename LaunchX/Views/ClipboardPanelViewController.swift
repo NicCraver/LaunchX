@@ -67,7 +67,7 @@ class ClipboardPanelViewController: NSViewController {
 
     // MARK: - 常量
 
-    private let rowHeight: CGFloat = 56
+    private let rowHeight: CGFloat = 44
 
     // MARK: - 生命周期
 
@@ -727,11 +727,11 @@ extension ClipboardPanelViewController: NSTableViewDataSource, NSTableViewDelega
 
 class ClipboardCellView: NSTableCellView {
 
-    private let iconView = NSImageView()
-    private let titleLabel = NSTextField()
-    private let subtitleLabel = NSTextField()
+    private let appIconView = NSImageView()  // 来源App图标
+    private let contentLabel = NSTextField()  // 内容文字
+    private let colorCircleView = NSView()  // 颜色圆形显示
     private let pinIndicator = NSImageView()
-    private let previewImageView = NSImageView()
+    private let previewImageView = NSImageView()  // 图片预览
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -744,29 +744,30 @@ class ClipboardCellView: NSTableCellView {
     }
 
     private func setupUI() {
-        // 图标
-        iconView.imageScaling = .scaleProportionallyUpOrDown
-        iconView.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(iconView)
+        // 来源App图标
+        appIconView.imageScaling = .scaleProportionallyUpOrDown
+        appIconView.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(appIconView)
 
-        // 标题
-        titleLabel.isEditable = false
-        titleLabel.isBordered = false
-        titleLabel.backgroundColor = .clear
-        titleLabel.font = .systemFont(ofSize: 13)
-        titleLabel.lineBreakMode = .byTruncatingTail
-        titleLabel.maximumNumberOfLines = 2
-        titleLabel.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(titleLabel)
+        // 内容文字
+        contentLabel.isEditable = false
+        contentLabel.isBordered = false
+        contentLabel.backgroundColor = .clear
+        contentLabel.font = .systemFont(ofSize: 13)
+        contentLabel.lineBreakMode = .byTruncatingTail
+        contentLabel.maximumNumberOfLines = 2
+        contentLabel.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(contentLabel)
 
-        // 副标题
-        subtitleLabel.isEditable = false
-        subtitleLabel.isBordered = false
-        subtitleLabel.backgroundColor = .clear
-        subtitleLabel.font = .systemFont(ofSize: 11)
-        subtitleLabel.textColor = .secondaryLabelColor
-        subtitleLabel.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(subtitleLabel)
+        // 颜色圆形（用于颜色类型）
+        colorCircleView.wantsLayer = true
+        colorCircleView.layer?.cornerRadius = 12  // 24/2
+        colorCircleView.layer?.borderColor = NSColor.white.cgColor
+        colorCircleView.layer?.borderWidth = 2
+        colorCircleView.layer?.masksToBounds = true
+        colorCircleView.translatesAutoresizingMaskIntoConstraints = false
+        colorCircleView.isHidden = true
+        addSubview(colorCircleView)
 
         // 固定指示器
         pinIndicator.image = NSImage(systemSymbolName: "pin.fill", accessibilityDescription: "已固定")
@@ -786,26 +787,34 @@ class ClipboardCellView: NSTableCellView {
 
         // 布局
         NSLayoutConstraint.activate([
-            iconView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
-            iconView.centerYAnchor.constraint(equalTo: centerYAnchor),
-            iconView.widthAnchor.constraint(equalToConstant: 32),
-            iconView.heightAnchor.constraint(equalToConstant: 32),
+            // App图标（左侧）
+            appIconView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
+            appIconView.centerYAnchor.constraint(equalTo: centerYAnchor),
+            appIconView.widthAnchor.constraint(equalToConstant: 28),
+            appIconView.heightAnchor.constraint(equalToConstant: 28),
 
-            titleLabel.leadingAnchor.constraint(equalTo: iconView.trailingAnchor, constant: 10),
-            titleLabel.trailingAnchor.constraint(equalTo: pinIndicator.leadingAnchor, constant: -8),
-            titleLabel.topAnchor.constraint(equalTo: topAnchor, constant: 10),
+            // 内容文字（居中）
+            contentLabel.leadingAnchor.constraint(
+                equalTo: appIconView.trailingAnchor, constant: 10),
+            contentLabel.trailingAnchor.constraint(
+                equalTo: pinIndicator.leadingAnchor, constant: -8),
+            contentLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
 
-            subtitleLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
-            subtitleLabel.trailingAnchor.constraint(equalTo: titleLabel.trailingAnchor),
-            subtitleLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 2),
+            // 颜色圆形（替代App图标位置）
+            colorCircleView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
+            colorCircleView.centerYAnchor.constraint(equalTo: centerYAnchor),
+            colorCircleView.widthAnchor.constraint(equalToConstant: 24),
+            colorCircleView.heightAnchor.constraint(equalToConstant: 24),
 
+            // 固定指示器（右侧）
             pinIndicator.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
             pinIndicator.centerYAnchor.constraint(equalTo: centerYAnchor),
             pinIndicator.widthAnchor.constraint(equalToConstant: 14),
             pinIndicator.heightAnchor.constraint(equalToConstant: 14),
 
+            // 图片预览
             previewImageView.leadingAnchor.constraint(
-                equalTo: iconView.trailingAnchor, constant: 10),
+                equalTo: appIconView.trailingAnchor, constant: 10),
             previewImageView.topAnchor.constraint(equalTo: topAnchor, constant: 8),
             previewImageView.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -8),
             previewImageView.widthAnchor.constraint(equalTo: previewImageView.heightAnchor),
@@ -815,12 +824,21 @@ class ClipboardCellView: NSTableCellView {
     func configure(with item: ClipboardItem) {
         // 重置状态
         previewImageView.isHidden = true
-        titleLabel.isHidden = false
-        subtitleLabel.isHidden = false
-        iconView.isHidden = false
+        contentLabel.isHidden = false
+        appIconView.isHidden = false
+        colorCircleView.isHidden = true
 
         // 固定指示器
         pinIndicator.isHidden = !item.isPinned
+
+        // 设置来源App图标
+        if let bundleId = item.sourceAppBundleId,
+            let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId)
+        {
+            appIconView.image = NSWorkspace.shared.icon(forFile: appURL.path)
+        } else {
+            appIconView.image = item.icon
+        }
 
         // 根据类型配置
         switch item.contentType {
@@ -829,33 +847,36 @@ class ClipboardCellView: NSTableCellView {
             if let data = item.imageData, let image = NSImage(data: data) {
                 previewImageView.image = image
                 previewImageView.isHidden = false
-                titleLabel.isHidden = true
-                iconView.isHidden = true
-                subtitleLabel.stringValue = item.displaySubtitle
+                contentLabel.isHidden = true
             } else {
-                iconView.image = item.icon
-                titleLabel.stringValue = item.displayTitle
-                subtitleLabel.stringValue = item.displaySubtitle
+                contentLabel.stringValue = "图片"
             }
 
         case .color:
-            // 颜色类型显示颜色块
+            // 颜色类型显示圆形颜色块
             if let hex = item.colorHex, let color = NSColor(hex: hex) {
-                let colorImage = NSImage(size: NSSize(width: 32, height: 32))
-                colorImage.lockFocus()
-                color.drawSwatch(in: NSRect(x: 0, y: 0, width: 32, height: 32))
-                colorImage.unlockFocus()
-                iconView.image = colorImage
+                colorCircleView.layer?.backgroundColor = color.cgColor
+                colorCircleView.isHidden = false
+                appIconView.isHidden = true
+                contentLabel.stringValue = hex.uppercased()
             } else {
-                iconView.image = item.icon
+                contentLabel.stringValue = item.displayTitle
             }
-            titleLabel.stringValue = item.displayTitle
-            subtitleLabel.stringValue = item.displaySubtitle
 
-        default:
-            iconView.image = item.icon
-            titleLabel.stringValue = item.displayTitle
-            subtitleLabel.stringValue = item.displaySubtitle
+        case .text, .link:
+            contentLabel.stringValue = item.textContent ?? ""
+
+        case .file:
+            if let paths = item.filePaths, let firstPath = paths.first {
+                let fileName = (firstPath as NSString).lastPathComponent
+                if paths.count > 1 {
+                    contentLabel.stringValue = "\(fileName) 等 \(paths.count) 个文件"
+                } else {
+                    contentLabel.stringValue = fileName
+                }
+            } else {
+                contentLabel.stringValue = item.displayTitle
+            }
         }
     }
 }
@@ -1083,7 +1104,7 @@ class ResizableContainerView: NSView {
 class ShortcutHintView: NSView {
 
     private let stackView = NSStackView()
-    private let keySize: CGFloat = 18
+    private let keySize: CGFloat = 16
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -1096,19 +1117,20 @@ class ShortcutHintView: NSView {
     }
 
     private func setupUI() {
-        stackView.orientation = .vertical
-        stackView.alignment = .trailing
-        stackView.spacing = 4
+        // 改为水平布局，一行显示
+        stackView.orientation = .horizontal
+        stackView.alignment = .centerY
+        stackView.spacing = 16
         stackView.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stackView)
 
-        // 粘贴选中行
-        let pasteRow = createHintRow(text: "粘贴选中行", keys: ["↵"])
-        stackView.addArrangedSubview(pasteRow)
+        // 粘贴选中行: ↵
+        let pasteHint = createHintGroup(text: "粘贴", keys: ["↵"])
+        stackView.addArrangedSubview(pasteHint)
 
-        // 粘贴为纯文本
-        let plainTextRow = createHintRow(text: "粘贴选中行为纯文本", keys: ["⌘", "↵"])
-        stackView.addArrangedSubview(plainTextRow)
+        // 粘贴为纯文本: ⌘ ↵
+        let plainTextHint = createHintGroup(text: "纯文本", keys: ["⌘", "↵"])
+        stackView.addArrangedSubview(plainTextHint)
 
         NSLayoutConstraint.activate([
             stackView.topAnchor.constraint(equalTo: topAnchor),
@@ -1118,27 +1140,25 @@ class ShortcutHintView: NSView {
         ])
     }
 
-    private func createHintRow(text: String, keys: [String]) -> NSView {
-        let rowStack = NSStackView()
-        rowStack.orientation = .horizontal
-        rowStack.spacing = 4
-        rowStack.alignment = .centerY
+    private func createHintGroup(text: String, keys: [String]) -> NSView {
+        let groupStack = NSStackView()
+        groupStack.orientation = .horizontal
+        groupStack.spacing = 3
+        groupStack.alignment = .centerY
 
-        // 文字标签（右对齐）
+        // 文字标签
         let label = NSTextField(labelWithString: text)
         label.font = .systemFont(ofSize: 10)
         label.textColor = .tertiaryLabelColor
-        label.alignment = .right
-        label.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        rowStack.addArrangedSubview(label)
+        groupStack.addArrangedSubview(label)
 
         // 按键图标
         for key in keys {
             let keyView = createKeyView(key)
-            rowStack.addArrangedSubview(keyView)
+            groupStack.addArrangedSubview(keyView)
         }
 
-        return rowStack
+        return groupStack
     }
 
     private func createKeyView(_ key: String) -> NSView {
