@@ -4,7 +4,7 @@ import SwiftUI
 
 struct SnippetSettingsView: View {
     @State private var settings = SnippetSettings.load()
-    @State private var snippets: [SnippetItem] = []
+    @ObservedObject private var snippetService = SnippetService.shared
     @State private var searchText = ""
     @State private var selectedSnippet: SnippetItem?
     @State private var showAddSheet = false
@@ -14,18 +14,19 @@ struct SnippetSettingsView: View {
 
     private var filteredSnippets: [SnippetItem] {
         if searchText.isEmpty {
-            return snippets
+            return snippetService.snippets
         }
-        return SnippetService.shared.search(query: searchText)
+        return snippetService.search(query: searchText)
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // 标题行
             HStack {
-                Image(systemName: "text.snippet")
-                    .font(.title2)
-                    .foregroundColor(.accentColor)
+                Image("Extension_snippet")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 24, height: 24)
                 Text("Snippet")
                     .font(.headline)
                 Spacer()
@@ -72,10 +73,10 @@ struct SnippetSettingsView: View {
             .padding(.vertical, 12)
 
             // Snippet 列表
-            if snippets.isEmpty {
+            if snippetService.snippets.isEmpty {
                 VStack(spacing: 16) {
                     Spacer()
-                    Image(systemName: "text.snippet")
+                    Image(systemName: "doc.text")
                         .font(.system(size: 48))
                         .foregroundColor(.secondary.opacity(0.5))
                     Text("暂无 Snippet")
@@ -101,7 +102,7 @@ struct SnippetSettingsView: View {
                                 showDeleteAlert = true
                             },
                             onToggle: {
-                                SnippetService.shared.toggleEnabled(snippet)
+                                snippetService.toggleEnabled(snippet)
                             }
                         )
                     }
@@ -150,23 +151,15 @@ struct SnippetSettingsView: View {
             .padding(.horizontal, 20)
             .padding(.vertical, 12)
         }
-        .onAppear {
-            loadSnippets()
-        }
-        .onReceive(
-            NotificationCenter.default.publisher(for: NSNotification.Name("SnippetsDidChange"))
-        ) { _ in
-            loadSnippets()
-        }
         .sheet(isPresented: $showAddSheet) {
             SnippetEditorSheet(mode: .add) { newSnippet in
-                SnippetService.shared.addSnippet(newSnippet)
+                snippetService.addSnippet(newSnippet)
             }
         }
         .sheet(isPresented: $showEditSheet) {
             if let snippet = selectedSnippet {
                 SnippetEditorSheet(mode: .edit(snippet)) { updatedSnippet in
-                    SnippetService.shared.updateSnippet(updatedSnippet)
+                    snippetService.updateSnippet(updatedSnippet)
                 }
             }
         }
@@ -174,7 +167,7 @@ struct SnippetSettingsView: View {
             Button("取消", role: .cancel) {}
             Button("删除", role: .destructive) {
                 if let snippet = snippetToDelete {
-                    SnippetService.shared.removeSnippet(snippet)
+                    snippetService.removeSnippet(snippet)
                 }
             }
         } message: {
@@ -182,10 +175,6 @@ struct SnippetSettingsView: View {
                 Text("确定要删除「\(snippet.name)」吗？此操作无法撤销。")
             }
         }
-    }
-
-    private func loadSnippets() {
-        snippets = SnippetService.shared.snippets
     }
 }
 
@@ -247,28 +236,40 @@ struct SnippetRowView: View {
             // 操作按钮（悬停时显示）
             if isHovered {
                 HStack(spacing: 8) {
-                    Button(action: onToggle) {
+                    Button {
+                        onToggle()
+                    } label: {
                         Image(systemName: snippet.isEnabled ? "pause.circle" : "play.circle")
                             .font(.system(size: 14))
                             .foregroundColor(.secondary)
+                            .frame(width: 24, height: 24)
+                            .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.borderless)
                     .help(snippet.isEnabled ? "禁用" : "启用")
 
-                    Button(action: onEdit) {
+                    Button {
+                        onEdit()
+                    } label: {
                         Image(systemName: "pencil")
                             .font(.system(size: 14))
                             .foregroundColor(.secondary)
+                            .frame(width: 24, height: 24)
+                            .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.borderless)
                     .help("编辑")
 
-                    Button(action: onDelete) {
+                    Button {
+                        onDelete()
+                    } label: {
                         Image(systemName: "trash")
                             .font(.system(size: 14))
                             .foregroundColor(.red.opacity(0.8))
+                            .frame(width: 24, height: 24)
+                            .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.borderless)
                     .help("删除")
                 }
             }

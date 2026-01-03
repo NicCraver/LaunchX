@@ -363,8 +363,10 @@ final class SnippetService: ObservableObject {
             snippets[index].isEnabled.toggle()
             saveSnippets()
 
-            NotificationCenter.default.post(
-                name: NSNotification.Name("SnippetsDidChange"), object: nil)
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(
+                    name: NSNotification.Name("SnippetsDidChange"), object: nil)
+            }
         }
     }
 
