@@ -160,6 +160,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             ClipboardPanelManager.shared.pasteSelectedAsPlainText()
         }
 
+        // 设置选词翻译快捷键回调
+        HotKeyService.shared.onTranslateSelectionHotKeyPressed = {
+            let settings = AITranslateSettings.load()
+            guard settings.isEnabled else { return }
+            AITranslatePanelManager.shared.showPanelWithSelection()
+        }
+
+        // 设置输入翻译快捷键回调
+        HotKeyService.shared.onTranslateInputHotKeyPressed = {
+            let settings = AITranslateSettings.load()
+            guard settings.isEnabled else { return }
+            AITranslatePanelManager.shared.togglePanel()
+        }
+
         // 优先从新的 ToolsConfig 加载，否则回退到 CustomItemsConfig
         let toolsConfig = ToolsConfig.load()
         if !toolsConfig.tools.isEmpty {
@@ -180,6 +194,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // 加载剪贴板快捷键
         HotKeyService.shared.loadClipboardHotKey()
         HotKeyService.shared.loadPlainTextPasteHotKey()
+
+        // 加载翻译快捷键
+        HotKeyService.shared.loadTranslateHotKeys()
 
         // 启动剪贴板监听
         ClipboardService.shared.startMonitoring()

@@ -121,6 +121,21 @@ class HotKeyService: ObservableObject {
     /// 纯文本粘贴快捷键 ID
     private let plainTextPasteHotKeyId: UInt32 = 5
 
+    // MARK: - AI 翻译快捷键
+
+    /// 选词翻译快捷键触发回调
+    var onTranslateSelectionHotKeyPressed: (() -> Void)?
+    /// 输入翻译快捷键触发回调
+    var onTranslateInputHotKeyPressed: (() -> Void)?
+    /// 选词翻译快捷键引用
+    private var translateSelectionHotKeyRef: EventHotKeyRef?
+    /// 输入翻译快捷键引用
+    private var translateInputHotKeyRef: EventHotKeyRef?
+    /// 选词翻译快捷键 ID
+    private let translateSelectionHotKeyId: UInt32 = 6
+    /// 输入翻译快捷键 ID
+    private let translateInputHotKeyId: UInt32 = 7
+
     // MARK: - 私有属性
 
     private let hotKeySignature: OSType
@@ -639,6 +654,93 @@ class HotKeyService: ObservableObject {
         }
     }
 
+    // MARK: - AI 翻译快捷键方法
+
+    /// 注册选词翻译快捷键
+    func registerTranslateSelectionHotKey(keyCode: UInt32, modifiers: UInt32) {
+        unregisterTranslateSelectionHotKey()
+        guard keyCode != 0 else { return }
+
+        let hotKeyID = EventHotKeyID(signature: hotKeySignature, id: translateSelectionHotKeyId)
+        var hotKeyRef: EventHotKeyRef?
+
+        let status = RegisterEventHotKey(
+            keyCode,
+            modifiers,
+            hotKeyID,
+            GetApplicationEventTarget(),
+            0,
+            &hotKeyRef
+        )
+
+        if status == noErr {
+            translateSelectionHotKeyRef = hotKeyRef
+            print(
+                "HotKeyService: Registered TranslateSelection HotKey (Code: \(keyCode), Mods: \(modifiers))"
+            )
+        } else {
+            print("HotKeyService: Failed to register translateSelection hotkey. Status: \(status)")
+        }
+    }
+
+    /// 注销选词翻译快捷键
+    func unregisterTranslateSelectionHotKey() {
+        if let ref = translateSelectionHotKeyRef {
+            UnregisterEventHotKey(ref)
+            translateSelectionHotKeyRef = nil
+            print("HotKeyService: Unregistered TranslateSelection HotKey")
+        }
+    }
+
+    /// 注册输入翻译快捷键
+    func registerTranslateInputHotKey(keyCode: UInt32, modifiers: UInt32) {
+        unregisterTranslateInputHotKey()
+        guard keyCode != 0 else { return }
+
+        let hotKeyID = EventHotKeyID(signature: hotKeySignature, id: translateInputHotKeyId)
+        var hotKeyRef: EventHotKeyRef?
+
+        let status = RegisterEventHotKey(
+            keyCode,
+            modifiers,
+            hotKeyID,
+            GetApplicationEventTarget(),
+            0,
+            &hotKeyRef
+        )
+
+        if status == noErr {
+            translateInputHotKeyRef = hotKeyRef
+            print(
+                "HotKeyService: Registered TranslateInput HotKey (Code: \(keyCode), Mods: \(modifiers))"
+            )
+        } else {
+            print("HotKeyService: Failed to register translateInput hotkey. Status: \(status)")
+        }
+    }
+
+    /// 注销输入翻译快捷键
+    func unregisterTranslateInputHotKey() {
+        if let ref = translateInputHotKeyRef {
+            UnregisterEventHotKey(ref)
+            translateInputHotKeyRef = nil
+            print("HotKeyService: Unregistered TranslateInput HotKey")
+        }
+    }
+
+    /// 加载翻译快捷键设置
+    func loadTranslateHotKeys() {
+        let settings = AITranslateSettings.load()
+        if settings.selectionHotKeyCode != 0 {
+            registerTranslateSelectionHotKey(
+                keyCode: settings.selectionHotKeyCode, modifiers: settings.selectionHotKeyModifiers)
+        }
+        if settings.inputHotKeyCode != 0 {
+            registerTranslateInputHotKey(
+                keyCode: settings.inputHotKeyCode, modifiers: settings.inputHotKeyModifiers)
+        }
+    }
+
     // MARK: - 暂停/恢复快捷键（用于录制时）
 
     /// 暂停所有快捷键（录制时使用）
@@ -909,6 +1011,26 @@ class HotKeyService: ObservableObject {
             }
         }
 
+        // 检查与选词翻译快捷键的冲突
+        if excludeType != "translateSelection" {
+            let translateSettings = AITranslateSettings.load()
+            if translateSettings.selectionHotKeyCode == keyCode
+                && translateSettings.selectionHotKeyModifiers == modifiers
+            {
+                return "选词翻译"
+            }
+        }
+
+        // 检查与输入翻译快捷键的冲突
+        if excludeType != "translateInput" {
+            let translateSettings = AITranslateSettings.load()
+            if translateSettings.inputHotKeyCode == keyCode
+                && translateSettings.inputHotKeyModifiers == modifiers
+            {
+                return "输入翻译"
+            }
+        }
+
         // 检查与工具快捷键的冲突
         let toolsConfig = ToolsConfig.load()
         for tool in toolsConfig.tools {
@@ -981,6 +1103,22 @@ class HotKeyService: ObservableObject {
             if hotKeyID.id == plainTextPasteHotKeyId {
                 DispatchQueue.main.async { [weak self] in
                     self?.onPlainTextPasteHotKeyPressed?()
+                }
+                return noErr
+            }
+
+            // 检查是否为选词翻译快捷键
+            if hotKeyID.id == translateSelectionHotKeyId {
+                DispatchQueue.main.async { [weak self] in
+                    self?.onTranslateSelectionHotKeyPressed?()
+                }
+                return noErr
+            }
+
+            // 检查是否为输入翻译快捷键
+            if hotKeyID.id == translateInputHotKeyId {
+                DispatchQueue.main.async { [weak self] in
+                    self?.onTranslateInputHotKeyPressed?()
                 }
                 return noErr
             }

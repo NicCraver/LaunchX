@@ -80,7 +80,7 @@ struct AdvancedExtensionsView: View {
         case .twoFactorAuth:
             TwoFactorAuthSettingsView()
         case .aiTranslate:
-            ComingSoonView(title: "AI 翻译", description: "使用 AI 进行智能翻译")
+            AITranslateSettingsView()
         }
     }
 }
