@@ -8,7 +8,6 @@ struct SnippetSettingsView: View {
     @State private var searchText = ""
     @State private var selectedSnippet: SnippetItem?
     @State private var showAddSheet = false
-    @State private var showEditSheet = false
     @State private var showDeleteAlert = false
     @State private var snippetToDelete: SnippetItem?
 
@@ -95,7 +94,6 @@ struct SnippetSettingsView: View {
                             snippet: snippet,
                             onEdit: {
                                 selectedSnippet = snippet
-                                showEditSheet = true
                             },
                             onDelete: {
                                 snippetToDelete = snippet
@@ -156,11 +154,9 @@ struct SnippetSettingsView: View {
                 snippetService.addSnippet(newSnippet)
             }
         }
-        .sheet(isPresented: $showEditSheet) {
-            if let snippet = selectedSnippet {
-                SnippetEditorSheet(mode: .edit(snippet)) { updatedSnippet in
-                    snippetService.updateSnippet(updatedSnippet)
-                }
+        .sheet(item: $selectedSnippet) { snippet in
+            SnippetEditorSheet(mode: .edit(snippet)) { updatedSnippet in
+                snippetService.updateSnippet(updatedSnippet)
             }
         }
         .alert("删除 Snippet", isPresented: $showDeleteAlert) {
