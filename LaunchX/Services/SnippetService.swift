@@ -417,11 +417,6 @@ final class SnippetService: ObservableObject {
     private func addDefaultSnippets() {
         let defaults = [
             SnippetItem(
-                name: "箭头",
-                keyword: "::",
-                content: ":="
-            ),
-            SnippetItem(
                 name: "当前日期",
                 keyword: "//date",
                 content: "{date}"
