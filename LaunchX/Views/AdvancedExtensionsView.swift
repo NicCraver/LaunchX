@@ -76,7 +76,7 @@ struct AdvancedExtensionsView: View {
         case .clipboard:
             ClipboardSettingsView()
         case .snippet:
-            ComingSoonView(title: "Snippet", description: "管理代码片段")
+            SnippetSettingsView()
         case .twoFactorAuth:
             TwoFactorAuthSettingsView()
         case .aiTranslate:

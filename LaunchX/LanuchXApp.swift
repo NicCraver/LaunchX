@@ -183,6 +183,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // 启动剪贴板监听
         ClipboardService.shared.startMonitoring()
+
+        // 启动 Snippet 监听
+        SnippetService.shared.startMonitoring()
     }
 
     private func setupHotKeyAndShowPanel() {
