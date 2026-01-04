@@ -25,8 +25,12 @@ class AITranslatePanelViewController: NSViewController {
 
     private var resultScrollView: NSScrollView!
     private var resultStackView: NSStackView!
+    private var resultHeightConstraint: NSLayoutConstraint!
 
     private var loadingIndicator: NSProgressIndicator!
+
+    // 是否有翻译结果
+    private var hasTranslationResult: Bool = false
 
     // 语言菜单
     private var fromLangMenu: NSMenu!
@@ -301,6 +305,10 @@ class AITranslatePanelViewController: NSViewController {
 
         resultScrollView.documentView = flippedContainer
 
+        // 初始状态下结果区域高度为 0（优先级低于底部约束，这样展开时可以正常工作）
+        resultHeightConstraint = resultScrollView.heightAnchor.constraint(equalToConstant: 0)
+        resultHeightConstraint.priority = .defaultHigh
+
         NSLayoutConstraint.activate([
             resultScrollView.topAnchor.constraint(equalTo: languageBar.bottomAnchor, constant: 4),
             resultScrollView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
@@ -315,7 +323,11 @@ class AITranslatePanelViewController: NSViewController {
             flippedContainer.widthAnchor.constraint(equalTo: resultScrollView.widthAnchor),
         ])
 
-        updateServicesDisplay()
+        // 初始激活高度约束
+        resultHeightConstraint.isActive = true
+
+        // 初始状态隐藏结果区域
+        resultScrollView.isHidden = true
     }
 
     private func setupLoadingIndicator() {
@@ -355,7 +367,43 @@ class AITranslatePanelViewController: NSViewController {
     /// 刷新设置（面板显示时调用）
     func reloadSettings() {
         settings = AITranslateSettings.load()
-        updateServicesDisplay()
+        // 不再自动显示服务列表，等有翻译结果时再显示
+    }
+
+    /// 重置面板状态（清空输入和结果）
+    func resetPanelState() {
+        // 清空输入
+        inputTextView.string = ""
+        inputPlaceholder.isHidden = false
+        updateInputHeight()
+
+        // 清空结果
+        for view in resultStackView.arrangedSubviews {
+            resultStackView.removeArrangedSubview(view)
+            view.removeFromSuperview()
+        }
+
+        // 收起结果区域
+        hasTranslationResult = false
+        collapseResultArea()
+    }
+
+    /// 收起结果区域
+    private func collapseResultArea() {
+        resultScrollView.isHidden = true
+        resultHeightConstraint.isActive = true
+        view.layoutSubtreeIfNeeded()
+
+        // 调整窗口为紧凑高度
+        if let window = view.window {
+            let compactHeight: CGFloat = 180
+            var frame = window.frame
+            if frame.height > compactHeight {
+                frame.origin.y += (frame.height - compactHeight)
+                frame.size.height = compactHeight
+                window.setFrame(frame, display: true, animate: true)
+            }
+        }
     }
 
     // MARK: - 公开方法
@@ -514,6 +562,28 @@ class AITranslatePanelViewController: NSViewController {
             if index < enabledServices.count - 1 {
                 let separator = createSeparator()
                 resultStackView.addArrangedSubview(separator)
+            }
+        }
+
+        // 展开结果区域
+        hasTranslationResult = true
+        expandResultArea()
+    }
+
+    /// 展开结果区域
+    private func expandResultArea() {
+        resultScrollView.isHidden = false
+        resultHeightConstraint.isActive = false
+        view.layoutSubtreeIfNeeded()
+
+        // 展开窗口到完整高度
+        if let window = view.window {
+            var frame = window.frame
+            let expandedHeight: CGFloat = 400  // 展开后的标准高度
+            if frame.height < expandedHeight {
+                frame.origin.y -= (expandedHeight - frame.height)
+                frame.size.height = expandedHeight
+                window.setFrame(frame, display: true, animate: true)
             }
         }
     }

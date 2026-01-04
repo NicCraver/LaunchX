@@ -180,10 +180,12 @@ class AITranslatePanelManager: NSObject, NSWindowDelegate {
     private func setupPanel() {
         let settings = AITranslateSettings.load()
 
+        // 初始使用紧凑高度（只显示输入框和语言栏）
+        let compactHeight: CGFloat = 180
         let contentRect = NSRect(
             x: 0, y: 0,
             width: settings.panelWidth,
-            height: settings.panelHeight
+            height: compactHeight
         )
 
         panel = AITranslatePanel(
@@ -205,7 +207,7 @@ class AITranslatePanelManager: NSObject, NSWindowDelegate {
         panel.backgroundColor = NSColor(named: "PanelBackground") ?? NSColor.windowBackgroundColor
 
         // 设置最小和最大尺寸
-        panel.minSize = NSSize(width: 400, height: 300)
+        panel.minSize = NSSize(width: 400, height: 180)
         panel.maxSize = NSSize(width: 900, height: 700)
 
         // 创建视图控制器
