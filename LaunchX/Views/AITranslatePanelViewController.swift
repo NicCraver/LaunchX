@@ -63,7 +63,7 @@ class AITranslatePanelViewController: NSViewController {
         // 容器视图（毛玻璃效果）
         containerView = NSVisualEffectView(frame: view.bounds)
         containerView.autoresizingMask = [.width, .height]
-        containerView.material = .hudWindow
+        containerView.material = .sidebar
         containerView.blendingMode = .behindWindow
         containerView.state = .active
         containerView.wantsLayer = true

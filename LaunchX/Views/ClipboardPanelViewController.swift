@@ -80,7 +80,7 @@ class ClipboardPanelViewController: NSViewController {
 
         // 创建毛玻璃效果视图
         let visualEffectView = NSVisualEffectView()
-        visualEffectView.material = .hudWindow
+        visualEffectView.material = .sidebar
         visualEffectView.blendingMode = .behindWindow
         visualEffectView.state = .active
         visualEffectView.translatesAutoresizingMaskIntoConstraints = false

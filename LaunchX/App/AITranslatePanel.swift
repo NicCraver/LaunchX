@@ -56,6 +56,15 @@ class AITranslatePanel: NSPanel {
                 view.layer?.cornerRadius = cornerRadius
                 view.layer?.masksToBounds = true
             }
+
+            // 增强阴影效果
+            self.hasShadow = true
+            if let shadowView = contentView?.superview {
+                shadowView.shadow = NSShadow()
+                shadowView.shadow?.shadowColor = NSColor.black.withAlphaComponent(0.45)
+                shadowView.shadow?.shadowOffset = NSSize(width: 0, height: -3)
+                shadowView.shadow?.shadowBlurRadius = 12
+            }
         }
     }
 
