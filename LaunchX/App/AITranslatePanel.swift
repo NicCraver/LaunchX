@@ -44,7 +44,7 @@ class AITranslatePanel: NSPanel {
         self.hidesOnDeactivate = false
         self.isReleasedWhenClosed = false
         self.isMovableByWindowBackground = true
-        self.animationBehavior = .utilityWindow
+        self.animationBehavior = .none
         self.isRestorable = false
     }
 

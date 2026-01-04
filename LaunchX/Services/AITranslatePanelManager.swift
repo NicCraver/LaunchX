@@ -126,8 +126,9 @@ class AITranslatePanelManager: NSObject, NSWindowDelegate {
 
     /// 强制隐藏面板（忽略固定状态）
     func forceHidePanel() {
-        panel?.orderOut(nil)
+        guard isPanelVisible else { return }
         isPanelVisible = false
+        panel?.orderOut(nil)
     }
 
     /// 隐藏并激活之前的应用
