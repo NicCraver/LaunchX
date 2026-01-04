@@ -160,8 +160,9 @@ class AITranslatePanelViewController: NSViewController {
         inputTextView.isHorizontallyResizable = false
         inputTextView.autoresizingMask = [.width]
         inputTextView.textContainer?.containerSize = NSSize(
-            width: 100, height: CGFloat.greatestFiniteMagnitude)
+            width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
         inputTextView.textContainer?.widthTracksTextView = true
+        inputTextView.textContainer?.lineFragmentPadding = 0
         inputTextView.font = .systemFont(ofSize: 15)
         inputTextView.textColor = .labelColor
         inputTextView.backgroundColor = .clear
@@ -497,20 +498,36 @@ class AITranslatePanelViewController: NSViewController {
         modelConfig: AIModelConfig,
         isWordMode: Bool = false
     ) {
-        // 如果是单词模式的 AI 翻译，使用特殊的 prompt
         var effectiveServiceConfig = serviceConfig
-        if isWordMode && serviceConfig.serviceType == .aiTranslate {
-            effectiveServiceConfig = TranslateServiceConfig(
-                id: serviceConfig.id,
-                name: serviceConfig.name,
-                serviceType: serviceConfig.serviceType,
-                systemPrompt:
-                    "You are a language learning assistant. When given an English word, provide 2-3 example sentences showing how native speakers use this word in daily life or popular TV shows/movies. Format: just the English sentences with Chinese translations, no explanations needed. Keep it concise.",
-                userPromptTemplate:
-                    "Give me 2-3 natural example sentences for the word \"{text}\" as used by native English speakers in daily conversation or TV shows/movies. Include Chinese translation for each sentence.",
-                modelConfigId: serviceConfig.modelConfigId,
-                isEnabled: serviceConfig.isEnabled
-            )
+
+        if serviceConfig.serviceType == .aiTranslate {
+            if isWordMode {
+                // 单词模式：给出例句
+                effectiveServiceConfig = TranslateServiceConfig(
+                    id: serviceConfig.id,
+                    name: serviceConfig.name,
+                    serviceType: serviceConfig.serviceType,
+                    systemPrompt:
+                        "You are a language learning assistant. When given an English word, provide 2-3 example sentences showing how native speakers use this word in daily life or popular TV shows/movies. Format: just the English sentences with Chinese translations, no explanations needed. Keep it concise.",
+                    userPromptTemplate:
+                        "Give me 2-3 natural example sentences for the word \"{text}\" as used by native English speakers in daily conversation or TV shows/movies. Include Chinese translation for each sentence.",
+                    modelConfigId: serviceConfig.modelConfigId,
+                    isEnabled: serviceConfig.isEnabled
+                )
+            } else {
+                // 句子模式：直接翻译，使用更明确的 prompt
+                effectiveServiceConfig = TranslateServiceConfig(
+                    id: serviceConfig.id,
+                    name: serviceConfig.name,
+                    serviceType: serviceConfig.serviceType,
+                    systemPrompt:
+                        "You are a professional translator. Your ONLY task is to translate text between languages. Output ONLY the translated text in the target language, nothing else. No explanations, no original text, just the translation.",
+                    userPromptTemplate:
+                        "Translate the following text to {toLang}. Output ONLY the translation:\n\n{text}",
+                    modelConfigId: serviceConfig.modelConfigId,
+                    isEnabled: serviceConfig.isEnabled
+                )
+            }
         }
 
         AITranslateService.shared.translate(

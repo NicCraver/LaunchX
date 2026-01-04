@@ -117,8 +117,9 @@ struct TranslateServiceConfig: Identifiable, Codable, Hashable {
         name: "AI 翻译",
         serviceType: .aiTranslate,
         systemPrompt:
-            "You are a professional translator. Translate the text accurately while maintaining the original meaning and tone. Only output the translation, no explanations.",
-        userPromptTemplate: "Translate the following text from {fromLang} to {toLang}:\n\n{text}"
+            "You are a professional translator. Your ONLY task is to translate text between languages. Output ONLY the translated text in the target language, nothing else. No explanations, no original text, just the translation.",
+        userPromptTemplate:
+            "Translate the following text to {toLang}. Output ONLY the translation:\n\n{text}"
     )
 
     // 默认单词翻译配置

@@ -380,31 +380,27 @@ final class AITranslateService: ObservableObject {
         // 清空剪贴板
         pasteboard.clearContents()
 
+        // 等待一小段时间确保剪贴板清空
+        usleep(50000)  // 50ms
+
         // 模拟 Cmd+C 复制选中文本
-        let source = CGEventSource(stateID: .hidSystemState)
+        // 使用 combinedSessionState 以支持全屏应用
+        let source = CGEventSource(stateID: .combinedSessionState)
 
-        // 按下 Cmd
-        let cmdDown = CGEvent(keyboardEventSource: source, virtualKey: 0x37, keyDown: true)  // Cmd key
-        cmdDown?.post(tap: .cghidEventTap)
-
-        // 按下 C
+        // 按下 C + Cmd
         let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0x08, keyDown: true)  // C key
         keyDown?.flags = .maskCommand
-        keyDown?.post(tap: .cghidEventTap)
+        keyDown?.post(tap: .cgSessionEventTap)
 
-        // 松开 C
+        // 松开 C + Cmd
         let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0x08, keyDown: false)
         keyUp?.flags = .maskCommand
-        keyUp?.post(tap: .cghidEventTap)
-
-        // 松开 Cmd
-        let cmdUp = CGEvent(keyboardEventSource: source, virtualKey: 0x37, keyDown: false)
-        cmdUp?.post(tap: .cghidEventTap)
+        keyUp?.post(tap: .cgSessionEventTap)
 
         // 等待复制完成 - 使用循环检测剪贴板变化
         var selectedText: String? = nil
-        let maxWaitTime: UInt32 = 500000  // 500ms
-        let checkInterval: UInt32 = 10000  // 10ms
+        let maxWaitTime: UInt32 = 300000  // 300ms
+        let checkInterval: UInt32 = 20000  // 20ms
         var waited: UInt32 = 0
 
         while waited < maxWaitTime {
@@ -414,12 +410,14 @@ final class AITranslateService: ObservableObject {
             // 检查剪贴板是否有变化
             if pasteboard.changeCount != previousChangeCount {
                 selectedText = pasteboard.string(forType: .string)
-                break
+                if selectedText != nil && !selectedText!.isEmpty {
+                    break
+                }
             }
         }
 
         // 如果没检测到变化，再尝试读取一次
-        if selectedText == nil {
+        if selectedText == nil || selectedText?.isEmpty == true {
             selectedText = pasteboard.string(forType: .string)
         }
 
@@ -429,7 +427,9 @@ final class AITranslateService: ObservableObject {
             pasteboard.setString(previous, forType: .string)
         }
 
-        print("[AITranslateService] getSelectedText: \(selectedText ?? "nil")")
+        print(
+            "[AITranslateService] getSelectedText: \(selectedText ?? "nil"), waited: \(waited/1000)ms"
+        )
 
         return selectedText
     }
