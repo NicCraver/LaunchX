@@ -31,14 +31,13 @@ class ClipboardPanel: NSPanel {
             defer: true
         )
 
-        // 窗口层级
-        self.level = .floating
+        // 窗口层级 - 使用 screenSaver 级别以显示在全屏应用上方
+        self.level = .screenSaver
 
         // 收集行为配置
         self.collectionBehavior = [
             .canJoinAllSpaces,
             .fullScreenAuxiliary,
-            .stationary,
             .ignoresCycle,
         ]
 

@@ -38,34 +38,42 @@ class ClipboardPanelManager: NSObject, NSWindowDelegate {
         let settings = ClipboardSettings.load()
         let panelSize = NSSize(width: settings.panelWidth, height: settings.panelHeight)
 
+        // 获取鼠标所在的屏幕（全屏应用时更准确）
+        let currentScreen =
+            NSScreen.screens.first { NSMouseInRect(mouseLocation, $0.frame, false) }
+            ?? NSScreen.main
+        let screenFrame = currentScreen?.visibleFrame ?? .zero
+
         var origin = NSPoint(
             x: mouseLocation.x - panelSize.width / 2,
             y: mouseLocation.y - panelSize.height - 20  // 在光标下方
         )
 
         // 确保不超出屏幕边界
-        if let screen = NSScreen.main {
-            let screenFrame = screen.visibleFrame
-
-            // 左边界
-            if origin.x < screenFrame.minX {
-                origin.x = screenFrame.minX + 10
-            }
-            // 右边界
-            if origin.x + panelSize.width > screenFrame.maxX {
-                origin.x = screenFrame.maxX - panelSize.width - 10
-            }
-            // 下边界（如果下方空间不足，显示在光标上方）
-            if origin.y < screenFrame.minY {
-                origin.y = mouseLocation.y + 20
-            }
-            // 上边界
-            if origin.y + panelSize.height > screenFrame.maxY {
-                origin.y = screenFrame.maxY - panelSize.height - 10
-            }
+        // 左边界
+        if origin.x < screenFrame.minX {
+            origin.x = screenFrame.minX + 10
+        }
+        // 右边界
+        if origin.x + panelSize.width > screenFrame.maxX {
+            origin.x = screenFrame.maxX - panelSize.width - 10
+        }
+        // 下边界（如果下方空间不足，显示在光标上方）
+        if origin.y < screenFrame.minY {
+            origin.y = mouseLocation.y + 20
+        }
+        // 上边界
+        if origin.y + panelSize.height > screenFrame.maxY {
+            origin.y = screenFrame.maxY - panelSize.height - 10
         }
 
         panel.setFrame(NSRect(origin: origin, size: panelSize), display: true)
+
+        // 确保面板移动到当前空间（不能同时使用 canJoinAllSpaces 和 moveToActiveSpace）
+        panel.collectionBehavior = [
+            .moveToActiveSpace, .fullScreenAuxiliary, .ignoresCycle,
+        ]
+
         panel.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
 

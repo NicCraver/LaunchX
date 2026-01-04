@@ -35,16 +35,23 @@ class AITranslatePanelManager: NSObject, NSWindowDelegate {
         // 刷新设置
         viewController?.reloadSettings()
 
-        // 计算位置（屏幕中央偏上）
-        if let screen = NSScreen.main {
-            let screenFrame = screen.visibleFrame
-            let panelSize = panel.frame.size
+        // 获取鼠标所在的屏幕（全屏应用时更准确）
+        let mouseLocation = NSEvent.mouseLocation
+        let currentScreen =
+            NSScreen.screens.first { NSMouseInRect(mouseLocation, $0.frame, false) }
+            ?? NSScreen.main
+        let screenFrame = currentScreen?.visibleFrame ?? .zero
+        let panelSize = panel.frame.size
 
-            let x = screenFrame.midX - panelSize.width / 2
-            let y = screenFrame.midY + 50  // 稍微偏上
+        let x = screenFrame.midX - panelSize.width / 2
+        let y = screenFrame.midY + 50  // 稍微偏上
 
-            panel.setFrameOrigin(NSPoint(x: x, y: y))
-        }
+        panel.setFrameOrigin(NSPoint(x: x, y: y))
+
+        // 确保面板移动到当前空间（不能同时使用 canJoinAllSpaces 和 moveToActiveSpace）
+        panel.collectionBehavior = [
+            .moveToActiveSpace, .fullScreenAuxiliary, .ignoresCycle,
+        ]
 
         panel.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
@@ -86,13 +93,17 @@ class AITranslatePanelManager: NSObject, NSWindowDelegate {
             setupPanel()
         }
 
-        guard let panel = panel, let screen = NSScreen.main else { return }
+        guard let panel = panel else { return }
 
         // 刷新设置
         viewController?.reloadSettings()
 
+        // 获取鼠标所在的屏幕（全屏应用时更准确）
         let mouseLocation = NSEvent.mouseLocation
-        let screenFrame = screen.visibleFrame
+        let currentScreen =
+            NSScreen.screens.first { NSMouseInRect(mouseLocation, $0.frame, false) }
+            ?? NSScreen.main
+        let screenFrame = currentScreen?.visibleFrame ?? .zero
         let panelSize = panel.frame.size
 
         // 默认在光标下方
@@ -109,6 +120,12 @@ class AITranslatePanelManager: NSObject, NSWindowDelegate {
         y = max(screenFrame.minY + 10, min(y, screenFrame.maxY - panelSize.height - 10))
 
         panel.setFrameOrigin(NSPoint(x: x, y: y))
+
+        // 确保面板移动到当前空间（不能同时使用 canJoinAllSpaces 和 moveToActiveSpace）
+        panel.collectionBehavior = [
+            .moveToActiveSpace, .fullScreenAuxiliary, .ignoresCycle,
+        ]
+
         panel.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         isPanelVisible = true

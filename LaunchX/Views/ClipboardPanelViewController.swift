@@ -702,10 +702,24 @@ extension ClipboardPanelViewController: NSTableViewDataSource, NSTableViewDelega
         guard row < filteredItems.count else { return rowHeight }
 
         let item = filteredItems[row]
+
         // 图片类型使用更大的高度
         if item.contentType == .image {
             return 80
         }
+
+        // 文本类型根据内容行数计算高度
+        if item.contentType == .text || item.contentType == .link {
+            if let text = item.textContent {
+                let lineCount = min(text.components(separatedBy: .newlines).count, 4)
+                if lineCount > 1 {
+                    // 每行约 17pt (13pt 字体 + 行间距)，上下各 8pt padding
+                    let height = CGFloat(lineCount) * 17 + 16
+                    return max(rowHeight, height)
+                }
+            }
+        }
+
         return rowHeight
     }
 
@@ -755,7 +769,9 @@ class ClipboardCellView: NSTableCellView {
         contentLabel.backgroundColor = .clear
         contentLabel.font = .systemFont(ofSize: 13)
         contentLabel.lineBreakMode = .byTruncatingTail
-        contentLabel.maximumNumberOfLines = 2
+        contentLabel.maximumNumberOfLines = 4
+        contentLabel.cell?.wraps = true
+        contentLabel.cell?.truncatesLastVisibleLine = true
         contentLabel.translatesAutoresizingMaskIntoConstraints = false
         addSubview(contentLabel)
 
@@ -793,12 +809,13 @@ class ClipboardCellView: NSTableCellView {
             appIconView.widthAnchor.constraint(equalToConstant: 28),
             appIconView.heightAnchor.constraint(equalToConstant: 28),
 
-            // 内容文字（居中）
+            // 内容文字（垂直方向用 top/bottom 约束，允许多行扩展）
             contentLabel.leadingAnchor.constraint(
                 equalTo: appIconView.trailingAnchor, constant: 10),
             contentLabel.trailingAnchor.constraint(
                 equalTo: pinIndicator.leadingAnchor, constant: -8),
-            contentLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
+            contentLabel.topAnchor.constraint(equalTo: topAnchor, constant: 8),
+            contentLabel.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor, constant: -8),
 
             // 颜色圆形（替代App图标位置）
             colorCircleView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),

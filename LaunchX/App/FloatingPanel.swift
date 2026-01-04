@@ -9,16 +9,15 @@ class FloatingPanel: NSPanel {
             backing: .buffered,
             defer: true)  // defer=true can reduce initial overhead
 
-        // Level: floating is lighter than mainMenu
-        self.level = .floating
+        // Level: use screenSaver level to appear above fullscreen apps
+        self.level = .screenSaver
 
         // Collection Behavior:
-        // - stationary: window doesn't move during space switches (reduces CPU)
         // - canJoinAllSpaces: appears on all spaces
         // - fullScreenAuxiliary: can appear over fullscreen apps
         // - ignoresCycle: not included in Cmd+` window cycling
         self.collectionBehavior = [
-            .canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle,
+            .canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle,
         ]
 
         // Visuals

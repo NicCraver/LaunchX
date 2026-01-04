@@ -78,12 +78,24 @@ class PanelManager: NSObject, NSWindowDelegate {
         // Notify before showing
         onWillShow?()
 
+        // 获取鼠标所在的屏幕（全屏应用时更准确）
+        let mouseLocation = NSEvent.mouseLocation
+        let currentScreen =
+            NSScreen.screens.first { NSMouseInRect(mouseLocation, $0.frame, false) }
+            ?? NSScreen.main
+        let screenFrame = currentScreen?.frame ?? .zero
+
         // 保持窗口顶部位置一致（基于展开后高度计算）
-        let topY = calculatePanelTopY()
+        let topY = screenFrame.midY + panelExpandedHeight / 2 + 100
         let currentHeight = panel.frame.height
         let originY = topY - currentHeight
-        let originX = (NSScreen.main?.frame.midX ?? 0) - panelWidth / 2
+        let originX = screenFrame.midX - panelWidth / 2
         panel.setFrameOrigin(NSPoint(x: originX, y: originY))
+
+        // 确保面板移动到当前空间（不能同时使用 canJoinAllSpaces 和 moveToActiveSpace）
+        panel.collectionBehavior = [
+            .moveToActiveSpace, .fullScreenAuxiliary, .ignoresCycle,
+        ]
 
         NSApp.activate(ignoringOtherApps: true)
         panel.makeKeyAndOrderFront(nil)
