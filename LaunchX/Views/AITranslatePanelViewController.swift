@@ -32,6 +32,9 @@ class AITranslatePanelViewController: NSViewController {
     // 是否有翻译结果
     private var hasTranslationResult: Bool = false
 
+    /// 内容高度变化回调
+    var onContentHeightChanged: ((CGFloat) -> Void)?
+
     // 语言菜单
     private var fromLangMenu: NSMenu!
     private var toLangMenu: NSMenu!
@@ -461,22 +464,29 @@ class AITranslatePanelViewController: NSViewController {
         }
 
         let isSingleWord = AITranslateService.shared.isSingleWord(text)
-        showServicesWithLoading()
+        let detectedLang = AITranslateService.shared.detectLanguage(text)
+        let isEnglishToChineseWord = isSingleWord && detectedLang == .english
+
+        // 根据是否为单词决定显示哪些服务
+        showServicesWithLoading(showWordTranslate: isEnglishToChineseWord)
 
         // 执行 AI 翻译
         if let aiConfig = settings.serviceConfigs.first(where: {
             $0.serviceType == .aiTranslate && $0.isEnabled
         }) {
-            translateWithService(text: text, serviceConfig: aiConfig, modelConfig: modelConfig)
+            translateWithService(
+                text: text, serviceConfig: aiConfig, modelConfig: modelConfig,
+                isWordMode: isEnglishToChineseWord)
         }
 
-        // 如果是单词，额外执行单词翻译
-        if isSingleWord {
+        // 只有英文单词才执行单词翻译
+        if isEnglishToChineseWord {
             if let wordConfig = settings.serviceConfigs.first(where: {
                 $0.serviceType == .wordTranslate && $0.isEnabled
             }) {
                 translateWithService(
-                    text: text, serviceConfig: wordConfig, modelConfig: modelConfig)
+                    text: text, serviceConfig: wordConfig, modelConfig: modelConfig,
+                    isWordMode: false)
             }
         }
     }
@@ -484,13 +494,30 @@ class AITranslatePanelViewController: NSViewController {
     private func translateWithService(
         text: String,
         serviceConfig: TranslateServiceConfig,
-        modelConfig: AIModelConfig
+        modelConfig: AIModelConfig,
+        isWordMode: Bool = false
     ) {
+        // 如果是单词模式的 AI 翻译，使用特殊的 prompt
+        var effectiveServiceConfig = serviceConfig
+        if isWordMode && serviceConfig.serviceType == .aiTranslate {
+            effectiveServiceConfig = TranslateServiceConfig(
+                id: serviceConfig.id,
+                name: serviceConfig.name,
+                serviceType: serviceConfig.serviceType,
+                systemPrompt:
+                    "You are a language learning assistant. When given an English word, provide 2-3 example sentences showing how native speakers use this word in daily life or popular TV shows/movies. Format: just the English sentences with Chinese translations, no explanations needed. Keep it concise.",
+                userPromptTemplate:
+                    "Give me 2-3 natural example sentences for the word \"{text}\" as used by native English speakers in daily conversation or TV shows/movies. Include Chinese translation for each sentence.",
+                modelConfigId: serviceConfig.modelConfigId,
+                isEnabled: serviceConfig.isEnabled
+            )
+        }
+
         AITranslateService.shared.translate(
             text: text,
             fromLang: fromLang,
             toLang: toLang,
-            serviceConfig: serviceConfig,
+            serviceConfig: effectiveServiceConfig,
             modelConfig: modelConfig
         ) { [weak self] result in
             guard let self = self else { return }
@@ -546,13 +573,20 @@ class AITranslatePanelViewController: NSViewController {
         }
     }
 
-    private func showServicesWithLoading() {
+    private func showServicesWithLoading(showWordTranslate: Bool) {
         for view in resultStackView.arrangedSubviews {
             resultStackView.removeArrangedSubview(view)
             view.removeFromSuperview()
         }
 
-        let enabledServices = settings.serviceConfigs.filter { $0.isEnabled }
+        // 根据参数过滤要显示的服务
+        let enabledServices = settings.serviceConfigs.filter { config in
+            guard config.isEnabled else { return false }
+            if config.serviceType == .wordTranslate && !showWordTranslate {
+                return false
+            }
+            return true
+        }
 
         for (index, service) in enabledServices.enumerated() {
             let serviceView = createServiceRowView(service: service, isLoading: true, content: nil)
@@ -576,16 +610,36 @@ class AITranslatePanelViewController: NSViewController {
         resultHeightConstraint.isActive = false
         view.layoutSubtreeIfNeeded()
 
-        // 展开窗口到完整高度
-        if let window = view.window {
-            var frame = window.frame
-            let expandedHeight: CGFloat = 400  // 展开后的标准高度
-            if frame.height < expandedHeight {
-                frame.origin.y -= (expandedHeight - frame.height)
-                frame.size.height = expandedHeight
-                window.setFrame(frame, display: true, animate: true)
-            }
+        // 延迟计算内容高度，等布局完成
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            self?.updateContentHeight()
         }
+    }
+
+    /// 计算并更新内容高度
+    private func updateContentHeight() {
+        view.layoutSubtreeIfNeeded()
+
+        // 计算各部分高度
+        let titleBarHeight: CGFloat = 44
+        let inputHeight: CGFloat = inputHeightConstraint.constant
+        let languageBarHeight: CGFloat = 40
+        let padding: CGFloat = 30  // 上下间距
+
+        // 计算结果区域的实际内容高度
+        var resultContentHeight: CGFloat = 0
+        for subview in resultStackView.arrangedSubviews {
+            resultContentHeight += subview.fittingSize.height
+        }
+
+        // 给结果区域一些额外空间
+        resultContentHeight += 16
+
+        let totalHeight =
+            titleBarHeight + inputHeight + languageBarHeight + resultContentHeight + padding
+
+        // 回调通知面板调整高度
+        onContentHeightChanged?(totalHeight)
     }
 
     private func updateServiceResult(
@@ -604,6 +658,11 @@ class AITranslatePanelViewController: NSViewController {
                 resultStackView.insertArrangedSubview(newView, at: index)
                 break
             }
+        }
+
+        // 内容更新后重新计算高度
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+            self?.updateContentHeight()
         }
     }
 

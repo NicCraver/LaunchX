@@ -375,31 +375,61 @@ final class AITranslateService: ObservableObject {
         // 保存当前剪贴板内容
         let pasteboard = NSPasteboard.general
         let previousContents = pasteboard.string(forType: .string)
+        let previousChangeCount = pasteboard.changeCount
 
         // 清空剪贴板
         pasteboard.clearContents()
 
         // 模拟 Cmd+C 复制选中文本
         let source = CGEventSource(stateID: .hidSystemState)
+
+        // 按下 Cmd
+        let cmdDown = CGEvent(keyboardEventSource: source, virtualKey: 0x37, keyDown: true)  // Cmd key
+        cmdDown?.post(tap: .cghidEventTap)
+
+        // 按下 C
         let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0x08, keyDown: true)  // C key
         keyDown?.flags = .maskCommand
         keyDown?.post(tap: .cghidEventTap)
 
+        // 松开 C
         let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0x08, keyDown: false)
         keyUp?.flags = .maskCommand
         keyUp?.post(tap: .cghidEventTap)
 
-        // 等待复制完成
-        usleep(100000)  // 100ms
+        // 松开 Cmd
+        let cmdUp = CGEvent(keyboardEventSource: source, virtualKey: 0x37, keyDown: false)
+        cmdUp?.post(tap: .cghidEventTap)
 
-        // 获取选中的文本
-        let selectedText = pasteboard.string(forType: .string)
+        // 等待复制完成 - 使用循环检测剪贴板变化
+        var selectedText: String? = nil
+        let maxWaitTime: UInt32 = 500000  // 500ms
+        let checkInterval: UInt32 = 10000  // 10ms
+        var waited: UInt32 = 0
+
+        while waited < maxWaitTime {
+            usleep(checkInterval)
+            waited += checkInterval
+
+            // 检查剪贴板是否有变化
+            if pasteboard.changeCount != previousChangeCount {
+                selectedText = pasteboard.string(forType: .string)
+                break
+            }
+        }
+
+        // 如果没检测到变化，再尝试读取一次
+        if selectedText == nil {
+            selectedText = pasteboard.string(forType: .string)
+        }
 
         // 恢复之前的剪贴板内容
         pasteboard.clearContents()
         if let previous = previousContents {
             pasteboard.setString(previous, forType: .string)
         }
+
+        print("[AITranslateService] getSelectedText: \(selectedText ?? "nil")")
 
         return selectedText
     }

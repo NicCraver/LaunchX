@@ -68,16 +68,23 @@ class AITranslatePanelManager: NSObject, NSWindowDelegate {
 
     /// 显示面板（选词翻译模式）
     func showPanelWithSelection() {
-        // 获取选中的文本
-        guard let selectedText = AITranslateService.shared.getSelectedText(),
-            !selectedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        else {
-            // 没有选中文本，显示空面板
-            showPanel()
-            return
-        }
+        // 异步获取选中文本，避免阻塞
+        DispatchQueue.global(qos: .userInitiated).async {
+            let selectedText = AITranslateService.shared.getSelectedText()
 
-        showPanelNearCursor(withText: selectedText)
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+
+                if let text = selectedText,
+                    !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                {
+                    self.showPanelNearCursor(withText: text)
+                } else {
+                    // 没有选中文本，显示空面板
+                    self.showPanel()
+                }
+            }
+        }
     }
 
     /// 在光标附近显示面板
@@ -206,13 +213,32 @@ class AITranslatePanelManager: NSObject, NSWindowDelegate {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.backgroundColor = NSColor(named: "PanelBackground") ?? NSColor.windowBackgroundColor
 
-        // 设置最小和最大尺寸
+        // 设置最小和最大尺寸 - 只限制宽度，高度自适应
         panel.minSize = NSSize(width: 400, height: 180)
-        panel.maxSize = NSSize(width: 900, height: 700)
+        panel.maxSize = NSSize(width: 900, height: 800)
 
         // 创建视图控制器
         viewController = AITranslatePanelViewController()
+        viewController?.onContentHeightChanged = { [weak self] newHeight in
+            self?.adjustPanelHeight(to: newHeight)
+        }
         panel.contentViewController = viewController
+    }
+
+    /// 调整面板高度
+    private func adjustPanelHeight(to contentHeight: CGFloat) {
+        guard let panel = panel else { return }
+
+        let minHeight: CGFloat = 180
+        let maxHeight: CGFloat = 800
+        let targetHeight = max(minHeight, min(contentHeight, maxHeight))
+
+        var frame = panel.frame
+        let heightDiff = targetHeight - frame.height
+        frame.origin.y -= heightDiff  // 向下扩展
+        frame.size.height = targetHeight
+
+        panel.setFrame(frame, display: true, animate: true)
     }
 
     // MARK: - NSWindowDelegate
