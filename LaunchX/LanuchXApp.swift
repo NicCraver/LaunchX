@@ -19,9 +19,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var onboardingWindow: NSWindow?
     var isQuitting = false
     private var permissionObserver: AnyCancellable?
+    private var hotKeyObservers: Set<AnyCancellable> = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupStatusItem()
+        observeHotKeyChanges()
 
         // 先不设置 activation policy，等权限检查后决定
         // 如果需要显示引导页，保持 regular 模式
@@ -35,6 +37,59 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // 2. Check permissions first before setting up hotkey
         checkPermissionsAndSetup()
+    }
+
+    /// 监听快捷键变化，更新菜单显示
+    private func observeHotKeyChanges() {
+        let hotKeyService = HotKeyService.shared
+
+        // 监听 keyCode 变化
+        hotKeyService.$currentKeyCode
+            .dropFirst()
+            .sink { [weak self] _ in
+                self?.updateStatusItemMenu()
+            }
+            .store(in: &hotKeyObservers)
+
+        // 监听 modifiers 变化
+        hotKeyService.$currentModifiers
+            .dropFirst()
+            .sink { [weak self] _ in
+                self?.updateStatusItemMenu()
+            }
+            .store(in: &hotKeyObservers)
+
+        // 监听双击模式变化
+        hotKeyService.$useDoubleTapModifier
+            .dropFirst()
+            .sink { [weak self] _ in
+                self?.updateStatusItemMenu()
+            }
+            .store(in: &hotKeyObservers)
+    }
+
+    /// 更新状态栏菜单的快捷键显示
+    private func updateStatusItemMenu() {
+        guard let menu = statusItem.menu,
+            let openItem = menu.items.first(where: { $0.action == #selector(togglePanel) })
+        else {
+            return
+        }
+
+        let hotKeyService = HotKeyService.shared
+        let keyCode = hotKeyService.currentKeyCode
+        let modifiers = hotKeyService.currentModifiers
+        let useDoubleTap = hotKeyService.useDoubleTapModifier
+
+        if !useDoubleTap {
+            let keyChar = DoubleTapModifier.keyCharacter(for: keyCode)
+            openItem.keyEquivalent = keyChar
+            openItem.keyEquivalentModifierMask = DoubleTapModifier.cocoaModifiers(from: modifiers)
+        } else {
+            // 双击模式不显示快捷键
+            openItem.keyEquivalent = ""
+            openItem.keyEquivalentModifierMask = []
+        }
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {
@@ -280,14 +335,30 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             print("LaunchX: button.image set: \(button.image != nil)")
         }
 
-        // 直接设置菜单
+        // 创建并设置菜单
         let menu = NSMenu()
         menu.autoenablesItems = false
 
+        // 获取当前快捷键设置
+        let hotKeyService = HotKeyService.shared
+        let keyCode = hotKeyService.currentKeyCode
+        let modifiers = hotKeyService.currentModifiers
+        let useDoubleTap = hotKeyService.useDoubleTapModifier
+
         let openItem = NSMenuItem(
-            title: "打开 LaunchX", action: #selector(togglePanel), keyEquivalent: "o")
+            title: "打开 LaunchX", action: #selector(togglePanel), keyEquivalent: "")
         openItem.target = self
         openItem.isEnabled = true
+
+        // 设置快捷键显示
+        if !useDoubleTap {
+            // 传统快捷键模式：设置 keyEquivalent
+            let keyChar = DoubleTapModifier.keyCharacter(for: keyCode)
+            openItem.keyEquivalent = keyChar
+            openItem.keyEquivalentModifierMask = DoubleTapModifier.cocoaModifiers(from: modifiers)
+        }
+        // 双击模式不显示快捷键（因为无法在菜单中表示）
+
         menu.addItem(openItem)
 
         menu.addItem(NSMenuItem.separator())
@@ -296,6 +367,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             title: "设置...", action: #selector(openSettings), keyEquivalent: ",")
         settingsItem.target = self
         settingsItem.isEnabled = true
+        settingsItem.keyEquivalentModifierMask = .command
         menu.addItem(settingsItem)
 
         menu.addItem(NSMenuItem.separator())
@@ -303,9 +375,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let quitItem = NSMenuItem(title: "退出", action: #selector(explicitQuit), keyEquivalent: "q")
         quitItem.target = self
         quitItem.isEnabled = true
+        quitItem.keyEquivalentModifierMask = .command
         menu.addItem(quitItem)
 
         statusItem.menu = menu
+        statusItem.isVisible = true
         print("LaunchX: StatusItem menu set, items count: \(menu.items.count)")
 
         print(
@@ -319,9 +393,23 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc func openSettings() {
         PanelManager.shared.hidePanel(deactivateApp: false)
-        // Send action to open the Settings window defined in the App struct
-        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+
+        // 先激活应用
+        NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
+
+        // 打开设置窗口
+        if #available(macOS 14.0, *) {
+            if let settingsURL = URL(string: "x-apple.systempreferences:") {
+                // 尝试使用 Environment 方式
+            }
+        }
+
+        // 使用标准方式打开设置
+        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+
+        // 延迟切换回 accessory 模式（设置窗口关闭后）
+        // 注意：这里不立即切换，让用户可以看到设置窗口
     }
 
     @objc func explicitQuit() {
