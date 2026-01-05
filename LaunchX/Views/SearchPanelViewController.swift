@@ -135,15 +135,48 @@ class SearchPanelViewController: NSViewController {
         }
 
         // macOS 26 以下使用传统的 NSVisualEffectView
+        // 使用容器视图来分离阴影层和内容层，解决圆角裁剪与阴影显示的冲突
+        let containerView = NSView()
+        containerView.wantsLayer = true
+
+        // 阴影层 - 用于显示阴影
+        let shadowLayer = CALayer()
+        shadowLayer.backgroundColor = NSColor.black.withAlphaComponent(0.01).cgColor
+        shadowLayer.cornerRadius = 26
+        shadowLayer.shadowColor = NSColor.black.cgColor
+        shadowLayer.shadowOpacity = 0.4
+        shadowLayer.shadowOffset = CGSize(width: 0, height: -4)
+        shadowLayer.shadowRadius = 20
+        containerView.layer?.addSublayer(shadowLayer)
+
+        // 内容视图 - NSVisualEffectView
         let visualEffectView = NSVisualEffectView()
         visualEffectView.material = .sidebar
         visualEffectView.blendingMode = .behindWindow
         visualEffectView.state = .active
         visualEffectView.wantsLayer = true
         visualEffectView.layer?.cornerRadius = 26
-        visualEffectView.layer?.masksToBounds = true
+        visualEffectView.layer?.masksToBounds = true  // 正确裁剪圆角
 
-        self.view = visualEffectView
+        // 添加边框
+        visualEffectView.layer?.borderWidth = 1
+        visualEffectView.layer?.borderColor = NSColor.white.withAlphaComponent(0.15).cgColor
+
+        visualEffectView.translatesAutoresizingMaskIntoConstraints = false
+        containerView.addSubview(visualEffectView)
+
+        // 保存阴影层引用，用于布局更新
+        containerView.layer?.setValue(shadowLayer, forKey: "shadowLayer")
+
+        // 设置约束让 visualEffectView 填充 containerView
+        NSLayoutConstraint.activate([
+            visualEffectView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
+            visualEffectView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
+            visualEffectView.topAnchor.constraint(equalTo: containerView.topAnchor),
+            visualEffectView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor),
+        ])
+
+        self.view = containerView
     }
 
     override func viewDidLoad() {
@@ -168,6 +201,14 @@ class SearchPanelViewController: NSViewController {
         // Register for panel hide callback
         PanelManager.shared.onWillHide = { [weak self] in
             self?.resetState()
+        }
+    }
+
+    override func viewDidLayout() {
+        super.viewDidLayout()
+        // 更新阴影层的 frame 以匹配视图大小
+        if let shadowLayer = view.layer?.value(forKey: "shadowLayer") as? CALayer {
+            shadowLayer.frame = view.bounds
         }
     }
 
