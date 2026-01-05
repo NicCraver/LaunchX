@@ -75,6 +75,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     // 首次启动但权限已全部授予，直接进入应用
                     print("LaunchX: First launch but all permissions granted, showing panel")
                     NSApp.setActivationPolicy(.accessory)
+                    self.setupStatusItem()  // 切换后重新设置状态栏
                     self.setupHotKeyAndShowPanel()
                 } else {
                     print("LaunchX: First launch, opening onboarding")
@@ -92,6 +93,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 print("LaunchX: All permissions granted, showing panel")
                 // 所有权限已授予，切换到 accessory 模式并显示面板
                 NSApp.setActivationPolicy(.accessory)
+                self.setupStatusItem()  // 切换后重新设置状态栏
                 self.setupHotKeyAndShowPanel()
             }
 
@@ -225,6 +227,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.onboardingWindow = nil
                 // 关闭引导页后切换为 accessory app
                 NSApp.setActivationPolicy(.accessory)
+                // 切换后重新设置状态栏
+                self?.setupStatusItem()
                 // 设置热键并显示面板
                 self?.setupHotKeyAndShowPanel()
             }
@@ -256,26 +260,34 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func setupStatusItem() {
+        print("LaunchX: setupStatusItem called")
+
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        print("LaunchX: statusItem created: \(statusItem != nil)")
 
         if let button = statusItem.button {
-            button.image = NSImage(named: NSImage.Name("StatusBarIcon"))
-            // 确保按钮能响应点击事件
-            button.target = self
-            button.action = #selector(statusItemClicked(_:))
-            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+            // 尝试使用系统图标作为备选
+            if let image = NSImage(named: NSImage.Name("StatusBarIcon")) {
+                image.isTemplate = true
+                button.image = image
+                print("LaunchX: Using StatusBarIcon")
+            } else {
+                // 备选：使用系统图标
+                button.image = NSImage(
+                    systemSymbolName: "magnifyingglass", accessibilityDescription: "LaunchX")
+                print("LaunchX: Using system icon as fallback")
+            }
+            print("LaunchX: button.image set: \(button.image != nil)")
         }
 
-        print("LaunchX: StatusItem setup complete, button: \(statusItem.button != nil)")
-    }
-
-    @objc func statusItemClicked(_ sender: NSStatusBarButton) {
-        // 创建并显示菜单
+        // 直接设置菜单
         let menu = NSMenu()
+        menu.autoenablesItems = false
 
         let openItem = NSMenuItem(
             title: "打开 LaunchX", action: #selector(togglePanel), keyEquivalent: "o")
         openItem.target = self
+        openItem.isEnabled = true
         menu.addItem(openItem)
 
         menu.addItem(NSMenuItem.separator())
@@ -283,21 +295,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let settingsItem = NSMenuItem(
             title: "设置...", action: #selector(openSettings), keyEquivalent: ",")
         settingsItem.target = self
+        settingsItem.isEnabled = true
         menu.addItem(settingsItem)
 
         menu.addItem(NSMenuItem.separator())
 
         let quitItem = NSMenuItem(title: "退出", action: #selector(explicitQuit), keyEquivalent: "q")
         quitItem.target = self
+        quitItem.isEnabled = true
         menu.addItem(quitItem)
 
-        // 在按钮位置显示菜单
         statusItem.menu = menu
-        statusItem.button?.performClick(nil)
-        // 点击后清除菜单，以便下次点击仍能触发 action
-        DispatchQueue.main.async { [weak self] in
-            self?.statusItem.menu = nil
-        }
+        print("LaunchX: StatusItem menu set, items count: \(menu.items.count)")
+
+        print(
+            "LaunchX: StatusItem setup complete, button: \(statusItem.button != nil), menu: \(statusItem.menu != nil)"
+        )
     }
 
     @objc func togglePanel() {
