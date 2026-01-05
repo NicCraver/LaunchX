@@ -68,21 +68,17 @@ class AITranslatePanelManager: NSObject, NSWindowDelegate {
 
     /// 显示面板（选词翻译模式）
     func showPanelWithSelection() {
-        // 异步获取选中文本，避免阻塞
-        DispatchQueue.global(qos: .userInitiated).async {
-            let selectedText = AITranslateService.shared.getSelectedText()
+        // 使用异步版本获取选中文本，避免阻塞主线程
+        AITranslateService.shared.getSelectedText { [weak self] selectedText in
+            guard let self = self else { return }
 
-            DispatchQueue.main.async { [weak self] in
-                guard let self = self else { return }
-
-                if let text = selectedText,
-                    !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                {
-                    self.showPanelNearCursor(withText: text)
-                } else {
-                    // 没有选中文本，显示空面板
-                    self.showPanel()
-                }
+            if let text = selectedText,
+                !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            {
+                self.showPanelNearCursor(withText: text)
+            } else {
+                // 没有选中文本，显示空面板
+                self.showPanel()
             }
         }
     }

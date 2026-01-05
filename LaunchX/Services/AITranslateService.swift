@@ -370,8 +370,99 @@ final class AITranslateService: ObservableObject {
 
     // MARK: - 选词翻译
 
-    /// 获取当前选中的文本
-    func getSelectedText() -> String? {
+    /// 获取当前选中的文本（异步版本，避免阻塞主线程）
+    func getSelectedText(completion: @escaping (String?) -> Void) {
+        // 在后台线程执行，避免阻塞主线程
+        DispatchQueue.global(qos: .userInitiated).async {
+            // 保存当前剪贴板内容
+            let pasteboard = NSPasteboard.general
+
+            // 在主线程读取剪贴板状态
+            var previousContents: String? = nil
+            var previousChangeCount: Int = 0
+
+            DispatchQueue.main.sync {
+                previousContents = pasteboard.string(forType: .string)
+                previousChangeCount = pasteboard.changeCount
+                pasteboard.clearContents()
+            }
+
+            // 等待一小段时间确保剪贴板清空
+            Thread.sleep(forTimeInterval: 0.05)  // 50ms
+
+            // 模拟 Cmd+C 复制选中文本
+            DispatchQueue.main.sync {
+                let source = CGEventSource(stateID: .combinedSessionState)
+
+                // 按下 C + Cmd
+                let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0x08, keyDown: true)
+                keyDown?.flags = .maskCommand
+                keyDown?.post(tap: .cgSessionEventTap)
+
+                // 松开 C + Cmd
+                let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0x08, keyDown: false)
+                keyUp?.flags = .maskCommand
+                keyUp?.post(tap: .cgSessionEventTap)
+            }
+
+            // 等待复制完成 - 使用循环检测剪贴板变化
+            var selectedText: String? = nil
+            let maxWaitTime: Double = 0.3  // 300ms
+            let checkInterval: Double = 0.02  // 20ms
+            var waited: Double = 0
+
+            while waited < maxWaitTime {
+                Thread.sleep(forTimeInterval: checkInterval)
+                waited += checkInterval
+
+                // 检查剪贴板是否有变化
+                var currentChangeCount: Int = 0
+                var currentText: String? = nil
+
+                DispatchQueue.main.sync {
+                    currentChangeCount = pasteboard.changeCount
+                    if currentChangeCount != previousChangeCount {
+                        currentText = pasteboard.string(forType: .string)
+                    }
+                }
+
+                if currentChangeCount != previousChangeCount {
+                    selectedText = currentText
+                    if selectedText != nil && !selectedText!.isEmpty {
+                        break
+                    }
+                }
+            }
+
+            // 如果没检测到变化，再尝试读取一次
+            if selectedText == nil || selectedText?.isEmpty == true {
+                DispatchQueue.main.sync {
+                    selectedText = pasteboard.string(forType: .string)
+                }
+            }
+
+            // 恢复之前的剪贴板内容
+            DispatchQueue.main.sync {
+                pasteboard.clearContents()
+                if let previous = previousContents {
+                    pasteboard.setString(previous, forType: .string)
+                }
+            }
+
+            print(
+                "[AITranslateService] getSelectedText: \(selectedText ?? "nil"), waited: \(Int(waited * 1000))ms"
+            )
+
+            // 在主线程回调
+            DispatchQueue.main.async {
+                completion(selectedText)
+            }
+        }
+    }
+
+    /// 获取当前选中的文本（同步版本，仅用于兼容旧代码）
+    /// 注意：此方法会阻塞当前线程，应避免在主线程调用
+    func getSelectedTextSync() -> String? {
         // 保存当前剪贴板内容
         let pasteboard = NSPasteboard.general
         let previousContents = pasteboard.string(forType: .string)
@@ -381,14 +472,13 @@ final class AITranslateService: ObservableObject {
         pasteboard.clearContents()
 
         // 等待一小段时间确保剪贴板清空
-        usleep(50000)  // 50ms
+        Thread.sleep(forTimeInterval: 0.05)  // 50ms
 
         // 模拟 Cmd+C 复制选中文本
-        // 使用 combinedSessionState 以支持全屏应用
         let source = CGEventSource(stateID: .combinedSessionState)
 
         // 按下 C + Cmd
-        let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0x08, keyDown: true)  // C key
+        let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0x08, keyDown: true)
         keyDown?.flags = .maskCommand
         keyDown?.post(tap: .cgSessionEventTap)
 
@@ -399,12 +489,12 @@ final class AITranslateService: ObservableObject {
 
         // 等待复制完成 - 使用循环检测剪贴板变化
         var selectedText: String? = nil
-        let maxWaitTime: UInt32 = 300000  // 300ms
-        let checkInterval: UInt32 = 20000  // 20ms
-        var waited: UInt32 = 0
+        let maxWaitTime: Double = 0.3  // 300ms
+        let checkInterval: Double = 0.02  // 20ms
+        var waited: Double = 0
 
         while waited < maxWaitTime {
-            usleep(checkInterval)
+            Thread.sleep(forTimeInterval: checkInterval)
             waited += checkInterval
 
             // 检查剪贴板是否有变化
@@ -428,7 +518,7 @@ final class AITranslateService: ObservableObject {
         }
 
         print(
-            "[AITranslateService] getSelectedText: \(selectedText ?? "nil"), waited: \(waited/1000)ms"
+            "[AITranslateService] getSelectedTextSync: \(selectedText ?? "nil"), waited: \(Int(waited * 1000))ms"
         )
 
         return selectedText
