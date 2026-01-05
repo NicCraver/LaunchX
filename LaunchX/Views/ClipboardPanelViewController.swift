@@ -709,10 +709,18 @@ extension ClipboardPanelViewController: NSTableViewDataSource, NSTableViewDelega
             return maxMultilineHeight
         }
 
-        // 文本类型根据内容行数计算高度
+        // 文本类型根据内容计算高度
         if item.contentType == .text || item.contentType == .link {
             if let text = item.textContent {
-                let lineCount = min(text.components(separatedBy: .newlines).count, 5)
+                // 计算实际显示行数（考虑换行符和长文本自动换行）
+                let newlineCount = text.components(separatedBy: .newlines).count
+
+                // 估算每行可显示的字符数（假设平均每字符约8pt宽度，可用宽度约350pt）
+                let charsPerLine = 44
+                let estimatedLines = max(
+                    newlineCount, (text.count + charsPerLine - 1) / charsPerLine)
+                let lineCount = min(estimatedLines, 5)
+
                 if lineCount > 1 {
                     // 每行约 17pt (13pt 字体 + 行间距)，上下各 8pt padding
                     let height = CGFloat(lineCount) * 17 + 16
@@ -812,8 +820,9 @@ class ClipboardCellView: NSTableCellView {
         // 创建可切换的约束
         contentLabelCenterYConstraint = contentLabel.centerYAnchor.constraint(
             equalTo: appIconView.centerYAnchor)
+        // 文字距离顶部14pt，视觉上与图标垂直居中（图标顶部8pt + 图标高28pt/2 - 字体高度/2 ≈ 14pt）
         contentLabelTopConstraint = contentLabel.topAnchor.constraint(
-            equalTo: topAnchor, constant: 8)
+            equalTo: topAnchor, constant: 14)
 
         // 图片预览宽度约束（默认等于高度，即正方形）
         previewImageWidthConstraint = previewImageView.widthAnchor.constraint(equalToConstant: 85)
@@ -917,17 +926,9 @@ class ClipboardCellView: NSTableCellView {
             let text = item.textContent ?? ""
             contentLabel.stringValue = text
 
-            // 判断是否为多行文本
-            let lineCount = text.components(separatedBy: .newlines).count
-            if lineCount > 1 {
-                // 多行文字：顶部对齐
-                contentLabelCenterYConstraint?.isActive = false
-                contentLabelTopConstraint?.isActive = true
-            } else {
-                // 单行文字：与图标垂直居中
-                contentLabelCenterYConstraint?.isActive = true
-                contentLabelTopConstraint?.isActive = false
-            }
+            // 文字始终顶部对齐（固定距离顶部，视觉上与图标居中）
+            contentLabelCenterYConstraint?.isActive = false
+            contentLabelTopConstraint?.isActive = true
 
         case .file:
             if let paths = item.filePaths, let firstPath = paths.first {
