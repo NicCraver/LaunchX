@@ -4,6 +4,7 @@ import Cocoa
 class SearchPanelViewController: NSViewController {
 
     // MARK: - UI Components
+    private var contentView: NSView!  // 用于添加子视图的内容视图
     private let searchField = NSTextField()
     private let searchIcon = NSImageView()
     private let tableView = NSTableView()
@@ -131,6 +132,7 @@ class SearchPanelViewController: NSViewController {
             glassEffectView.layer?.cornerRadius = 26
             glassEffectView.layer?.masksToBounds = true
             self.view = glassEffectView
+            self.contentView = glassEffectView  // macOS 26+ 直接使用 glassEffectView
             return
         }
 
@@ -177,6 +179,7 @@ class SearchPanelViewController: NSViewController {
         ])
 
         self.view = containerView
+        self.contentView = visualEffectView  // 子视图应添加到 visualEffectView
     }
 
     override func viewDidLoad() {
@@ -794,7 +797,7 @@ class SearchPanelViewController: NSViewController {
         ideTagView.layer?.cornerRadius = 6
         ideTagView.translatesAutoresizingMaskIntoConstraints = false
         ideTagView.isHidden = true
-        view.addSubview(ideTagView)
+        contentView.addSubview(ideTagView)
 
         ideIconView.translatesAutoresizingMaskIntoConstraints = false
         ideTagView.addSubview(ideIconView)
@@ -810,7 +813,7 @@ class SearchPanelViewController: NSViewController {
         searchIcon.contentTintColor = .secondaryLabelColor
         searchIcon.translatesAutoresizingMaskIntoConstraints = false
         searchIcon.isHidden = true
-        view.addSubview(searchIcon)
+        contentView.addSubview(searchIcon)
 
         // Search field
         setPlaceholder("搜索应用或文档...")
@@ -820,13 +823,13 @@ class SearchPanelViewController: NSViewController {
         searchField.font = .systemFont(ofSize: 22, weight: .light)
         searchField.delegate = self
         searchField.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(searchField)
+        contentView.addSubview(searchField)
 
         // Divider
         divider.boxType = .separator
         divider.translatesAutoresizingMaskIntoConstraints = false
         divider.isHidden = true
-        view.addSubview(divider)
+        contentView.addSubview(divider)
 
         // Table view setup
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("ResultColumn"))
@@ -849,19 +852,19 @@ class SearchPanelViewController: NSViewController {
         scrollView.drawsBackground = false
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         scrollView.isHidden = true
-        view.addSubview(scrollView)
+        contentView.addSubview(scrollView)
 
         // No results label
         noResultsLabel.textColor = .secondaryLabelColor
         noResultsLabel.alignment = .center
         noResultsLabel.translatesAutoresizingMaskIntoConstraints = false
         noResultsLabel.isHidden = true
-        view.addSubview(noResultsLabel)
+        contentView.addSubview(noResultsLabel)
 
         // Constraints
         NSLayoutConstraint.activate([
             // IDE Tag View - 与搜索框垂直居中对齐，微调 +3 补偿视觉偏差
-            ideTagView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+            ideTagView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
             ideTagView.centerYAnchor.constraint(equalTo: searchField.centerYAnchor, constant: -3),
             ideTagView.heightAnchor.constraint(equalToConstant: 28),
 
@@ -876,37 +879,37 @@ class SearchPanelViewController: NSViewController {
             ideNameLabel.centerYAnchor.constraint(equalTo: ideTagView.centerYAnchor),
 
             // Search icon
-            searchIcon.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
-            searchIcon.centerYAnchor.constraint(equalTo: view.topAnchor, constant: 40),
+            searchIcon.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
+            searchIcon.centerYAnchor.constraint(equalTo: contentView.topAnchor, constant: 40),
             searchIcon.widthAnchor.constraint(equalToConstant: 22),
             searchIcon.heightAnchor.constraint(equalToConstant: 22),
 
             // Search field (leading 约束单独处理，用于 IDE 模式切换)
             searchField.trailingAnchor.constraint(
-                equalTo: view.trailingAnchor, constant: -20),
+                equalTo: contentView.trailingAnchor, constant: -20),
             searchField.centerYAnchor.constraint(equalTo: searchIcon.centerYAnchor),
             searchField.heightAnchor.constraint(equalToConstant: 32),
 
             // Divider
-            divider.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            divider.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            divider.topAnchor.constraint(equalTo: view.topAnchor, constant: headerHeight),
+            divider.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            divider.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            divider.topAnchor.constraint(equalTo: contentView.topAnchor, constant: headerHeight),
 
             // Scroll view
-            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
             scrollView.topAnchor.constraint(equalTo: divider.bottomAnchor),
-            scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
 
             // No results label
-            noResultsLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            noResultsLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
             noResultsLabel.topAnchor.constraint(equalTo: divider.bottomAnchor, constant: 20),
         ])
 
         // 创建并保存 searchField 的 leading 约束
         // 默认直接从左边开始（无搜索图标）
         searchFieldLeadingToIcon = searchField.leadingAnchor.constraint(
-            equalTo: view.leadingAnchor, constant: 20)
+            equalTo: contentView.leadingAnchor, constant: 20)
         searchFieldLeadingToTag = searchField.leadingAnchor.constraint(
             equalTo: ideTagView.trailingAnchor, constant: 12)
         searchFieldLeadingToIcon?.isActive = true
@@ -926,7 +929,7 @@ class SearchPanelViewController: NSViewController {
         // 选项容器
         uuidOptionsView.translatesAutoresizingMaskIntoConstraints = false
         uuidOptionsView.isHidden = true
-        view.addSubview(uuidOptionsView)
+        contentView.addSubview(uuidOptionsView)
 
         // 连字符复选框
         hyphenCheckbox.state = .on
@@ -985,10 +988,13 @@ class SearchPanelViewController: NSViewController {
 
         // UUID 选项约束
         NSLayoutConstraint.activate([
-            uuidOptionsView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
-            uuidOptionsView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            uuidOptionsView.leadingAnchor.constraint(
+                equalTo: contentView.leadingAnchor, constant: 20),
+            uuidOptionsView.trailingAnchor.constraint(
+                equalTo: contentView.trailingAnchor, constant: -20),
             uuidOptionsView.topAnchor.constraint(equalTo: divider.bottomAnchor, constant: 12),
-            uuidOptionsView.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -12),
+            uuidOptionsView.bottomAnchor.constraint(
+                equalTo: contentView.bottomAnchor, constant: -12),
 
             // 第一行：选项按钮（水平排列）
             hyphenCheckbox.leadingAnchor.constraint(equalTo: uuidOptionsView.leadingAnchor),
@@ -1019,7 +1025,7 @@ class SearchPanelViewController: NSViewController {
         // URL 编码解码容器
         urlCoderView.translatesAutoresizingMaskIntoConstraints = false
         urlCoderView.isHidden = true
-        view.addSubview(urlCoderView)
+        contentView.addSubview(urlCoderView)
 
         // 解码的 URL 标签
         decodedURLLabel.font = .systemFont(ofSize: 12, weight: .medium)
@@ -1113,10 +1119,11 @@ class SearchPanelViewController: NSViewController {
 
         // URL 编码解码约束
         NSLayoutConstraint.activate([
-            urlCoderView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
-            urlCoderView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            urlCoderView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
+            urlCoderView.trailingAnchor.constraint(
+                equalTo: contentView.trailingAnchor, constant: -20),
             urlCoderView.topAnchor.constraint(equalTo: divider.bottomAnchor, constant: 12),
-            urlCoderView.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -12),
+            urlCoderView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -12),
 
             // 解码的 URL 标签
             decodedURLLabel.leadingAnchor.constraint(equalTo: urlCoderView.leadingAnchor),
@@ -1178,7 +1185,7 @@ class SearchPanelViewController: NSViewController {
         // Base64 编码解码容器
         base64CoderView.translatesAutoresizingMaskIntoConstraints = false
         base64CoderView.isHidden = true
-        view.addSubview(base64CoderView)
+        contentView.addSubview(base64CoderView)
 
         // 原始文本标签
         originalTextLabel.font = .systemFont(ofSize: 12, weight: .medium)
@@ -1272,10 +1279,13 @@ class SearchPanelViewController: NSViewController {
 
         // Base64 编码解码约束
         NSLayoutConstraint.activate([
-            base64CoderView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
-            base64CoderView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            base64CoderView.leadingAnchor.constraint(
+                equalTo: contentView.leadingAnchor, constant: 20),
+            base64CoderView.trailingAnchor.constraint(
+                equalTo: contentView.trailingAnchor, constant: -20),
             base64CoderView.topAnchor.constraint(equalTo: divider.bottomAnchor, constant: 12),
-            base64CoderView.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -12),
+            base64CoderView.bottomAnchor.constraint(
+                equalTo: contentView.bottomAnchor, constant: -12),
 
             // 原始文本标签
             originalTextLabel.leadingAnchor.constraint(equalTo: base64CoderView.leadingAnchor),
