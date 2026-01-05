@@ -72,8 +72,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
             if isFirstLaunch {
                 UserDefaults.standard.set(true, forKey: "hasLaunchedBefore")
-                print("LaunchX: First launch, opening onboarding")
-                self.openOnboarding()
+                if allGranted {
+                    // 首次启动但权限已全部授予，直接进入应用
+                    print("LaunchX: First launch but all permissions granted, showing panel")
+                    NSApp.setActivationPolicy(.accessory)
+                    self.setupHotKeyAndShowPanel()
+                } else {
+                    print("LaunchX: First launch, opening onboarding")
+                    self.openOnboarding()
+                }
             } else if !allGranted {
                 print("LaunchX: Not all permissions granted, opening onboarding")
                 // 非首次启动但权限未全部授予，显示引导页
