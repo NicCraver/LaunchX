@@ -26,25 +26,42 @@ jobs:
                   xcodebuild -scheme LaunchX \
                     -configuration Release \
                     -arch arm64 \
-                    -archivePath $PWD/build/LaunchX.xcarchive \
+                    -archivePath $PWD/build/LaunchX-arm64.xcarchive \
                     archive \
                     ONLY_ACTIVE_ARCH=NO \
                     CODE_SIGN_IDENTITY="-" \
                     CODE_SIGNING_REQUIRED=NO \
                     CODE_SIGNING_ALLOWED=NO
 
-            - name: Export app
+            - name: Build app (Intel)
               run: |
-                  mkdir -p build/export
-                  cp -R build/LaunchX.xcarchive/Products/Applications/LaunchX.app build/export/
-                  cp repair.sh build/export/
+                  xcodebuild -scheme LaunchX \
+                    -configuration Release \
+                    -arch x86_64 \
+                    -archivePath $PWD/build/LaunchX-x86_64.xcarchive \
+                    archive \
+                    ONLY_ACTIVE_ARCH=NO \
+                    CODE_SIGN_IDENTITY="-" \
+                    CODE_SIGNING_REQUIRED=NO \
+                    CODE_SIGNING_ALLOWED=NO
 
-            - name: Create DMG
+            - name: Export apps
               run: |
-                  # Install create-dmg
-                  brew install create-dmg
+                  # Export Apple Silicon app
+                  mkdir -p build/export-arm64
+                  cp -R build/LaunchX-arm64.xcarchive/Products/Applications/LaunchX.app build/export-arm64/
+                  cp repair.sh build/export-arm64/
 
-                  # Create DMG
+                  # Export Intel app
+                  mkdir -p build/export-x86_64
+                  cp -R build/LaunchX-x86_64.xcarchive/Products/Applications/LaunchX.app build/export-x86_64/
+                  cp repair.sh build/export-x86_64/
+
+            - name: Install create-dmg
+              run: brew install create-dmg
+
+            - name: Create DMG (Apple Silicon)
+              run: |
                   create-dmg \
                     --volname "LaunchX" \
                     --window-pos 200 120 \
@@ -54,17 +71,37 @@ jobs:
                     --hide-extension "LaunchX.app" \
                     --app-drop-link 450 185 \
                     "build/LaunchX-${{ github.ref_name }}-arm64.dmg" \
-                    "build/export/" || true
+                    "build/export-arm64/" || true
 
                   # Fallback: create simple DMG if create-dmg fails
                   if [ ! -f "build/LaunchX-${{ github.ref_name }}-arm64.dmg" ]; then
-                    hdiutil create -volname "LaunchX" -srcfolder "build/export" -ov -format UDZO "build/LaunchX-${{ github.ref_name }}-arm64.dmg"
+                    hdiutil create -volname "LaunchX" -srcfolder "build/export-arm64" -ov -format UDZO "build/LaunchX-${{ github.ref_name }}-arm64.dmg"
                   fi
 
-            - name: Create ZIP
+            - name: Create DMG (Intel)
               run: |
-                  cd build/export
+                  create-dmg \
+                    --volname "LaunchX" \
+                    --window-pos 200 120 \
+                    --window-size 600 400 \
+                    --icon-size 100 \
+                    --icon "LaunchX.app" 150 185 \
+                    --hide-extension "LaunchX.app" \
+                    --app-drop-link 450 185 \
+                    "build/LaunchX-${{ github.ref_name }}-x86_64.dmg" \
+                    "build/export-x86_64/" || true
+
+                  # Fallback: create simple DMG if create-dmg fails
+                  if [ ! -f "build/LaunchX-${{ github.ref_name }}-x86_64.dmg" ]; then
+                    hdiutil create -volname "LaunchX" -srcfolder "build/export-x86_64" -ov -format UDZO "build/LaunchX-${{ github.ref_name }}-x86_64.dmg"
+                  fi
+
+            - name: Create ZIPs
+              run: |
+                  cd build/export-arm64
                   zip -r ../LaunchX-${{ github.ref_name }}-arm64.zip LaunchX.app
+                  cd ../export-x86_64
+                  zip -r ../LaunchX-${{ github.ref_name }}-x86_64.zip LaunchX.app
 
             - name: Generate release notes
               id: release_notes
@@ -87,6 +124,11 @@ jobs:
                     echo "## LaunchX ${VERSION}" >> $GITHUB_OUTPUT
                   fi
 
+                  echo "" >> $GITHUB_OUTPUT
+                  echo "### Downloads" >> $GITHUB_OUTPUT
+                  echo "- **Apple Silicon (M1/M2/M3)**: LaunchX-${VERSION}-arm64.dmg" >> $GITHUB_OUTPUT
+                  echo "- **Intel**: LaunchX-${VERSION}-x86_64.dmg" >> $GITHUB_OUTPUT
+
                   echo "EOF" >> $GITHUB_OUTPUT
 
             - name: Create Release
@@ -99,5 +141,7 @@ jobs:
                   files: |
                       build/LaunchX-${{ github.ref_name }}-arm64.dmg
                       build/LaunchX-${{ github.ref_name }}-arm64.zip
+                      build/LaunchX-${{ github.ref_name }}-x86_64.dmg
+                      build/LaunchX-${{ github.ref_name }}-x86_64.zip
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
