@@ -6,7 +6,6 @@ class PermissionService: ObservableObject {
     static let shared = PermissionService()
 
     @Published var isAccessibilityGranted: Bool = false
-    @Published var isScreenRecordingGranted: Bool = false
     @Published var isFullDiskAccessGranted: Bool = false
 
     private var refreshTimer: Timer?
@@ -39,16 +38,12 @@ class PermissionService: ObservableObject {
             guard let self = self else { return }
 
             let accessibility = AXIsProcessTrusted()
-            let screenRecording = self.checkScreenRecordingSync()
             let fullDiskAccess = self.checkFullDiskAccessSync()
 
             DispatchQueue.main.async {
                 // 一次性更新所有状态，避免竞争
                 if self.isAccessibilityGranted != accessibility {
                     self.isAccessibilityGranted = accessibility
-                }
-                if self.isScreenRecordingGranted != screenRecording {
-                    self.isScreenRecordingGranted = screenRecording
                 }
                 if self.isFullDiskAccessGranted != fullDiskAccess {
                     self.isFullDiskAccessGranted = fullDiskAccess
@@ -61,41 +56,6 @@ class PermissionService: ObservableObject {
     /// 同步检查辅助功能权限（用于启动时快速检查）
     func checkAccessibilitySync() -> Bool {
         return AXIsProcessTrusted()
-    }
-
-    // MARK: - Screen Recording
-
-    private func checkScreenRecordingSync() -> Bool {
-        // CGPreflightScreenCaptureAccess 不可靠，改用实际测试
-        // 尝试获取其他应用窗口的名称，这需要屏幕录制权限
-        guard
-            let windowList = CGWindowListCopyWindowInfo(
-                [.optionOnScreenOnly, .excludeDesktopElements],
-                kCGNullWindowID
-            ) as? [[String: Any]]
-        else {
-            return false
-        }
-
-        let currentPID = ProcessInfo.processInfo.processIdentifier
-
-        for window in windowList {
-            guard let ownerPID = window[kCGWindowOwnerPID as String] as? Int32,
-                ownerPID != currentPID
-            else {
-                continue
-            }
-
-            // 如果能获取到其他应用窗口的名称，说明有屏幕录制权限
-            if let windowName = window[kCGWindowName as String] as? String,
-                !windowName.isEmpty
-            {
-                return true
-            }
-        }
-
-        // 没有找到带名称的窗口，再用 CGPreflightScreenCaptureAccess 作为后备
-        return CGPreflightScreenCaptureAccess()
     }
 
     // MARK: - Accessibility
@@ -118,29 +78,6 @@ class PermissionService: ObservableObject {
 
     func openAccessibilitySettings() {
         openSystemSettings(pane: "Privacy_Accessibility")
-    }
-
-    // MARK: - Screen Recording
-
-    func requestScreenRecording() {
-        // CGRequestScreenCaptureAccess() 只会在首次调用时显示弹窗
-        // 如果用户之前拒绝过，需要直接打开系统设置
-        // 先尝试调用系统API，如果没有弹窗则打开设置
-        let result = CGRequestScreenCaptureAccess()
-
-        // 如果返回 false 且权限未授予，说明需要手动去设置
-        if !result && !checkScreenRecordingSync() {
-            openSystemSettings(pane: "Privacy_ScreenCapture")
-        }
-
-        // 立即检查一次权限状态
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-            self?.checkAllPermissions()
-        }
-    }
-
-    func openScreenRecordingSettings() {
-        openSystemSettings(pane: "Privacy_ScreenCapture")
     }
 
     // MARK: - Full Disk Access
@@ -174,7 +111,7 @@ class PermissionService: ObservableObject {
     // MARK: - Helper
 
     var allPermissionsGranted: Bool {
-        return isAccessibilityGranted && isScreenRecordingGranted && isFullDiskAccessGranted
+        return isAccessibilityGranted && isFullDiskAccessGranted
     }
 
     /// 检查是否有基本功能所需的权限（辅助功能）

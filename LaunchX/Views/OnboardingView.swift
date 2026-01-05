@@ -54,18 +54,6 @@ struct OnboardingView: View {
                         permissionService.requestFullDiskAccess()
                     }
                 )
-
-                PermissionRow(
-                    icon: "rectangle.on.rectangle",
-                    iconColor: .green,
-                    title: "屏幕录制",
-                    description: "用于获取当前活动窗口信息（可选）",
-                    isGranted: permissionService.isScreenRecordingGranted,
-                    helpText: nil,
-                    action: {
-                        permissionService.requestScreenRecording()
-                    }
-                )
             }
             .padding(.horizontal, 32)
 

@@ -64,11 +64,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
             let allGranted = PermissionService.shared.allPermissionsGranted
             let accessibility = PermissionService.shared.isAccessibilityGranted
-            let screenRecording = PermissionService.shared.isScreenRecordingGranted
             let fullDisk = PermissionService.shared.isFullDiskAccessGranted
 
             print(
-                "LaunchX: allGranted=\(allGranted), accessibility=\(accessibility), screenRecording=\(screenRecording), fullDisk=\(fullDisk)"
+                "LaunchX: allGranted=\(allGranted), accessibility=\(accessibility), fullDisk=\(fullDisk)"
             )
 
             if isFirstLaunch {

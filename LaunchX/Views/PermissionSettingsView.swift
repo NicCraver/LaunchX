@@ -22,7 +22,7 @@ struct PermissionSettingsView: View {
                 }
             }
 
-            // 三个权限一行显示
+            // 两个权限一行显示
             HStack(spacing: 12) {
                 PermissionBadge(
                     icon: "hand.raised.fill",
@@ -42,19 +42,6 @@ struct PermissionSettingsView: View {
                     title: "磁盘访问",
                     isGranted: permissionService.isFullDiskAccessGranted,
                     action: { permissionService.requestFullDiskAccess() }
-                )
-
-                PermissionBadge(
-                    icon: "rectangle.on.rectangle",
-                    title: "屏幕录制",
-                    isGranted: permissionService.isScreenRecordingGranted,
-                    action: {
-                        if permissionService.isScreenRecordingGranted {
-                            permissionService.openScreenRecordingSettings()
-                        } else {
-                            permissionService.requestScreenRecording()
-                        }
-                    }
                 )
             }
 
