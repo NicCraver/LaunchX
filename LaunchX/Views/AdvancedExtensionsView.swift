@@ -13,6 +13,19 @@ enum AdvancedExtensionType: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    /// 判断是否运行在 macOS 26 或更高版本
+    private static var isMacOS26OrLater: Bool {
+        ProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 26
+    }
+
+    /// 获取当前系统可用的扩展类型（macOS 26+ 不显示 2FA 短信，因为系统已原生支持）
+    static var availableCases: [AdvancedExtensionType] {
+        if isMacOS26OrLater {
+            return allCases.filter { $0 != .twoFactorAuth }
+        }
+        return allCases
+    }
+
     /// 资源图标名称
     var iconImageName: String {
         switch self {
@@ -48,7 +61,7 @@ struct AdvancedExtensionsView: View {
 
     private var extensionList: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ForEach(AdvancedExtensionType.allCases) { type in
+            ForEach(AdvancedExtensionType.availableCases) { type in
                 ExtensionSidebarItem(
                     iconImageName: type.iconImageName,
                     title: type.rawValue,
