@@ -21,9 +21,10 @@ class ClipboardPanelManager: NSObject, NSWindowDelegate {
     /// 显示面板（在光标附近）
     func showPanel() {
         // 记住当前前台应用（在激活 LaunchX 之前）
-        if let frontApp = NSWorkspace.shared.frontmostApplication,
-            frontApp.bundleIdentifier != Bundle.main.bundleIdentifier
-        {
+        // 注意：如果当前前台应用是 LaunchX 自己，我们仍然要记录它
+        // 因为用户可能想要粘贴到 LaunchX 的设置窗口中
+        if let frontApp = NSWorkspace.shared.frontmostApplication {
+            // 即使是 LaunchX 自己，也记录下来，这样粘贴时可以正确返回到设置窗口
             previousApp = frontApp
         }
 

@@ -965,6 +965,8 @@ extension AITranslatePanelViewController: NSTextViewDelegate {
                 inputTextView.string = item.sourceText
                 inputPlaceholder.isHidden = true
                 updateInputHeight()
+                // 显示历史记录中的翻译结果
+                showHistoryTranslationResult(item)
             }
             return true
         }
@@ -974,14 +976,48 @@ extension AITranslatePanelViewController: NSTextViewDelegate {
                 inputTextView.string = item.sourceText
                 inputPlaceholder.isHidden = true
                 updateInputHeight()
+                // 显示历史记录中的翻译结果
+                showHistoryTranslationResult(item)
             } else {
                 inputTextView.string = ""
                 inputPlaceholder.isHidden = false
                 updateInputHeight()
+                // 清空结果区域
+                collapseResultArea()
             }
             return true
         }
 
         return false
+    }
+
+    /// 显示历史记录中的翻译结果
+    private func showHistoryTranslationResult(_ item: TranslateHistoryItem) {
+        // 清空当前结果
+        for view in resultStackView.arrangedSubviews {
+            resultStackView.removeArrangedSubview(view)
+            view.removeFromSuperview()
+        }
+
+        // 找到对应的服务配置
+        let settings = AITranslateSettings.load()
+        if let serviceConfig = settings.serviceConfigs.first(where: {
+            $0.serviceType == item.serviceType && $0.isEnabled
+        }) {
+            let serviceView = createServiceRowView(
+                service: serviceConfig, isLoading: false, content: item.translatedText)
+            serviceView.identifier = NSUserInterfaceItemIdentifier("service_\(serviceConfig.id)")
+            resultStackView.addArrangedSubview(serviceView)
+        } else {
+            // 如果找不到对应的服务配置，使用默认显示
+            let defaultConfig = TranslateServiceConfig.defaultAITranslate
+            let serviceView = createServiceRowView(
+                service: defaultConfig, isLoading: false, content: item.translatedText)
+            resultStackView.addArrangedSubview(serviceView)
+        }
+
+        // 展开结果区域
+        hasTranslationResult = true
+        expandResultArea()
     }
 }

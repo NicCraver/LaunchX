@@ -87,7 +87,11 @@ final class ClipboardService: ObservableObject {
         guard currentCount != lastChangeCount else { return }
         lastChangeCount = currentCount
 
-        // 检查是否应该忽略当前应用
+        // 注意：不再检查当前前台应用是否为 LaunchX
+        // 因为截图工具等应用可能在后台运行，而 LaunchX 在前台
+        // 我们仍然需要记录这些截图
+
+        // 只检查用户配置的忽略列表中的应用
         if shouldIgnoreCurrentApp() {
             print("[ClipboardService] Ignored clipboard from excluded app")
             return
@@ -108,10 +112,8 @@ final class ClipboardService: ObservableObject {
             return false
         }
 
-        // 忽略 LaunchX 自身
-        if bundleId == Bundle.main.bundleIdentifier {
-            return true
-        }
+        // 不再自动忽略 LaunchX 自身
+        // 这样可以正确记录截图工具等后台应用的剪贴板内容
 
         let settings = ClipboardSettings.load()
         return settings.ignoredAppBundleIds.contains(bundleId)
@@ -130,6 +132,10 @@ final class ClipboardService: ObservableObject {
     private func parseClipboardContent() -> ClipboardItem? {
         let appInfo = getCurrentAppInfo()
 
+        // 调试：打印剪贴板中的所有类型
+        let types = pasteboard.types ?? []
+        print("[ClipboardService] Available pasteboard types: \(types.map { $0.rawValue })")
+
         // 1. 检查文件（优先级最高）
         if let fileURLs = pasteboard.readObjects(
             forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL],
@@ -144,18 +150,81 @@ final class ClipboardService: ObservableObject {
             )
         }
 
-        // 2. 检查图片
-        if let imageData = pasteboard.data(forType: .png) ?? pasteboard.data(forType: .tiff) {
+        // 2. 检查图片（支持多种图片格式）
+        // 尝试从多种常见的图片类型中读取
+        var imageData: Data? = nil
+
+        // 首先尝试直接读取常见的图片格式
+        if let data = pasteboard.data(forType: .png) {
+            print("[ClipboardService] Found PNG data")
+            imageData = data
+        } else if let data = pasteboard.data(forType: .tiff) {
+            print("[ClipboardService] Found TIFF data")
+            imageData = data
+        } else if let data = pasteboard.data(forType: NSPasteboard.PasteboardType("public.jpeg")) {
+            print("[ClipboardService] Found JPEG data")
+            imageData = data
+        } else if let data = pasteboard.data(forType: NSPasteboard.PasteboardType("public.heic")) {
+            print("[ClipboardService] Found HEIC data")
+            imageData = data
+        }
+
+        // 如果没有找到标准格式，尝试使用 NSImage 类从剪贴板读取图片
+        // 这可以处理更多的图片格式，包括某些应用特殊的剪贴板格式
+        if imageData == nil {
+            if let images = pasteboard.readObjects(forClasses: [NSImage.self], options: nil)
+                as? [NSImage],
+                let image = images.first
+            {
+                print("[ClipboardService] Found image via NSImage class")
+                if let tiffData = image.tiffRepresentation,
+                    let bitmap = NSBitmapImageRep(data: tiffData),
+                    let pngData = bitmap.representation(using: .png, properties: [:])
+                {
+                    imageData = pngData
+                }
+            }
+        }
+
+        // 最后尝试检查是否有任何图片相关的类型
+        if imageData == nil {
+            for type in types {
+                let typeString = type.rawValue.lowercased()
+                if typeString.contains("image") || typeString.contains("png")
+                    || typeString.contains("tiff") || typeString.contains("jpeg")
+                    || typeString.contains("jpg") || typeString.contains("heic")
+                {
+                    if let data = pasteboard.data(forType: type) {
+                        print("[ClipboardService] Found image data for type: \(type.rawValue)")
+                        // 尝试用 NSImage 解析
+                        if let image = NSImage(data: data),
+                            let tiffData = image.tiffRepresentation,
+                            let bitmap = NSBitmapImageRep(data: tiffData),
+                            let pngData = bitmap.representation(using: .png, properties: [:])
+                        {
+                            imageData = pngData
+                            break
+                        }
+                    }
+                }
+            }
+        }
+
+        if let imageData = imageData {
             // 转换为 PNG 存储
             var pngData = imageData
-            if pasteboard.data(forType: .png) == nil,
-                let image = NSImage(data: imageData),
-                let tiffData = image.tiffRepresentation,
-                let bitmap = NSBitmapImageRep(data: tiffData),
-                let png = bitmap.representation(using: .png, properties: [:])
-            {
-                pngData = png
+            // 如果不是 PNG 格式，转换为 PNG
+            if pasteboard.data(forType: .png) == nil {
+                if let image = NSImage(data: imageData),
+                    let tiffData = image.tiffRepresentation,
+                    let bitmap = NSBitmapImageRep(data: tiffData),
+                    let png = bitmap.representation(using: .png, properties: [:])
+                {
+                    pngData = png
+                }
             }
+
+            print("[ClipboardService] Successfully parsed image, size: \(pngData.count) bytes")
 
             return ClipboardItem(
                 contentType: .image,

@@ -15,7 +15,6 @@ struct LaunchXApp: App {
 }
 
 class AppDelegate: NSObject, NSApplicationDelegate {
-    var statusBar: NSStatusBar!
     var statusItem: NSStatusItem!
     var onboardingWindow: NSWindow?
     var isQuitting = false
@@ -257,22 +256,48 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func setupStatusItem() {
-        statusBar = NSStatusBar()
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
 
         if let button = statusItem.button {
             button.image = NSImage(named: NSImage.Name("StatusBarIcon"))
+            // 确保按钮能响应点击事件
+            button.target = self
+            button.action = #selector(statusItemClicked(_:))
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
 
+        print("LaunchX: StatusItem setup complete, button: \(statusItem.button != nil)")
+    }
+
+    @objc func statusItemClicked(_ sender: NSStatusBarButton) {
+        // 创建并显示菜单
         let menu = NSMenu()
-        menu.addItem(
-            NSMenuItem(title: "打开 LaunchX", action: #selector(togglePanel), keyEquivalent: "o"))
+
+        let openItem = NSMenuItem(
+            title: "打开 LaunchX", action: #selector(togglePanel), keyEquivalent: "o")
+        openItem.target = self
+        menu.addItem(openItem)
+
         menu.addItem(NSMenuItem.separator())
-        menu.addItem(
-            NSMenuItem(title: "设置...", action: #selector(openSettings), keyEquivalent: ","))
+
+        let settingsItem = NSMenuItem(
+            title: "设置...", action: #selector(openSettings), keyEquivalent: ",")
+        settingsItem.target = self
+        menu.addItem(settingsItem)
+
         menu.addItem(NSMenuItem.separator())
-        menu.addItem(NSMenuItem(title: "退出", action: #selector(explicitQuit), keyEquivalent: "q"))
-        statusItem?.menu = menu
+
+        let quitItem = NSMenuItem(title: "退出", action: #selector(explicitQuit), keyEquivalent: "q")
+        quitItem.target = self
+        menu.addItem(quitItem)
+
+        // 在按钮位置显示菜单
+        statusItem.menu = menu
+        statusItem.button?.performClick(nil)
+        // 点击后清除菜单，以便下次点击仍能触发 action
+        DispatchQueue.main.async { [weak self] in
+            self?.statusItem.menu = nil
+        }
     }
 
     @objc func togglePanel() {

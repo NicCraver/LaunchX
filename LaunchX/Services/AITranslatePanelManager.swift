@@ -35,6 +35,13 @@ class AITranslatePanelManager: NSObject, NSWindowDelegate {
         // 刷新设置
         viewController?.reloadSettings()
 
+        // 重置面板状态（清空上次的输入和翻译结果），但只在没有初始文本时重置
+        if text == nil || text?.isEmpty == true {
+            viewController?.resetPanelState()
+            // 重置历史导航索引
+            AITranslateService.shared.resetHistoryNavigation()
+        }
+
         // 获取鼠标所在的屏幕（全屏应用时更准确）
         let mouseLocation = NSEvent.mouseLocation
         let currentScreen =

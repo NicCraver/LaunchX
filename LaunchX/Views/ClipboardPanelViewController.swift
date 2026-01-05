@@ -546,7 +546,8 @@ class ClipboardPanelViewController: NSViewController {
         }
 
         // 延迟执行粘贴，等待目标窗口获得焦点
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+        // 增加延迟时间确保窗口完全激活
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
             self.performPaste()
         }
     }
@@ -562,29 +563,26 @@ class ClipboardPanelViewController: NSViewController {
         }
 
         // 延迟执行粘贴，等待目标窗口获得焦点
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+        // 增加延迟时间确保窗口完全激活
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
             self.performPaste()
         }
     }
 
     /// 执行粘贴操作
     private func performPaste() {
-        // 使用 AppleScript 来执行粘贴，更可靠
-        let script = """
-            tell application "System Events"
-                keystroke "v" using command down
-            end tell
-            """
+        // 使用 CGEvent 直接发送按键事件，更可靠
+        let source = CGEventSource(stateID: .combinedSessionState)
 
-        if let appleScript = NSAppleScript(source: script) {
-            var error: NSDictionary?
-            appleScript.executeAndReturnError(&error)
-            if let error = error {
-                print("[ClipboardService] AppleScript error: \(error)")
-                // 如果 AppleScript 失败，尝试使用 CGEvent
-                ClipboardService.shared.simulatePasteCommand()
-            }
-        }
+        // Key down: Cmd + V
+        let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: true)
+        keyDown?.flags = .maskCommand
+        keyDown?.post(tap: .cgSessionEventTap)
+
+        // Key up: Cmd + V
+        let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: false)
+        keyUp?.flags = .maskCommand
+        keyUp?.post(tap: .cgSessionEventTap)
     }
 }
 
@@ -747,6 +745,10 @@ class ClipboardCellView: NSTableCellView {
     private let pinIndicator = NSImageView()
     private let previewImageView = NSImageView()  // 图片预览
 
+    // 约束引用，用于动态调整
+    private var contentLabelCenterYConstraint: NSLayoutConstraint?
+    private var contentLabelTopConstraint: NSLayoutConstraint?
+
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         setupUI()
@@ -762,18 +764,6 @@ class ClipboardCellView: NSTableCellView {
         appIconView.imageScaling = .scaleProportionallyUpOrDown
         appIconView.translatesAutoresizingMaskIntoConstraints = false
         addSubview(appIconView)
-
-        // 内容文字
-        contentLabel.isEditable = false
-        contentLabel.isBordered = false
-        contentLabel.backgroundColor = .clear
-        contentLabel.font = .systemFont(ofSize: 13)
-        contentLabel.lineBreakMode = .byTruncatingTail
-        contentLabel.maximumNumberOfLines = 4
-        contentLabel.cell?.wraps = true
-        contentLabel.cell?.truncatesLastVisibleLine = true
-        contentLabel.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(contentLabel)
 
         // 颜色圆形（用于颜色类型）
         colorCircleView.wantsLayer = true
@@ -792,6 +782,18 @@ class ClipboardCellView: NSTableCellView {
         pinIndicator.isHidden = true
         addSubview(pinIndicator)
 
+        // 内容文字
+        contentLabel.isEditable = false
+        contentLabel.isBordered = false
+        contentLabel.backgroundColor = .clear
+        contentLabel.font = .systemFont(ofSize: 13)
+        contentLabel.lineBreakMode = .byTruncatingTail
+        contentLabel.maximumNumberOfLines = 4
+        contentLabel.cell?.wraps = true
+        contentLabel.cell?.truncatesLastVisibleLine = true
+        contentLabel.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(contentLabel)
+
         // 图片预览
         previewImageView.imageScaling = .scaleProportionallyUpOrDown
         previewImageView.wantsLayer = true
@@ -801,35 +803,40 @@ class ClipboardCellView: NSTableCellView {
         previewImageView.isHidden = true
         addSubview(previewImageView)
 
+        // 创建可切换的约束
+        contentLabelCenterYConstraint = contentLabel.centerYAnchor.constraint(
+            equalTo: appIconView.centerYAnchor)
+        contentLabelTopConstraint = contentLabel.topAnchor.constraint(
+            equalTo: topAnchor, constant: 8)
+
         // 布局
         NSLayoutConstraint.activate([
-            // App图标（左侧）
+            // App图标（左侧，顶部对齐）
             appIconView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
-            appIconView.centerYAnchor.constraint(equalTo: centerYAnchor),
+            appIconView.topAnchor.constraint(equalTo: topAnchor, constant: 8),
             appIconView.widthAnchor.constraint(equalToConstant: 28),
             appIconView.heightAnchor.constraint(equalToConstant: 28),
 
-            // 内容文字（垂直方向用 top/bottom 约束，允许多行扩展）
+            // 颜色圆形（替代App图标位置）
+            colorCircleView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
+            colorCircleView.topAnchor.constraint(equalTo: topAnchor, constant: 10),
+            colorCircleView.widthAnchor.constraint(equalToConstant: 24),
+            colorCircleView.heightAnchor.constraint(equalToConstant: 24),
+
+            // 固定指示器（右侧，与图标垂直居中）
+            pinIndicator.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
+            pinIndicator.centerYAnchor.constraint(equalTo: appIconView.centerYAnchor),
+            pinIndicator.widthAnchor.constraint(equalToConstant: 14),
+            pinIndicator.heightAnchor.constraint(equalToConstant: 14),
+
+            // 内容文字（水平位置固定，垂直位置动态调整）
             contentLabel.leadingAnchor.constraint(
                 equalTo: appIconView.trailingAnchor, constant: 10),
             contentLabel.trailingAnchor.constraint(
                 equalTo: pinIndicator.leadingAnchor, constant: -8),
-            contentLabel.topAnchor.constraint(equalTo: topAnchor, constant: 8),
             contentLabel.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor, constant: -8),
 
-            // 颜色圆形（替代App图标位置）
-            colorCircleView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
-            colorCircleView.centerYAnchor.constraint(equalTo: centerYAnchor),
-            colorCircleView.widthAnchor.constraint(equalToConstant: 24),
-            colorCircleView.heightAnchor.constraint(equalToConstant: 24),
-
-            // 固定指示器（右侧）
-            pinIndicator.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
-            pinIndicator.centerYAnchor.constraint(equalTo: centerYAnchor),
-            pinIndicator.widthAnchor.constraint(equalToConstant: 14),
-            pinIndicator.heightAnchor.constraint(equalToConstant: 14),
-
-            // 图片预览
+            // 图片预览（顶部对齐）
             previewImageView.leadingAnchor.constraint(
                 equalTo: appIconView.trailingAnchor, constant: 10),
             previewImageView.topAnchor.constraint(equalTo: topAnchor, constant: 8),
@@ -857,6 +864,13 @@ class ClipboardCellView: NSTableCellView {
             appIconView.image = item.icon
         }
 
+        // 根据内容类型设置文字垂直对齐方式
+        // 图片类型：顶部对齐（因为图片预览会显示）
+        // 其他类型：与图标垂直居中对齐
+        let isImageType = item.contentType == .image && item.imageData != nil
+        contentLabelCenterYConstraint?.isActive = !isImageType && !contentLabel.isHidden
+        contentLabelTopConstraint?.isActive = isImageType || contentLabel.isHidden
+
         // 根据类型配置
         switch item.contentType {
         case .image:
@@ -865,8 +879,14 @@ class ClipboardCellView: NSTableCellView {
                 previewImageView.image = image
                 previewImageView.isHidden = false
                 contentLabel.isHidden = true
+                // 图片类型不需要文字约束
+                contentLabelCenterYConstraint?.isActive = false
+                contentLabelTopConstraint?.isActive = false
             } else {
                 contentLabel.stringValue = "图片"
+                // 文字和图标垂直居中
+                contentLabelCenterYConstraint?.isActive = true
+                contentLabelTopConstraint?.isActive = false
             }
 
         case .color:
@@ -879,9 +899,15 @@ class ClipboardCellView: NSTableCellView {
             } else {
                 contentLabel.stringValue = item.displayTitle
             }
+            // 文字和图标垂直居中
+            contentLabelCenterYConstraint?.isActive = true
+            contentLabelTopConstraint?.isActive = false
 
         case .text, .link:
             contentLabel.stringValue = item.textContent ?? ""
+            // 文字和图标垂直居中
+            contentLabelCenterYConstraint?.isActive = true
+            contentLabelTopConstraint?.isActive = false
 
         case .file:
             if let paths = item.filePaths, let firstPath = paths.first {
@@ -894,6 +920,9 @@ class ClipboardCellView: NSTableCellView {
             } else {
                 contentLabel.stringValue = item.displayTitle
             }
+            // 文字和图标垂直居中
+            contentLabelCenterYConstraint?.isActive = true
+            contentLabelTopConstraint?.isActive = false
         }
     }
 }
