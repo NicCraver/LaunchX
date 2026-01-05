@@ -704,8 +704,24 @@ extension ClipboardPanelViewController: NSTableViewDataSource, NSTableViewDelega
         // 5行文字高度: 5 * 17 (13pt字体 + 行间距) + 16 (上下各8pt padding) = 101
         let maxMultilineHeight: CGFloat = 101
 
-        // 图片类型使用5行高度
+        // 图片类型根据实际图片尺寸计算高度
         if item.contentType == .image {
+            if let data = item.imageData, let image = NSImage(data: data) {
+                // 图片预览最大宽度200，最小宽度50
+                let maxPreviewWidth: CGFloat = 200
+                let aspectRatio = image.size.width / max(image.size.height, 1)
+
+                // 计算图片预览的实际尺寸
+                // 如果图片很宽（宽高比 > 1），宽度受限，高度较小
+                // 如果图片很高（宽高比 < 1），高度受限于 maxMultilineHeight - padding
+                let maxImageHeight: CGFloat = 85  // 最大图片高度
+                let imageWidth = min(maxImageHeight * aspectRatio, maxPreviewWidth)
+                let imageHeight = imageWidth / max(aspectRatio, 0.1)
+
+                // 行高 = 图片高度 + 上下 padding (8pt each)
+                let height = min(imageHeight, maxImageHeight) + 16
+                return max(rowHeight, height)
+            }
             return maxMultilineHeight
         }
 
@@ -760,8 +776,9 @@ class ClipboardCellView: NSTableCellView {
     private var contentLabelCenterYConstraint: NSLayoutConstraint?
     private var contentLabelTopConstraint: NSLayoutConstraint?
 
-    // 图片预览宽度约束（用于动态调整）
+    // 图片预览尺寸约束（用于动态调整）
     private var previewImageWidthConstraint: NSLayoutConstraint?
+    private var previewImageHeightConstraint: NSLayoutConstraint?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -824,8 +841,9 @@ class ClipboardCellView: NSTableCellView {
         contentLabelTopConstraint = contentLabel.topAnchor.constraint(
             equalTo: topAnchor, constant: 14)
 
-        // 图片预览宽度约束（默认等于高度，即正方形）
+        // 图片预览尺寸约束（默认正方形）
         previewImageWidthConstraint = previewImageView.widthAnchor.constraint(equalToConstant: 85)
+        previewImageHeightConstraint = previewImageView.heightAnchor.constraint(equalToConstant: 85)
 
         // 布局
         NSLayoutConstraint.activate([
@@ -858,8 +876,8 @@ class ClipboardCellView: NSTableCellView {
             previewImageView.leadingAnchor.constraint(
                 equalTo: appIconView.trailingAnchor, constant: 10),
             previewImageView.topAnchor.constraint(equalTo: appIconView.topAnchor),
-            previewImageView.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor, constant: -8),
             previewImageWidthConstraint!,
+            previewImageHeightConstraint!,
         ])
     }
 
@@ -891,12 +909,26 @@ class ClipboardCellView: NSTableCellView {
                 previewImageView.isHidden = false
                 contentLabel.isHidden = true
 
-                // 计算图片宽度，使其在5行高度内尽可能大展示
-                // 5行文字高度约为 5 * 17 = 85pt，减去上下padding后约 85pt
-                let maxHeight: CGFloat = 85
+                // 计算图片尺寸，根据实际比例自适应
+                let maxPreviewWidth: CGFloat = 200
+                let maxPreviewHeight: CGFloat = 85
                 let aspectRatio = image.size.width / max(image.size.height, 1)
-                let imageWidth = min(maxHeight * aspectRatio, 200)  // 最大宽度200
-                previewImageWidthConstraint?.constant = max(imageWidth, 50)  // 最小宽度50
+
+                let imageWidth: CGFloat
+                let imageHeight: CGFloat
+
+                if aspectRatio >= 1 {
+                    // 宽图：宽度优先，高度按比例
+                    imageWidth = min(maxPreviewHeight * aspectRatio, maxPreviewWidth)
+                    imageHeight = imageWidth / aspectRatio
+                } else {
+                    // 高图：高度优先，宽度按比例
+                    imageHeight = maxPreviewHeight
+                    imageWidth = imageHeight * aspectRatio
+                }
+
+                previewImageWidthConstraint?.constant = max(imageWidth, 28)  // 最小宽度28（与图标同宽）
+                previewImageHeightConstraint?.constant = max(imageHeight, 28)  // 最小高度28
 
                 // 图片类型不需要文字约束
                 contentLabelCenterYConstraint?.isActive = false
