@@ -701,19 +701,22 @@ extension ClipboardPanelViewController: NSTableViewDataSource, NSTableViewDelega
 
         let item = filteredItems[row]
 
-        // 图片类型使用更大的高度
+        // 5行文字高度: 5 * 17 (13pt字体 + 行间距) + 16 (上下各8pt padding) = 101
+        let maxMultilineHeight: CGFloat = 101
+
+        // 图片类型使用5行高度
         if item.contentType == .image {
-            return 80
+            return maxMultilineHeight
         }
 
         // 文本类型根据内容行数计算高度
         if item.contentType == .text || item.contentType == .link {
             if let text = item.textContent {
-                let lineCount = min(text.components(separatedBy: .newlines).count, 4)
+                let lineCount = min(text.components(separatedBy: .newlines).count, 5)
                 if lineCount > 1 {
                     // 每行约 17pt (13pt 字体 + 行间距)，上下各 8pt padding
                     let height = CGFloat(lineCount) * 17 + 16
-                    return max(rowHeight, height)
+                    return max(rowHeight, min(height, maxMultilineHeight))
                 }
             }
         }
@@ -748,6 +751,9 @@ class ClipboardCellView: NSTableCellView {
     // 约束引用，用于动态调整
     private var contentLabelCenterYConstraint: NSLayoutConstraint?
     private var contentLabelTopConstraint: NSLayoutConstraint?
+
+    // 图片预览宽度约束（用于动态调整）
+    private var previewImageWidthConstraint: NSLayoutConstraint?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -788,7 +794,7 @@ class ClipboardCellView: NSTableCellView {
         contentLabel.backgroundColor = .clear
         contentLabel.font = .systemFont(ofSize: 13)
         contentLabel.lineBreakMode = .byTruncatingTail
-        contentLabel.maximumNumberOfLines = 4
+        contentLabel.maximumNumberOfLines = 5  // 改为5行限制
         contentLabel.cell?.wraps = true
         contentLabel.cell?.truncatesLastVisibleLine = true
         contentLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -809,6 +815,9 @@ class ClipboardCellView: NSTableCellView {
         contentLabelTopConstraint = contentLabel.topAnchor.constraint(
             equalTo: topAnchor, constant: 8)
 
+        // 图片预览宽度约束（默认等于高度，即正方形）
+        previewImageWidthConstraint = previewImageView.widthAnchor.constraint(equalToConstant: 85)
+
         // 布局
         NSLayoutConstraint.activate([
             // App图标（左侧，顶部对齐）
@@ -823,9 +832,9 @@ class ClipboardCellView: NSTableCellView {
             colorCircleView.widthAnchor.constraint(equalToConstant: 24),
             colorCircleView.heightAnchor.constraint(equalToConstant: 24),
 
-            // 固定指示器（右侧，与图标垂直居中）
+            // 固定指示器（右侧，顶部对齐）
             pinIndicator.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
-            pinIndicator.centerYAnchor.constraint(equalTo: appIconView.centerYAnchor),
+            pinIndicator.topAnchor.constraint(equalTo: topAnchor, constant: 15),
             pinIndicator.widthAnchor.constraint(equalToConstant: 14),
             pinIndicator.heightAnchor.constraint(equalToConstant: 14),
 
@@ -836,12 +845,12 @@ class ClipboardCellView: NSTableCellView {
                 equalTo: pinIndicator.leadingAnchor, constant: -8),
             contentLabel.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor, constant: -8),
 
-            // 图片预览（顶部对齐）
+            // 图片预览（顶部对齐，与图标顶部对齐）
             previewImageView.leadingAnchor.constraint(
                 equalTo: appIconView.trailingAnchor, constant: 10),
-            previewImageView.topAnchor.constraint(equalTo: topAnchor, constant: 8),
-            previewImageView.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -8),
-            previewImageView.widthAnchor.constraint(equalTo: previewImageView.heightAnchor),
+            previewImageView.topAnchor.constraint(equalTo: appIconView.topAnchor),
+            previewImageView.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor, constant: -8),
+            previewImageWidthConstraint!,
         ])
     }
 
@@ -864,13 +873,6 @@ class ClipboardCellView: NSTableCellView {
             appIconView.image = item.icon
         }
 
-        // 根据内容类型设置文字垂直对齐方式
-        // 图片类型：顶部对齐（因为图片预览会显示）
-        // 其他类型：与图标垂直居中对齐
-        let isImageType = item.contentType == .image && item.imageData != nil
-        contentLabelCenterYConstraint?.isActive = !isImageType && !contentLabel.isHidden
-        contentLabelTopConstraint?.isActive = isImageType || contentLabel.isHidden
-
         // 根据类型配置
         switch item.contentType {
         case .image:
@@ -879,6 +881,14 @@ class ClipboardCellView: NSTableCellView {
                 previewImageView.image = image
                 previewImageView.isHidden = false
                 contentLabel.isHidden = true
+
+                // 计算图片宽度，使其在5行高度内尽可能大展示
+                // 5行文字高度约为 5 * 17 = 85pt，减去上下padding后约 85pt
+                let maxHeight: CGFloat = 85
+                let aspectRatio = image.size.width / max(image.size.height, 1)
+                let imageWidth = min(maxHeight * aspectRatio, 200)  // 最大宽度200
+                previewImageWidthConstraint?.constant = max(imageWidth, 50)  // 最小宽度50
+
                 // 图片类型不需要文字约束
                 contentLabelCenterYConstraint?.isActive = false
                 contentLabelTopConstraint?.isActive = false
@@ -899,15 +909,25 @@ class ClipboardCellView: NSTableCellView {
             } else {
                 contentLabel.stringValue = item.displayTitle
             }
-            // 文字和图标垂直居中
+            // 文字和图标垂直居中（单行）
             contentLabelCenterYConstraint?.isActive = true
             contentLabelTopConstraint?.isActive = false
 
         case .text, .link:
-            contentLabel.stringValue = item.textContent ?? ""
-            // 文字和图标垂直居中
-            contentLabelCenterYConstraint?.isActive = true
-            contentLabelTopConstraint?.isActive = false
+            let text = item.textContent ?? ""
+            contentLabel.stringValue = text
+
+            // 判断是否为多行文本
+            let lineCount = text.components(separatedBy: .newlines).count
+            if lineCount > 1 {
+                // 多行文字：顶部对齐
+                contentLabelCenterYConstraint?.isActive = false
+                contentLabelTopConstraint?.isActive = true
+            } else {
+                // 单行文字：与图标垂直居中
+                contentLabelCenterYConstraint?.isActive = true
+                contentLabelTopConstraint?.isActive = false
+            }
 
         case .file:
             if let paths = item.filePaths, let firstPath = paths.first {
