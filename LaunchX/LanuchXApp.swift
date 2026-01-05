@@ -1,13 +1,30 @@
 import Combine
 import SwiftUI
 
+// 用于触发打开设置的辅助视图
+struct SettingsOpenerView: View {
+    @Environment(\.openSettings) private var openSettings
+
+    var body: some View {
+        Color.clear
+            .frame(width: 1, height: 1)
+            .onReceive(NotificationCenter.default.publisher(for: .openSettingsNotification)) { _ in
+                openSettings()
+            }
+    }
+}
+
+// 自定义通知
+extension Notification.Name {
+    static let openSettingsNotification = Notification.Name("openSettingsNotification")
+}
+
 @main
 struct LaunchXApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     var body: some Scene {
-        // We use Settings to avoid creating a default WindowGroup window.
-        // The actual main interface is managed by PanelManager.
+        // 使用 Settings scene 作为设置窗口
         Settings {
             SettingsView()
         }
@@ -17,12 +34,14 @@ struct LaunchXApp: App {
 class AppDelegate: NSObject, NSApplicationDelegate {
     var statusItem: NSStatusItem!
     var onboardingWindow: NSWindow?
+    var settingsOpenerWindow: NSWindow?
     var isQuitting = false
     private var permissionObserver: AnyCancellable?
     private var hotKeyObservers: Set<AnyCancellable> = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupStatusItem()
+        setupSettingsOpenerWindow()
         observeHotKeyChanges()
 
         // 先不设置 activation policy，等权限检查后决定
@@ -37,6 +56,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // 2. Check permissions first before setting up hotkey
         checkPermissionsAndSetup()
+    }
+
+    /// 创建隐藏窗口来承载 SettingsOpenerView
+    private func setupSettingsOpenerWindow() {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 1, height: 1),
+            styleMask: [],
+            backing: .buffered,
+            defer: false
+        )
+        window.contentView = NSHostingView(rootView: SettingsOpenerView())
+        window.isReleasedWhenClosed = false
+        window.orderOut(nil)  // 确保窗口不显示
+        settingsOpenerWindow = window
     }
 
     /// 监听快捷键变化，更新菜单显示
@@ -394,22 +427,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @objc func openSettings() {
         PanelManager.shared.hidePanel(deactivateApp: false)
 
-        // 先激活应用
-        NSApp.setActivationPolicy(.regular)
-        NSApp.activate(ignoringOtherApps: true)
-
-        // 打开设置窗口
-        if #available(macOS 14.0, *) {
-            if let settingsURL = URL(string: "x-apple.systempreferences:") {
-                // 尝试使用 Environment 方式
-            }
-        }
-
-        // 使用标准方式打开设置
-        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-
-        // 延迟切换回 accessory 模式（设置窗口关闭后）
-        // 注意：这里不立即切换，让用户可以看到设置窗口
+        // 发送通知，让 SettingsOpenerView 通过 @Environment(\.openSettings) 打开设置
+        // 不需要切换到 regular 模式，避免 Dock 图标出现
+        NotificationCenter.default.post(name: .openSettingsNotification, object: nil)
     }
 
     @objc func explicitQuit() {
