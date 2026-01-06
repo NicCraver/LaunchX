@@ -50,12 +50,12 @@ jobs:
                   # Export Apple Silicon app
                   mkdir -p build/export-arm64
                   cp -R build/LaunchX-arm64.xcarchive/Products/Applications/LaunchX.app build/export-arm64/
-                  cp repair.sh build/export-arm64/
+                  cp Repair build/export-arm64/
 
                   # Export Intel app
                   mkdir -p build/export-x86_64
                   cp -R build/LaunchX-x86_64.xcarchive/Products/Applications/LaunchX.app build/export-x86_64/
-                  cp repair.sh build/export-x86_64/
+                  cp Repair build/export-x86_64/
 
             - name: Install create-dmg
               run: brew install create-dmg

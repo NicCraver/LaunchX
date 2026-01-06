@@ -36,3 +36,4 @@ fi
 echo ""
 echo -e "按任意键关闭 / Press any key to close"
 read -n 1
+
