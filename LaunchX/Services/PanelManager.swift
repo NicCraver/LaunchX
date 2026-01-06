@@ -38,7 +38,8 @@ class PanelManager: NSObject, NSWindowDelegate {
         guard !isSetup else { return }
         isSetup = true
 
-        let initialHeight: CGFloat = 80
+        let defaultWindowMode = UserDefaults.standard.string(forKey: "defaultWindowMode") ?? "full"
+        let initialHeight: CGFloat = (defaultWindowMode == "simple") ? 80 : 500
         let topY = calculatePanelTopY()
         // origin.y = 顶部Y - 窗口高度（macOS坐标系从左下角开始）
         let originY = topY - initialHeight

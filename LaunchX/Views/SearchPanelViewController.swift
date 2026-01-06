@@ -18,7 +18,8 @@ class SearchPanelViewController: NSViewController {
     private let ideNameLabel = NSTextField(labelWithString: "")
 
     // MARK: - State
-    private var results: [SearchResult] = []
+    var results: [SearchResult] = []
+    private var contentHeightConstraint: NSLayoutConstraint?
     private var recentApps: [SearchResult] = []  // 最近使用的应用
     private var selectedIndex: Int = 0
     private let searchEngine = SearchEngine.shared
@@ -893,7 +894,8 @@ class SearchPanelViewController: NSViewController {
             // Divider
             divider.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
             divider.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-            divider.topAnchor.constraint(equalTo: contentView.topAnchor, constant: headerHeight),
+            divider.topAnchor.constraint(
+                equalTo: contentView.topAnchor, constant: headerHeight),
 
             // Scroll view
             scrollView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
@@ -905,6 +907,10 @@ class SearchPanelViewController: NSViewController {
             noResultsLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
             noResultsLabel.topAnchor.constraint(equalTo: divider.bottomAnchor, constant: 20),
         ])
+
+        // Define main height constraint
+        contentHeightConstraint = contentView.heightAnchor.constraint(equalToConstant: headerHeight)
+        contentHeightConstraint?.isActive = true
 
         // 创建并保存 searchField 的 leading 约束
         // 默认直接从左边开始（无搜索图标）
@@ -993,8 +999,6 @@ class SearchPanelViewController: NSViewController {
             uuidOptionsView.trailingAnchor.constraint(
                 equalTo: contentView.trailingAnchor, constant: -20),
             uuidOptionsView.topAnchor.constraint(equalTo: divider.bottomAnchor, constant: 12),
-            uuidOptionsView.bottomAnchor.constraint(
-                equalTo: contentView.bottomAnchor, constant: -12),
 
             // 第一行：选项按钮（水平排列）
             hyphenCheckbox.leadingAnchor.constraint(equalTo: uuidOptionsView.leadingAnchor),
@@ -1018,6 +1022,10 @@ class SearchPanelViewController: NSViewController {
             uuidResultView.topAnchor.constraint(equalTo: resultLabel.bottomAnchor, constant: 8),
             uuidResultView.bottomAnchor.constraint(equalTo: uuidOptionsView.bottomAnchor),
         ])
+
+        uuidOptionsView.bottomAnchor.constraint(
+            equalTo: contentView.bottomAnchor, constant: -12
+        ).isActive = true
     }
 
     /// 设置 URL 编码解码 UI
@@ -1123,7 +1131,6 @@ class SearchPanelViewController: NSViewController {
             urlCoderView.trailingAnchor.constraint(
                 equalTo: contentView.trailingAnchor, constant: -20),
             urlCoderView.topAnchor.constraint(equalTo: divider.bottomAnchor, constant: 12),
-            urlCoderView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -12),
 
             // 解码的 URL 标签
             decodedURLLabel.leadingAnchor.constraint(equalTo: urlCoderView.leadingAnchor),
@@ -1178,6 +1185,9 @@ class SearchPanelViewController: NSViewController {
             encodedURLScrollView.bottomAnchor.constraint(
                 equalTo: encodedFieldBg.bottomAnchor, constant: -4),
         ])
+
+        urlCoderView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -12)
+            .isActive = true
     }
 
     /// 设置 Base64 编码解码 UI
@@ -1284,8 +1294,6 @@ class SearchPanelViewController: NSViewController {
             base64CoderView.trailingAnchor.constraint(
                 equalTo: contentView.trailingAnchor, constant: -20),
             base64CoderView.topAnchor.constraint(equalTo: divider.bottomAnchor, constant: 12),
-            base64CoderView.bottomAnchor.constraint(
-                equalTo: contentView.bottomAnchor, constant: -12),
 
             // 原始文本标签
             originalTextLabel.leadingAnchor.constraint(equalTo: base64CoderView.leadingAnchor),
@@ -1343,6 +1351,10 @@ class SearchPanelViewController: NSViewController {
             base64TextScrollView.bottomAnchor.constraint(
                 equalTo: base64FieldBg.bottomAnchor, constant: -4),
         ])
+
+        base64CoderView.bottomAnchor.constraint(
+            equalTo: contentView.bottomAnchor, constant: -12
+        ).isActive = true
     }
 
     @objc private func copyOriginalText() {
@@ -1420,6 +1432,9 @@ class SearchPanelViewController: NSViewController {
 
         // 每次显示面板时刷新状态，确保设置更改立即生效
         refreshDisplayMode()
+
+        // 强制立即更新窗口高度，确保在 Simple 模式下启动时不会显示多余高度
+        updateVisibility()
     }
 
     /// 刷新显示模式（Simple/Full）
@@ -1767,9 +1782,12 @@ class SearchPanelViewController: NSViewController {
             shouldExpand = expanded && !results.isEmpty  // Simple mode: only expand with results
         }
 
-        let targetHeight: CGFloat = shouldExpand ? 500 : 80
-        let currentFrame = window.frame
+        let targetHeight: CGFloat = shouldExpand ? 500 : headerHeight
 
+        // Update the height constraint instead of just the window frame
+        contentHeightConstraint?.constant = targetHeight
+
+        let currentFrame = window.frame
         guard abs(currentFrame.height - targetHeight) > 1 else { return }
 
         let newOriginY = currentFrame.origin.y - (targetHeight - currentFrame.height)
@@ -1780,7 +1798,7 @@ class SearchPanelViewController: NSViewController {
             height: targetHeight
         )
 
-        // No animation for speed
+        // Disable window's internal constraint updates during frame set
         window.setFrame(newFrame, display: true, animate: false)
     }
 
