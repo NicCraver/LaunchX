@@ -159,6 +159,7 @@ class SearchPanelViewController: NSViewController {
         visualEffectView.state = .active
         visualEffectView.wantsLayer = true
         visualEffectView.layer?.cornerRadius = 26
+        visualEffectView.layer?.cornerCurve = .continuous
         visualEffectView.layer?.masksToBounds = true  // 正确裁剪圆角
 
         // 添加边框
