@@ -205,11 +205,9 @@ class ClipboardPanelViewController: NSViewController {
     }
 
     @objc private func showFilterMenu() {
-        let buttonFrame = filterButton.convert(filterButton.bounds, to: nil)
-        let screenPoint =
-            view.window?.convertPoint(toScreen: NSPoint(x: buttonFrame.minX, y: buttonFrame.minY))
-            ?? .zero
-        filterMenu.popUp(positioning: nil, at: NSPoint(x: screenPoint.x, y: screenPoint.y), in: nil)
+        // 在按钮下方弹出菜单，指定 in: filterButton 确保菜单在正确的层级显示
+        let point = NSPoint(x: 0, y: filterButton.bounds.height + 4)
+        filterMenu.popUp(positioning: nil, at: point, in: filterButton)
     }
 
     private func setupTableView() {
