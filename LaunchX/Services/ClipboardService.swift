@@ -141,6 +141,30 @@ final class ClipboardService: ObservableObject {
             forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL],
             !fileURLs.isEmpty
         {
+            // 检查是否是单个图片文件（微信等应用复制图片时会以文件形式放入剪贴板）
+            let imageExtensions = ["png", "jpg", "jpeg", "gif", "bmp", "tiff", "tif", "heic", "webp"]
+            if fileURLs.count == 1,
+               let fileURL = fileURLs.first,
+               imageExtensions.contains(fileURL.pathExtension.lowercased()),
+               let imageData = try? Data(contentsOf: fileURL),
+               let image = NSImage(data: imageData)
+            {
+                print("[ClipboardService] Found image file from clipboard: \(fileURL.path)")
+                // 转换为 PNG 格式存储
+                if let tiffData = image.tiffRepresentation,
+                   let bitmap = NSBitmapImageRep(data: tiffData),
+                   let pngData = bitmap.representation(using: .png, properties: [:])
+                {
+                    return ClipboardItem(
+                        contentType: .image,
+                        imageData: pngData,
+                        sourceAppBundleId: appInfo.bundleId,
+                        sourceAppName: appInfo.name
+                    )
+                }
+            }
+
+            // 不是图片文件，按普通文件处理
             let paths = fileURLs.map { $0.path }
             return ClipboardItem(
                 contentType: .file,
