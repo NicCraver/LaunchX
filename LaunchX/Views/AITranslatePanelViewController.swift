@@ -288,9 +288,15 @@ class AITranslatePanelViewController: NSViewController {
         resultStackView.orientation = .vertical
         resultStackView.alignment = .leading
         resultStackView.spacing = 0
+        resultStackView.setHuggingPriority(.required, for: .vertical)
         resultStackView.translatesAutoresizingMaskIntoConstraints = false
         resultStackView.setHuggingPriority(.defaultLow, for: .horizontal)
         flippedContainer.addSubview(resultStackView)
+
+        // 让 flippedContainer 自动适应 stackView 的高度，确保点击事件能穿透到子视图
+        NSLayoutConstraint.activate([
+            resultStackView.bottomAnchor.constraint(equalTo: flippedContainer.bottomAnchor)
+        ])
 
         resultScrollView.documentView = flippedContainer
 
@@ -576,12 +582,23 @@ class AITranslatePanelViewController: NSViewController {
         }
 
         // 根据参数过滤要显示的服务
-        let enabledServices = settings.serviceConfigs.filter { config in
+        var enabledServices = settings.serviceConfigs.filter { config in
             guard config.isEnabled else { return false }
             if config.serviceType == .wordTranslate && !showWordTranslate {
                 return false
             }
             return true
+        }
+
+        // 固定顺序：单词翻译在前，AI翻译在后
+        enabledServices.sort { s1, s2 in
+            if s1.serviceType == .wordTranslate && s2.serviceType != .wordTranslate {
+                return true
+            }
+            if s1.serviceType != .wordTranslate && s2.serviceType == .wordTranslate {
+                return false
+            }
+            return false
         }
 
         for (index, service) in enabledServices.enumerated() {
@@ -671,8 +688,9 @@ class AITranslatePanelViewController: NSViewController {
     ) -> NSView {
         let container = NSView()
         container.translatesAutoresizingMaskIntoConstraints = false
+        container.identifier = NSUserInterfaceItemIdentifier("service_\(service.id)")
 
-        // 头部容器 - 包含图标、服务名和复制按钮
+        // 头部容器 - 包含图标和服务名
         let headerView = NSView()
         headerView.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(headerView)
@@ -703,26 +721,10 @@ class AITranslatePanelViewController: NSViewController {
         nameLabel.textColor = .labelColor
         leftStack.addArrangedSubview(nameLabel)
 
-        // 复制按钮 - 单独放在右侧
-        let copyButton = NSButton()
-        copyButton.image = NSImage(systemSymbolName: "doc.on.doc", accessibilityDescription: "复制")
-        copyButton.bezelStyle = .inline
-        copyButton.isBordered = false
-        copyButton.contentTintColor = .secondaryLabelColor
-        copyButton.target = self
-        copyButton.action = #selector(copyServiceResult(_:))
-        copyButton.translatesAutoresizingMaskIntoConstraints = false
-        headerView.addSubview(copyButton)
-
-        // 头部布局约束
+        // 头部布局约束 (不包含复制按钮)
         NSLayoutConstraint.activate([
             leftStack.leadingAnchor.constraint(equalTo: headerView.leadingAnchor),
             leftStack.centerYAnchor.constraint(equalTo: headerView.centerYAnchor),
-
-            copyButton.trailingAnchor.constraint(equalTo: headerView.trailingAnchor),
-            copyButton.centerYAnchor.constraint(equalTo: headerView.centerYAnchor),
-            copyButton.widthAnchor.constraint(equalToConstant: 24),
-            copyButton.heightAnchor.constraint(equalToConstant: 24),
         ])
 
         // 内容区域
@@ -731,7 +733,12 @@ class AITranslatePanelViewController: NSViewController {
             contentLabel = NSTextField(wrappingLabelWithString: content)
             contentLabel!.font = .systemFont(ofSize: 14)
             contentLabel!.textColor = isError ? .systemRed : .labelColor
+            contentLabel!.isEditable = false
             contentLabel!.isSelectable = true
+            contentLabel!.focusRingType = .none
+            contentLabel!.drawsBackground = false
+            contentLabel!.isBordered = false
+            contentLabel!.allowsEditingTextAttributes = true
             contentLabel!.translatesAutoresizingMaskIntoConstraints = false
             contentLabel!.identifier = NSUserInterfaceItemIdentifier("content_\(service.id)")
             container.addSubview(contentLabel!)
@@ -744,11 +751,28 @@ class AITranslatePanelViewController: NSViewController {
             contentLabel = loadingLabel
         }
 
+        // 复制按钮 - 最后添加确保在最上层
+        let copyButton = NSButton(frame: NSRect(x: 0, y: 0, width: 24, height: 24))
+        copyButton.image = NSImage(systemSymbolName: "doc.on.doc", accessibilityDescription: "复制")
+        copyButton.bezelStyle = .accessoryBarAction
+        copyButton.isBordered = false
+        copyButton.imagePosition = .imageOnly
+        copyButton.contentTintColor = .secondaryLabelColor
+        copyButton.translatesAutoresizingMaskIntoConstraints = false
+        copyButton.target = self
+        copyButton.action = #selector(handleCopyButtonClick(_:))
+        container.addSubview(copyButton)  // 直接添加到 container，确保在最上层
+
         NSLayoutConstraint.activate([
             headerView.topAnchor.constraint(equalTo: container.topAnchor, constant: 12),
             headerView.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
-            headerView.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
+            headerView.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -56),
             headerView.heightAnchor.constraint(equalToConstant: 24),
+
+            copyButton.topAnchor.constraint(equalTo: container.topAnchor, constant: 12),
+            copyButton.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
+            copyButton.widthAnchor.constraint(equalToConstant: 24),
+            copyButton.heightAnchor.constraint(equalToConstant: 24),
         ])
 
         if let label = contentLabel {
@@ -890,62 +914,90 @@ class AITranslatePanelViewController: NSViewController {
     }
 
     @objc private func copyServiceResult(_ sender: NSButton) {
-        // 按钮层级: copyButton -> headerView -> container -> resultStackView -> flippedContainer
-        // 向上查找直到找到 resultStackView 的子视图（container）
+        handleCopyButtonClick(sender)
+    }
+
+    @objc private func handleCopyButtonClick(_ sender: NSButton) {
+        print("[AITranslate] handleCopyButtonClick called")
+
+        // 从按钮向上查找 container（有 service_ 前缀 identifier 的视图）
         var currentView: NSView? = sender
         var container: NSView? = nil
+        var depth = 0
 
         while let view = currentView {
-            // 检查父视图是否是 resultStackView
-            if view.superview === resultStackView {
+            let id = view.identifier?.rawValue ?? "nil"
+            print("[AITranslate] depth \(depth): \(type(of: view)), identifier: \(id)")
+            if let identifier = view.identifier?.rawValue, identifier.hasPrefix("service_") {
                 container = view
                 break
             }
             currentView = view.superview
+            depth += 1
         }
 
         guard let container = container else {
-            print("[AITranslate] Failed to find container view in resultStackView")
+            print("[AITranslate] Failed to find container with service_ prefix")
             return
         }
 
-        // 递归查找 content label
+        print("[AITranslate] Found container: \(container.identifier?.rawValue ?? "nil")")
+
+        // 递归查找所有 NSTextField（排除标题），找到内容最长的那个
         func findContentLabel(in view: NSView) -> NSTextField? {
-            if let textField = view as? NSTextField,
-                let identifier = textField.identifier?.rawValue,
-                identifier.hasPrefix("content_")
-            {
-                return textField
-            }
+            var bestMatch: NSTextField? = nil
+
             for subview in view.subviews {
+                if let textField = subview as? NSTextField,
+                    textField.isSelectable,  // 内容标签是可选择的
+                    !textField.stringValue.isEmpty
+                {
+                    if bestMatch == nil
+                        || textField.stringValue.count > bestMatch!.stringValue.count
+                    {
+                        bestMatch = textField
+                    }
+                }
+                // 递归查找子视图
                 if let found = findContentLabel(in: subview) {
-                    return found
+                    if bestMatch == nil || found.stringValue.count > bestMatch!.stringValue.count {
+                        bestMatch = found
+                    }
                 }
             }
-            return nil
+            return bestMatch
         }
 
-        if let contentLabel = findContentLabel(in: container) {
-            let text = contentLabel.stringValue
-            let success = NSPasteboard.general.clearContents()
-            let writeSuccess = NSPasteboard.general.setString(text, forType: .string)
-            print(
-                "[AITranslate] Copied to clipboard (clear: \(success), write: \(writeSuccess)): \(text.prefix(50))..."
-            )
+        // 先尝试通过 identifier 直接定位内容标签
+        let serviceId =
+            container.identifier?.rawValue.replacingOccurrences(of: "service_", with: "") ?? ""
+        let contentId = NSUserInterfaceItemIdentifier("content_\(serviceId)")
 
-            // 添加视觉反馈 - 短暂改变图标
+        var targetLabel: NSTextField? = nil
+        if let found = findView(in: container, identifier: contentId) as? NSTextField {
+            targetLabel = found
+        } else {
+            // 降级使用递归查找
+            targetLabel = findContentLabel(in: container)
+        }
+
+        if let contentLabel = targetLabel {
+            let text = contentLabel.stringValue
+            print("[AITranslate] Copying text: \(text.prefix(50))...")
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(text, forType: .string)
+
+            // 视觉反馈 - 短暂改变图标为勾选
             let originalImage = sender.image
-            sender.image = NSImage(
-                systemSymbolName: "checkmark", accessibilityDescription: "已复制")
+            sender.image = NSImage(systemSymbolName: "checkmark", accessibilityDescription: "已复制")
             sender.contentTintColor = .systemGreen
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                 sender.image = originalImage
                 sender.contentTintColor = .secondaryLabelColor
             }
-            return
+        } else {
+            print("[AITranslate] No selectable content found in container")
         }
-
-        print("[AITranslate] Content label not found in container, subviews: \(container.subviews)")
     }
 
     private func findView(in view: NSView, identifier: NSUserInterfaceItemIdentifier) -> NSView? {
@@ -960,6 +1012,10 @@ class AITranslatePanelViewController: NSViewController {
         return nil
     }
 }
+
+// MARK: - CopyButton
+
+/// 自定义复制按钮，使用闭包处理点击事件
 
 // MARK: - FlippedView
 
@@ -1039,7 +1095,18 @@ extension AITranslatePanelViewController: NSTextViewDelegate {
 
         // 如果有多个服务结果，显示所有结果
         if let serviceResults = item.serviceResults, !serviceResults.isEmpty {
-            for (index, result) in serviceResults.enumerated() {
+            // 固定顺序：单词翻译在前，AI翻译在后
+            let sortedResults = serviceResults.sorted { r1, r2 in
+                if r1.serviceType == .wordTranslate && r2.serviceType != .wordTranslate {
+                    return true
+                }
+                if r1.serviceType != .wordTranslate && r2.serviceType == .wordTranslate {
+                    return false
+                }
+                return false
+            }
+
+            for (index, result) in sortedResults.enumerated() {
                 // 找到对应的服务配置
                 if let serviceConfig = settings.serviceConfigs.first(where: {
                     $0.serviceType == result.serviceType && $0.isEnabled
@@ -1059,7 +1126,7 @@ extension AITranslatePanelViewController: NSTextViewDelegate {
                         .isActive = true
 
                     // 添加分隔线
-                    if index < serviceResults.count - 1 {
+                    if index < sortedResults.count - 1 {
                         let separator = createSeparator()
                         resultStackView.addArrangedSubview(separator)
                         separator.widthAnchor.constraint(equalTo: resultStackView.widthAnchor)

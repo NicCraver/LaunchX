@@ -212,7 +212,7 @@ class AITranslatePanelManager: NSObject, NSWindowDelegate {
         panel.level = .floating
         panel.titlebarAppearsTransparent = true
         panel.titleVisibility = .hidden
-        panel.isMovableByWindowBackground = true
+        panel.isMovableByWindowBackground = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.backgroundColor = NSColor(named: "PanelBackground") ?? NSColor.windowBackgroundColor
 
