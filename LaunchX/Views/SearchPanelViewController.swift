@@ -216,6 +216,12 @@ class SearchPanelViewController: NSViewController {
         }
     }
 
+    // 支持顶部拖拽（简单的支持了一下，这不是重点）
+    override func viewDidAppear() {
+        super.viewDidAppear()
+        self.view.window?.isMovableByWindowBackground = true
+    }
+
     /// 设置通知观察者
     private func setupNotificationObservers() {
         // 监听直接进入 IDE 模式的通知（由快捷键触发）
