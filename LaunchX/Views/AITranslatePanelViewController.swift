@@ -10,7 +10,7 @@ class AITranslatePanelViewController: NSViewController {
     private var containerView: NSVisualEffectView!
     private var titleBar: NSView!
     private var titleLabel: NSTextField!
-    private var settingsButton: NSButton!
+
     private var pinButton: NSButton!
 
     private var inputScrollView: NSScrollView!
@@ -96,17 +96,6 @@ class AITranslatePanelViewController: NSViewController {
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         titleBar.addSubview(titleLabel)
 
-        // 设置按钮
-        settingsButton = NSButton()
-        settingsButton.image = NSImage(
-            systemSymbolName: "gearshape", accessibilityDescription: "设置")
-        settingsButton.bezelStyle = .inline
-        settingsButton.isBordered = false
-        settingsButton.target = self
-        settingsButton.action = #selector(openSettings)
-        settingsButton.translatesAutoresizingMaskIntoConstraints = false
-        titleBar.addSubview(settingsButton)
-
         // 固定按钮
         pinButton = NSButton()
         pinButton.image = NSImage(systemSymbolName: "pin", accessibilityDescription: "固定")
@@ -130,12 +119,6 @@ class AITranslatePanelViewController: NSViewController {
             pinButton.trailingAnchor.constraint(equalTo: titleBar.trailingAnchor, constant: -12),
             pinButton.widthAnchor.constraint(equalToConstant: 24),
             pinButton.heightAnchor.constraint(equalToConstant: 24),
-
-            settingsButton.centerYAnchor.constraint(equalTo: titleBar.centerYAnchor),
-            settingsButton.trailingAnchor.constraint(
-                equalTo: pinButton.leadingAnchor, constant: -8),
-            settingsButton.widthAnchor.constraint(equalToConstant: 24),
-            settingsButton.heightAnchor.constraint(equalToConstant: 24),
         ])
     }
 
@@ -148,11 +131,12 @@ class AITranslatePanelViewController: NSViewController {
         inputScrollView.borderType = .noBorder
         inputScrollView.backgroundColor = .clear
         inputScrollView.drawsBackground = false
+        inputScrollView.horizontalScrollElasticity = .none
         inputScrollView.translatesAutoresizingMaskIntoConstraints = false
         containerView.addSubview(inputScrollView)
 
         // 输入文本视图
-        inputTextView = NSTextView(frame: NSRect(x: 0, y: 0, width: 100, height: inputMinHeight))
+        inputTextView = NSTextView()
         inputTextView.minSize = NSSize(width: 0, height: inputMinHeight)
         inputTextView.maxSize = NSSize(
             width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
@@ -160,7 +144,7 @@ class AITranslatePanelViewController: NSViewController {
         inputTextView.isHorizontallyResizable = false
         inputTextView.autoresizingMask = [.width]
         inputTextView.textContainer?.containerSize = NSSize(
-            width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+            width: 0, height: CGFloat.greatestFiniteMagnitude)
         inputTextView.textContainer?.widthTracksTextView = true
         inputTextView.textContainer?.lineFragmentPadding = 0
         inputTextView.font = .systemFont(ofSize: 15)
@@ -305,6 +289,7 @@ class AITranslatePanelViewController: NSViewController {
         resultStackView.alignment = .leading
         resultStackView.spacing = 0
         resultStackView.translatesAutoresizingMaskIntoConstraints = false
+        resultStackView.setHuggingPriority(.defaultLow, for: .horizontal)
         flippedContainer.addSubview(resultStackView)
 
         resultScrollView.documentView = flippedContainer
@@ -323,6 +308,7 @@ class AITranslatePanelViewController: NSViewController {
             resultStackView.topAnchor.constraint(equalTo: flippedContainer.topAnchor),
             resultStackView.leadingAnchor.constraint(equalTo: flippedContainer.leadingAnchor),
             resultStackView.trailingAnchor.constraint(equalTo: flippedContainer.trailingAnchor),
+            resultStackView.widthAnchor.constraint(equalTo: flippedContainer.widthAnchor),
 
             flippedContainer.widthAnchor.constraint(equalTo: resultScrollView.widthAnchor),
         ])
@@ -471,6 +457,10 @@ class AITranslatePanelViewController: NSViewController {
         // 根据是否为单词决定显示哪些服务
         showServicesWithLoading(showWordTranslate: isEnglishToChineseWord)
 
+        // 开始新的翻译会话
+        AITranslateService.shared.startNewTranslation(
+            text: text, fromLang: fromLang, toLang: toLang)
+
         // 执行 AI 翻译
         if let aiConfig = settings.serviceConfigs.first(where: {
             $0.serviceType == .aiTranslate && $0.isEnabled
@@ -568,10 +558,13 @@ class AITranslatePanelViewController: NSViewController {
         for (index, service) in enabledServices.enumerated() {
             let serviceView = createServiceRowView(service: service, isLoading: false, content: nil)
             resultStackView.addArrangedSubview(serviceView)
+            serviceView.widthAnchor.constraint(equalTo: resultStackView.widthAnchor).isActive = true
 
             if index < enabledServices.count - 1 {
                 let separator = createSeparator()
                 resultStackView.addArrangedSubview(separator)
+                separator.widthAnchor.constraint(equalTo: resultStackView.widthAnchor).isActive =
+                    true
             }
         }
     }
@@ -595,10 +588,13 @@ class AITranslatePanelViewController: NSViewController {
             let serviceView = createServiceRowView(service: service, isLoading: true, content: nil)
             serviceView.identifier = NSUserInterfaceItemIdentifier("service_\(service.id)")
             resultStackView.addArrangedSubview(serviceView)
+            serviceView.widthAnchor.constraint(equalTo: resultStackView.widthAnchor).isActive = true
 
             if index < enabledServices.count - 1 {
                 let separator = createSeparator()
                 resultStackView.addArrangedSubview(separator)
+                separator.widthAnchor.constraint(equalTo: resultStackView.widthAnchor).isActive =
+                    true
             }
         }
 
@@ -659,6 +655,7 @@ class AITranslatePanelViewController: NSViewController {
                     service: serviceConfig, isLoading: false, content: content, isError: isError)
                 newView.identifier = identifier
                 resultStackView.insertArrangedSubview(newView, at: index)
+                newView.widthAnchor.constraint(equalTo: resultStackView.widthAnchor).isActive = true
                 break
             }
         }
@@ -675,13 +672,18 @@ class AITranslatePanelViewController: NSViewController {
         let container = NSView()
         container.translatesAutoresizingMaskIntoConstraints = false
 
-        // 头部
-        let headerStack = NSStackView()
-        headerStack.orientation = .horizontal
-        headerStack.spacing = 6
-        headerStack.alignment = .centerY
-        headerStack.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(headerStack)
+        // 头部容器 - 包含图标、服务名和复制按钮
+        let headerView = NSView()
+        headerView.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(headerView)
+
+        // 左侧 stack - 图标和服务名
+        let leftStack = NSStackView()
+        leftStack.orientation = .horizontal
+        leftStack.spacing = 6
+        leftStack.alignment = .centerY
+        leftStack.translatesAutoresizingMaskIntoConstraints = false
+        headerView.addSubview(leftStack)
 
         // 图标
         let iconView = NSImageView()
@@ -693,34 +695,35 @@ class AITranslatePanelViewController: NSViewController {
             iconView.widthAnchor.constraint(equalToConstant: 18),
             iconView.heightAnchor.constraint(equalToConstant: 18),
         ])
-        headerStack.addArrangedSubview(iconView)
+        leftStack.addArrangedSubview(iconView)
 
         // 服务名
         let nameLabel = NSTextField(labelWithString: service.name)
         nameLabel.font = .systemFont(ofSize: 13, weight: .medium)
         nameLabel.textColor = .labelColor
-        headerStack.addArrangedSubview(nameLabel)
+        leftStack.addArrangedSubview(nameLabel)
 
-        // 弹簧
-        let spacer = NSView()
-        spacer.translatesAutoresizingMaskIntoConstraints = false
-        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        headerStack.addArrangedSubview(spacer)
-
-        // 复制按钮
+        // 复制按钮 - 单独放在右侧
         let copyButton = NSButton()
         copyButton.image = NSImage(systemSymbolName: "doc.on.doc", accessibilityDescription: "复制")
         copyButton.bezelStyle = .inline
         copyButton.isBordered = false
+        copyButton.contentTintColor = .secondaryLabelColor
         copyButton.target = self
         copyButton.action = #selector(copyServiceResult(_:))
-        copyButton.identifier = NSUserInterfaceItemIdentifier("copy_\(service.id)")
         copyButton.translatesAutoresizingMaskIntoConstraints = false
+        headerView.addSubview(copyButton)
+
+        // 头部布局约束
         NSLayoutConstraint.activate([
+            leftStack.leadingAnchor.constraint(equalTo: headerView.leadingAnchor),
+            leftStack.centerYAnchor.constraint(equalTo: headerView.centerYAnchor),
+
+            copyButton.trailingAnchor.constraint(equalTo: headerView.trailingAnchor),
+            copyButton.centerYAnchor.constraint(equalTo: headerView.centerYAnchor),
             copyButton.widthAnchor.constraint(equalToConstant: 24),
             copyButton.heightAnchor.constraint(equalToConstant: 24),
         ])
-        headerStack.addArrangedSubview(copyButton)
 
         // 内容区域
         var contentLabel: NSTextField?
@@ -742,23 +745,28 @@ class AITranslatePanelViewController: NSViewController {
         }
 
         NSLayoutConstraint.activate([
-            headerStack.topAnchor.constraint(equalTo: container.topAnchor, constant: 12),
-            headerStack.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
-            headerStack.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
+            headerView.topAnchor.constraint(equalTo: container.topAnchor, constant: 12),
+            headerView.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
+            headerView.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
+            headerView.heightAnchor.constraint(equalToConstant: 24),
         ])
 
         if let label = contentLabel {
             NSLayoutConstraint.activate([
-                label.topAnchor.constraint(equalTo: headerStack.bottomAnchor, constant: 8),
+                label.topAnchor.constraint(equalTo: headerView.bottomAnchor, constant: 8),
                 label.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
                 label.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
                 label.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -12),
             ])
         } else {
             NSLayoutConstraint.activate([
-                headerStack.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -12)
+                headerView.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -12)
             ])
         }
+
+        // 让 container 可以水平拉伸填满 stackView
+        container.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        container.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
         return container
     }
@@ -845,12 +853,6 @@ class AITranslatePanelViewController: NSViewController {
 
     // MARK: - 操作
 
-    @objc private func openSettings() {
-        AITranslatePanelManager.shared.forceHidePanel()
-        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-        NSApp.activate(ignoringOtherApps: true)
-    }
-
     @objc private func togglePin() {
         AITranslatePanelManager.shared.togglePinned()
     }
@@ -888,28 +890,62 @@ class AITranslatePanelViewController: NSViewController {
     }
 
     @objc private func copyServiceResult(_ sender: NSButton) {
-        guard let identifier = sender.identifier?.rawValue,
-            identifier.hasPrefix("copy_"),
-            let serviceIdString = identifier.components(separatedBy: "copy_").last,
-            let serviceId = UUID(uuidString: serviceIdString)
-        else {
-            print("[AITranslate] Failed to get service ID from button")
+        // 按钮层级: copyButton -> headerView -> container -> resultStackView -> flippedContainer
+        // 向上查找直到找到 resultStackView 的子视图（container）
+        var currentView: NSView? = sender
+        var container: NSView? = nil
+
+        while let view = currentView {
+            // 检查父视图是否是 resultStackView
+            if view.superview === resultStackView {
+                container = view
+                break
+            }
+            currentView = view.superview
+        }
+
+        guard let container = container else {
+            print("[AITranslate] Failed to find container view in resultStackView")
             return
         }
 
-        let contentIdentifier = NSUserInterfaceItemIdentifier("content_\(serviceId)")
-        for subview in resultStackView.arrangedSubviews {
-            if let contentLabel = findView(in: subview, identifier: contentIdentifier)
-                as? NSTextField
+        // 递归查找 content label
+        func findContentLabel(in view: NSView) -> NSTextField? {
+            if let textField = view as? NSTextField,
+                let identifier = textField.identifier?.rawValue,
+                identifier.hasPrefix("content_")
             {
-                let text = contentLabel.stringValue
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(text, forType: .string)
-                print("[AITranslate] Copied to clipboard: \(text.prefix(50))...")
-                return
+                return textField
             }
+            for subview in view.subviews {
+                if let found = findContentLabel(in: subview) {
+                    return found
+                }
+            }
+            return nil
         }
-        print("[AITranslate] Content label not found for service: \(serviceId)")
+
+        if let contentLabel = findContentLabel(in: container) {
+            let text = contentLabel.stringValue
+            let success = NSPasteboard.general.clearContents()
+            let writeSuccess = NSPasteboard.general.setString(text, forType: .string)
+            print(
+                "[AITranslate] Copied to clipboard (clear: \(success), write: \(writeSuccess)): \(text.prefix(50))..."
+            )
+
+            // 添加视觉反馈 - 短暂改变图标
+            let originalImage = sender.image
+            sender.image = NSImage(
+                systemSymbolName: "checkmark", accessibilityDescription: "已复制")
+            sender.contentTintColor = .systemGreen
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                sender.image = originalImage
+                sender.contentTintColor = .secondaryLabelColor
+            }
+            return
+        }
+
+        print("[AITranslate] Content label not found in container, subviews: \(container.subviews)")
     }
 
     private func findView(in view: NSView, identifier: NSUserInterfaceItemIdentifier) -> NSView? {
@@ -999,21 +1035,70 @@ extension AITranslatePanelViewController: NSTextViewDelegate {
             view.removeFromSuperview()
         }
 
-        // 找到对应的服务配置
         let settings = AITranslateSettings.load()
-        if let serviceConfig = settings.serviceConfigs.first(where: {
-            $0.serviceType == item.serviceType && $0.isEnabled
-        }) {
-            let serviceView = createServiceRowView(
-                service: serviceConfig, isLoading: false, content: item.translatedText)
-            serviceView.identifier = NSUserInterfaceItemIdentifier("service_\(serviceConfig.id)")
-            resultStackView.addArrangedSubview(serviceView)
+
+        // 如果有多个服务结果，显示所有结果
+        if let serviceResults = item.serviceResults, !serviceResults.isEmpty {
+            for (index, result) in serviceResults.enumerated() {
+                // 找到对应的服务配置
+                if let serviceConfig = settings.serviceConfigs.first(where: {
+                    $0.serviceType == result.serviceType && $0.isEnabled
+                }) {
+                    // 对于单词翻译，在翻译结果前加上原始单词
+                    var displayText = result.translatedText
+                    if result.serviceType == .wordTranslate {
+                        displayText = "「\(item.sourceText)」\n\n\(result.translatedText)"
+                    }
+
+                    let serviceView = createServiceRowView(
+                        service: serviceConfig, isLoading: false, content: displayText)
+                    serviceView.identifier = NSUserInterfaceItemIdentifier(
+                        "service_\(serviceConfig.id)")
+                    resultStackView.addArrangedSubview(serviceView)
+                    serviceView.widthAnchor.constraint(equalTo: resultStackView.widthAnchor)
+                        .isActive = true
+
+                    // 添加分隔线
+                    if index < serviceResults.count - 1 {
+                        let separator = createSeparator()
+                        resultStackView.addArrangedSubview(separator)
+                        separator.widthAnchor.constraint(equalTo: resultStackView.widthAnchor)
+                            .isActive = true
+                    }
+                }
+            }
         } else {
-            // 如果找不到对应的服务配置，使用默认显示
-            let defaultConfig = TranslateServiceConfig.defaultAITranslate
-            let serviceView = createServiceRowView(
-                service: defaultConfig, isLoading: false, content: item.translatedText)
-            resultStackView.addArrangedSubview(serviceView)
+            // 向后兼容：旧的历史记录格式
+            if let serviceConfig = settings.serviceConfigs.first(where: {
+                $0.serviceType == item.serviceType && $0.isEnabled
+            }) {
+                // 对于单词翻译，在翻译结果前加上原始单词
+                var displayText = item.translatedText
+                if item.serviceType == .wordTranslate {
+                    displayText = "「\(item.sourceText)」\n\n\(item.translatedText)"
+                }
+
+                let serviceView = createServiceRowView(
+                    service: serviceConfig, isLoading: false, content: displayText)
+                serviceView.identifier = NSUserInterfaceItemIdentifier(
+                    "service_\(serviceConfig.id)")
+                resultStackView.addArrangedSubview(serviceView)
+                serviceView.widthAnchor.constraint(equalTo: resultStackView.widthAnchor).isActive =
+                    true
+            } else {
+                // 如果找不到对应的服务配置，使用默认显示
+                let defaultConfig = TranslateServiceConfig.defaultAITranslate
+                var displayText = item.translatedText
+                if item.serviceType == .wordTranslate {
+                    displayText = "「\(item.sourceText)」\n\n\(item.translatedText)"
+                }
+
+                let serviceView = createServiceRowView(
+                    service: defaultConfig, isLoading: false, content: displayText)
+                resultStackView.addArrangedSubview(serviceView)
+                serviceView.widthAnchor.constraint(equalTo: resultStackView.widthAnchor).isActive =
+                    true
+            }
         }
 
         // 展开结果区域

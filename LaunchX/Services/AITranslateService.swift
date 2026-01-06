@@ -16,6 +16,12 @@ final class AITranslateService: ObservableObject {
 
     private var activeTasks: [UUID: URLSessionDataTask] = [:]
 
+    // 用于收集当前翻译的所有服务结果
+    private var pendingResults: [TranslateServiceResult] = []
+    private var pendingSourceText: String = ""
+    private var pendingFromLang: TranslateLanguage = .auto
+    private var pendingToLang: TranslateLanguage = .auto
+
     // 数据存储路径
     private let storageURL: URL = {
         let appSupport = FileManager.default.urls(
@@ -37,6 +43,14 @@ final class AITranslateService: ObservableObject {
     }
 
     // MARK: - 翻译方法
+
+    /// 开始新的翻译会话（清空之前的待处理结果）
+    func startNewTranslation(text: String, fromLang: TranslateLanguage, toLang: TranslateLanguage) {
+        pendingResults = []
+        pendingSourceText = text
+        pendingFromLang = fromLang
+        pendingToLang = toLang
+    }
 
     /// 执行翻译
     func translate(
@@ -113,12 +127,16 @@ final class AITranslateService: ObservableObject {
             return
         }
 
+        let serviceType = serviceConfig.serviceType
+
         let task = URLSession.shared.dataTask(with: request) {
             [weak self] data, response, error in
             DispatchQueue.main.async {
+                guard let self = self else { return }
+
                 // 移除已完成的任务
-                self?.activeTasks.removeValue(forKey: taskId)
-                self?.updateTranslatingState()
+                self.activeTasks.removeValue(forKey: taskId)
+                self.updateTranslatingState()
 
                 if let error = error {
                     if (error as NSError).code == NSURLErrorCancelled {
@@ -152,14 +170,18 @@ final class AITranslateService: ObservableObject {
                             let translatedText = content.trimmingCharacters(
                                 in: .whitespacesAndNewlines)
 
-                            // 保存到历史记录（只保存第一个服务的结果）
-                            if serviceConfig.serviceType == .aiTranslate {
-                                self?.addToHistory(
-                                    sourceText: text,
-                                    translatedText: translatedText,
+                            // 收集翻译结果
+                            let result = TranslateServiceResult(
+                                serviceType: serviceType,
+                                translatedText: translatedText
+                            )
+                            self.pendingResults.append(result)
+
+                            // 当所有任务完成时，保存到历史记录
+                            if self.activeTasks.isEmpty && !self.pendingResults.isEmpty {
+                                self.saveCollectedResults(
                                     fromLang: actualFromLang,
-                                    toLang: actualToLang,
-                                    serviceType: serviceConfig.serviceType
+                                    toLang: actualToLang
                                 )
                             }
 
@@ -178,6 +200,41 @@ final class AITranslateService: ObservableObject {
         activeTasks[taskId] = task
         updateTranslatingState()
         task.resume()
+    }
+
+    /// 保存收集到的所有翻译结果到历史记录
+    private func saveCollectedResults(fromLang: TranslateLanguage, toLang: TranslateLanguage) {
+        guard !pendingResults.isEmpty, !pendingSourceText.isEmpty else { return }
+
+        // 找到 AI 翻译结果作为主要结果
+        let aiResult = pendingResults.first { $0.serviceType == .aiTranslate }
+        let mainTranslatedText =
+            aiResult?.translatedText ?? pendingResults.first?.translatedText ?? ""
+        let mainServiceType =
+            aiResult?.serviceType ?? pendingResults.first?.serviceType ?? .aiTranslate
+
+        let item = TranslateHistoryItem(
+            sourceText: pendingSourceText,
+            translatedText: mainTranslatedText,
+            fromLang: fromLang,
+            toLang: toLang,
+            serviceType: mainServiceType,
+            serviceResults: pendingResults
+        )
+
+        history.insert(item, at: 0)
+
+        // 限制历史记录数量
+        let settings = AITranslateSettings.load()
+        if history.count > settings.historyLimit {
+            history = Array(history.prefix(settings.historyLimit))
+        }
+
+        saveHistory()
+
+        // 清空待处理结果
+        pendingResults = []
+        pendingSourceText = ""
     }
 
     private func updateTranslatingState() {
@@ -222,32 +279,6 @@ final class AITranslateService: ObservableObject {
     }
 
     // MARK: - 历史记录管理
-
-    private func addToHistory(
-        sourceText: String,
-        translatedText: String,
-        fromLang: TranslateLanguage,
-        toLang: TranslateLanguage,
-        serviceType: TranslateServiceType
-    ) {
-        let item = TranslateHistoryItem(
-            sourceText: sourceText,
-            translatedText: translatedText,
-            fromLang: fromLang,
-            toLang: toLang,
-            serviceType: serviceType
-        )
-
-        history.insert(item, at: 0)
-
-        // 限制历史记录数量
-        let settings = AITranslateSettings.load()
-        if history.count > settings.historyLimit {
-            history = Array(history.prefix(settings.historyLimit))
-        }
-
-        saveHistory()
-    }
 
     func clearHistory() {
         history.removeAll()

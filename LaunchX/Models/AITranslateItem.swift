@@ -160,15 +160,24 @@ enum TranslateLanguage: String, Codable, CaseIterable {
 
 // MARK: - 翻译历史记录
 
+/// 单个服务的翻译结果
+struct TranslateServiceResult: Codable {
+    let serviceType: TranslateServiceType
+    let translatedText: String
+}
+
 /// 翻译历史记录
 struct TranslateHistoryItem: Identifiable, Codable {
     let id: UUID
     let sourceText: String
-    let translatedText: String
+    let translatedText: String  // 主要翻译结果（AI翻译），保持向后兼容
     let fromLang: TranslateLanguage
     let toLang: TranslateLanguage
-    let serviceType: TranslateServiceType
+    let serviceType: TranslateServiceType  // 主要服务类型，保持向后兼容
     let createdAt: Date
+
+    // 新增：所有服务的翻译结果
+    var serviceResults: [TranslateServiceResult]?
 
     init(
         id: UUID = UUID(),
@@ -177,7 +186,8 @@ struct TranslateHistoryItem: Identifiable, Codable {
         fromLang: TranslateLanguage,
         toLang: TranslateLanguage,
         serviceType: TranslateServiceType,
-        createdAt: Date = Date()
+        createdAt: Date = Date(),
+        serviceResults: [TranslateServiceResult]? = nil
     ) {
         self.id = id
         self.sourceText = sourceText
@@ -186,6 +196,7 @@ struct TranslateHistoryItem: Identifiable, Codable {
         self.toLang = toLang
         self.serviceType = serviceType
         self.createdAt = createdAt
+        self.serviceResults = serviceResults
     }
 }
 
