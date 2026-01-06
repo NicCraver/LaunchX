@@ -837,10 +837,10 @@ class AITranslatePanelViewController: NSViewController {
     private func getTargetLanguageDisplay() -> String {
         let text = inputTextView.string.trimmingCharacters(in: .whitespacesAndNewlines)
         if text.isEmpty {
-            return "中文简体"
+            return "中文"
         }
         let detected = AITranslateService.shared.detectLanguage(text)
-        return detected == .chinese ? "英语" : "中文简体"
+        return detected == .chinese ? "英语" : "中文"
     }
 
     // MARK: - 操作
