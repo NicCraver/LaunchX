@@ -387,6 +387,7 @@ class ClipboardPanelViewController: NSViewController {
         alert.addButton(withTitle: "清空")
         alert.addButton(withTitle: "取消")
 
+        NSApp.activate(ignoringOtherApps: true)
         if alert.runModal() == .alertFirstButtonReturn {
             ClipboardService.shared.clearHistory()
         }

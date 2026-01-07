@@ -319,6 +319,8 @@ class SystemCommandService {
             alert.addButton(withTitle: "确认")
             alert.addButton(withTitle: "取消")
 
+            // 激活应用以确保弹窗获得焦点并支持回车确认
+            NSApp.activate(ignoringOtherApps: true)
             let response = alert.runModal()
             completion(response == .alertFirstButtonReturn)
         }

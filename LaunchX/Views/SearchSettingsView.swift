@@ -602,6 +602,7 @@ class SearchSettingsViewModel: ObservableObject {
         alert.addButton(withTitle: "重建")
         alert.addButton(withTitle: "取消")
 
+        NSApp.activate(ignoringOtherApps: true)
         if alert.runModal() == .alertFirstButtonReturn {
             // Trigger re-indexing
             let config = SearchConfig.load()
@@ -611,6 +612,7 @@ class SearchSettingsViewModel: ObservableObject {
             let confirmAlert = NSAlert()
             confirmAlert.messageText = "索引重建已开始"
             confirmAlert.informativeText = "索引正在后台重建，完成后搜索结果将自动更新。"
+            NSApp.activate(ignoringOtherApps: true)
             confirmAlert.runModal()
         }
     }

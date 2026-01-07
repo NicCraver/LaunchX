@@ -3033,6 +3033,8 @@ class SearchPanelViewController: NSViewController {
             alert.icon = icon
         }
 
+        // 激活应用以确保弹窗获得焦点并支持回车确认
+        NSApp.activate(ignoringOtherApps: true)
         let response = alert.runModal()
         if response == .alertFirstButtonReturn {
             // 执行 kill
@@ -3057,6 +3059,7 @@ class SearchPanelViewController: NSViewController {
                 failAlert.informativeText = "可能需要更高的权限"
                 failAlert.alertStyle = .critical
                 failAlert.addButton(withTitle: "确定")
+                NSApp.activate(ignoringOtherApps: true)
                 failAlert.runModal()
             }
         }
