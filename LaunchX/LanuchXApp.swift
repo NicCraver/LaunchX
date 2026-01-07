@@ -425,7 +425,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc func openSettings() {
-        PanelManager.shared.hidePanel(deactivateApp: false)
+        PanelManager.shared.hidePanel()
 
         // 发送通知，让 SettingsOpenerView 通过 @Environment(\.openSettings) 打开设置
         // 不需要切换到 regular 模式，避免 Dock 图标出现

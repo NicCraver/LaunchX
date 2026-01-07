@@ -60,12 +60,8 @@ class PanelManager: NSObject, NSWindowDelegate {
     func togglePanel() {
         guard isSetup else { return }
 
-        if panel.isVisible && NSApp.isActive {
-            // 检查是否有其他窗口（如设置窗口）打开
-            let hasOtherVisibleWindows = NSApp.windows.contains { window in
-                window != panel && window.isVisible && !window.isKind(of: NSPanel.self)
-            }
-            hidePanel(deactivateApp: !hasOtherVisibleWindows)
+        if panel.isVisible && panel.isKeyWindow {
+            hidePanel()
         } else {
             showPanel()
         }
@@ -98,7 +94,6 @@ class PanelManager: NSObject, NSWindowDelegate {
             .moveToActiveSpace, .fullScreenAuxiliary, .ignoresCycle,
         ]
 
-        NSApp.activate(ignoringOtherApps: true)
         panel.makeKeyAndOrderFront(nil)
 
         // Focus the search field
@@ -107,7 +102,7 @@ class PanelManager: NSObject, NSWindowDelegate {
         isPanelVisible = true
     }
 
-    func hidePanel(deactivateApp: Bool = false) {
+    func hidePanel() {
         guard isSetup else { return }
 
         print("PanelManager: hidePanel called, onWillHide is \(onWillHide == nil ? "nil" : "set")")
@@ -116,10 +111,6 @@ class PanelManager: NSObject, NSWindowDelegate {
         onWillHide?()
 
         panel.orderOut(nil)
-
-        if deactivateApp {
-            NSApp.hide(nil)
-        }
 
         isPanelVisible = false
     }
@@ -221,7 +212,7 @@ class PanelManager: NSObject, NSWindowDelegate {
             if Date().timeIntervalSince(lastShowTime) < 0.3 {
                 return
             }
-            hidePanel(deactivateApp: false)
+            hidePanel()
         }
     }
 }

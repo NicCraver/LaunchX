@@ -20,7 +20,7 @@ class AITranslatePanel: NSPanel {
     ) {
         super.init(
             contentRect: contentRect,
-            styleMask: [.titled, .closable, .resizable, .fullSizeContentView],
+            styleMask: [.titled, .closable, .resizable, .fullSizeContentView, .nonactivatingPanel],
             backing: backingStoreType,
             defer: flag
         )

@@ -76,7 +76,6 @@ class ClipboardPanelManager: NSObject, NSWindowDelegate {
         ]
 
         panel.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
 
         isPanelVisible = true
         viewController?.focus()
@@ -100,16 +99,11 @@ class ClipboardPanelManager: NSObject, NSWindowDelegate {
     func hidePanelAndActivatePreviousApp() {
         panel?.orderOut(nil)
         isPanelVisible = false
-
-        // 激活之前的前台应用
-        if let app = previousApp {
-            app.activate()
-        }
     }
 
     /// 切换面板显示
     func togglePanel() {
-        if panel?.isVisible == true && isPanelVisible {
+        if panel?.isVisible == true && isPanelVisible && panel?.isKeyWindow == true {
             if isPinned {
                 forceHidePanel()
             } else {

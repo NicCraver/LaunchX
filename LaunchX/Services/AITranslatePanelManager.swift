@@ -61,7 +61,6 @@ class AITranslatePanelManager: NSObject, NSWindowDelegate {
         ]
 
         panel.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
         isPanelVisible = true
 
         // 如果有初始文本，设置并翻译
@@ -137,7 +136,6 @@ class AITranslatePanelManager: NSObject, NSWindowDelegate {
         ]
 
         panel.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
         isPanelVisible = true
 
         // 设置文本并翻译
@@ -161,14 +159,11 @@ class AITranslatePanelManager: NSObject, NSWindowDelegate {
     /// 隐藏并激活之前的应用
     func hidePanelAndActivatePreviousApp() {
         forceHidePanel()
-        if let app = previousApp {
-            app.activate()
-        }
     }
 
     /// 切换面板显示
     func togglePanel() {
-        if isPanelVisible {
+        if isPanelVisible && panel?.isKeyWindow == true {
             hidePanel()
         } else {
             showPanel()
