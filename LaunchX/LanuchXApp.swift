@@ -149,39 +149,32 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
             guard let self = self else { return }
 
-            let allGranted = PermissionService.shared.allPermissionsGranted
             let accessibility = PermissionService.shared.isAccessibilityGranted
             let fullDisk = PermissionService.shared.isFullDiskAccessGranted
 
             print(
-                "LaunchX: allGranted=\(allGranted), accessibility=\(accessibility), fullDisk=\(fullDisk)"
+                "LaunchX: accessibility=\(accessibility), fullDisk=\(fullDisk)"
             )
 
             if isFirstLaunch {
                 UserDefaults.standard.set(true, forKey: "hasLaunchedBefore")
-                if allGranted {
-                    // 首次启动但权限已全部授予，直接进入应用
-                    print("LaunchX: First launch but all permissions granted, showing panel")
+                if accessibility {
+                    // 首次启动且辅助功能已授予，直接进入应用
+                    print("LaunchX: First launch and accessibility granted, showing panel")
                     NSApp.setActivationPolicy(.accessory)
-                    self.setupStatusItem()  // 切换后重新设置状态栏
+                    self.setupStatusItem()
                     self.setupHotKeyAndShowPanel()
                 } else {
                     print("LaunchX: First launch, opening onboarding")
                     self.openOnboarding()
                 }
-            } else if !allGranted {
-                print("LaunchX: Not all permissions granted, opening onboarding")
-                // 非首次启动但权限未全部授予，显示引导页
+            } else if !accessibility {
+                print("LaunchX: Accessibility not granted, opening onboarding")
                 self.openOnboarding()
-                // 如果辅助功能已授权，先设置热键
-                if hasAccessibility {
-                    self.setupHotKey()
-                }
             } else {
-                print("LaunchX: All permissions granted, showing panel")
-                // 所有权限已授予，切换到 accessory 模式并显示面板
+                print("LaunchX: Accessibility granted, showing panel")
                 NSApp.setActivationPolicy(.accessory)
-                self.setupStatusItem()  // 切换后重新设置状态栏
+                self.setupStatusItem()
                 self.setupHotKeyAndShowPanel()
             }
 
@@ -311,14 +304,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         if onboardingWindow == nil {
             let rootView = OnboardingView { [weak self] in
-                self?.onboardingWindow?.close()
-                self?.onboardingWindow = nil
-                // 关闭引导页后切换为 accessory app
+                guard let self = self else { return }
+                // 1. 设置热键并显示面板
+                self.setupHotKeyAndShowPanel()
+
+                // 2. 关闭引导页窗口并清理引用
+                self.onboardingWindow?.close()
+                self.onboardingWindow = nil
+
+                // 3. 切换为 accessory app (不在 Dock 显示)
                 NSApp.setActivationPolicy(.accessory)
-                // 切换后重新设置状态栏
-                self?.setupStatusItem()
-                // 设置热键并显示面板
-                self?.setupHotKeyAndShowPanel()
+
+                // 4. 重新设置状态栏以确保在切换模式后正确显示
+                self.setupStatusItem()
             }
 
             let window = NSWindow(

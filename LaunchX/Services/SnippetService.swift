@@ -296,13 +296,7 @@ final class SnippetService: ObservableObject {
 
     /// 检查辅助功能权限
     private func checkAccessibilityPermission() -> Bool {
-        let trusted = AXIsProcessTrusted()
-        if !trusted {
-            let options =
-                [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-            AXIsProcessTrustedWithOptions(options)
-        }
-        return trusted
+        return AXIsProcessTrusted()
     }
 
     // MARK: - Snippet 管理
