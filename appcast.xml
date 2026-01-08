@@ -1,0 +1,18 @@
+<?xml version="1.0" standalone="yes"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>LaunchX</title>
+        <item>
+            <title>Version v0.1.7</title>
+            <sparkle:releaseNotesLink>https://github.com/twotwoba/LaunchX/releases/tag/v0.1.7</sparkle:releaseNotesLink>
+            <pubDate>Thu, 08 Jan 2026 11:16:17 +0000</pubDate>
+            <sparkle:version>0.1.7</sparkle:version>
+            <sparkle:shortVersionString>0.1.7</sparkle:shortVersionString>
+            <enclosure
+                url="https://github.com/twotwoba/LaunchX/releases/download/v0.1.7/LaunchX-v0.1.7-arm64.dmg"
+                sparkle:os="macos"
+                sparkle:version="0.1.7"
+                type="application/octet-stream" />
+        </item>
+    </channel>
+</rss>
