@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.1.7
+### 检查更新优化
+- 引入了 Sparkle
+
 ## v0.1.6
 ### 兼容处理
 - 更新LaunchX的macos兼容版本为14.0
