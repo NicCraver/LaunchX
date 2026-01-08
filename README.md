@@ -2,7 +2,7 @@
 
 一个现代、优雅且智能的 macOS 启动器。高性能的应用和文件搜索，丰富的扩展功能，让你的 Mac 使用效率翻倍。
 
-![macOS](https://img.shields.io/badge/macOS-13.0+-blue.svg)
+![macOS](https://img.shields.io/badge/macOS-14.0+-blue.svg)
 ![Swift](https://img.shields.io/badge/Swift-5.9-orange.svg)
 ![License](https://img.shields.io/badge/License-Apache%202.0-green.svg)
 
@@ -35,7 +35,7 @@
 
 ### 系统要求
 
-- macOS 13.0 或更高版本
+- macOS 14.0 或更高版本
 
 ### 下载安装
 
