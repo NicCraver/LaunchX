@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.1.9
+### 新功能
+- 修复 github actions / Commit and Push Appcast 阶段问题
+
 ## v0.1.8
 ### 测试更新版本（忽略）
 
