@@ -179,14 +179,21 @@ jobs:
                   </rss>
                   EOF
 
-            - name: Commit and Push Appcast
+            - name: Commit and Push Version Changes
               run: |
                   git config --local user.email "github-actions[bot]@users.noreply.github.com"
                   git config --local user.name "github-actions[bot]"
+
+                  # Add appcast and the project file modified by agvtool
                   git add appcast.xml
-                  # Rebase to handle remote changes, stashing any build artifacts
+                  git add LaunchX.xcodeproj/project.pbxproj || echo "Project file not found"
+
+                  git commit -m "chore: bump version and update appcast for ${VERSION}" || echo "No changes to commit"
+
+                  # Rebase to handle remote changes, stashing build artifacts
                   git stash push --all
                   git fetch origin main
                   git rebase origin/main
                   git stash pop || true
+
                   git push origin HEAD:main
