@@ -505,31 +505,22 @@ class ClipboardPanelViewController: NSViewController {
 
     /// 滚动使选中行保持在中间位置（参考主搜索列表实现）
     private func scrollToKeepSelectionCentered() {
-        let visibleRect = scrollView.contentView.bounds
         let selectedRow = tableView.selectedRow
         guard selectedRow >= 0 else { return }
 
-        // 计算可视区域能显示多少行
-        let visibleRows = Int(visibleRect.height / rowHeight)
-        let middleOffset = visibleRows / 2
+        let visibleRect = scrollView.contentView.bounds
+        let selectedRect = tableView.rect(ofRow: selectedRow)
 
         // 计算目标滚动位置，使选中行在中间
-        let targetRow = max(0, selectedRow - middleOffset)
-        let targetRect = tableView.rect(ofRow: targetRow)
+        // targetY = 选中行中心点 - 可视区域高度的一半
+        let targetY = selectedRect.midY - (visibleRect.height / 2)
 
-        // 如果选中行在前几行，不需要居中（保持在顶部）
-        if selectedRow < middleOffset {
-            tableView.scrollRowToVisible(0)
-        }
-        // 如果选中行在最后几行，不需要居中（保持在底部）
-        else if selectedRow >= filteredItems.count - middleOffset {
-            tableView.scrollRowToVisible(filteredItems.count - 1)
-        }
-        // 否则滚动使选中行居中
-        else {
-            scrollView.contentView.scroll(to: NSPoint(x: 0, y: targetRect.origin.y))
-            scrollView.reflectScrolledClipView(scrollView.contentView)
-        }
+        // 边界处理：确保不会滚动超出范围
+        let maxY = max(0, tableView.frame.height - visibleRect.height)
+        let clampedY = max(0, min(targetY, maxY))
+
+        scrollView.contentView.scroll(to: NSPoint(x: 0, y: clampedY))
+        scrollView.reflectScrolledClipView(scrollView.contentView)
     }
 
     // MARK: - 粘贴功能

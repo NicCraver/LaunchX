@@ -3067,29 +3067,21 @@ class SearchPanelViewController: NSViewController {
 
     /// 滚动表格使选中行尽量保持在可视区域中间
     private func scrollToKeepSelectionCentered() {
-        let visibleRect = scrollView.contentView.bounds
+        guard selectedIndex >= 0 else { return }
 
-        // 计算可视区域能显示多少行
-        let visibleRows = Int(visibleRect.height / rowHeight)
-        let middleOffset = visibleRows / 2
+        let visibleRect = scrollView.contentView.bounds
+        let selectedRect = tableView.rect(ofRow: selectedIndex)
 
         // 计算目标滚动位置，使选中行在中间
-        let targetRow = max(0, selectedIndex - middleOffset)
-        let targetRect = tableView.rect(ofRow: targetRow)
+        // targetY = 选中行中心点 - 可视区域高度的一半
+        let targetY = selectedRect.midY - (visibleRect.height / 2)
 
-        // 如果选中行在前几行，不需要居中（保持在顶部）
-        if selectedIndex < middleOffset {
-            tableView.scrollRowToVisible(0)
-        }
-        // 如果选中行在最后几行，不需要居中（保持在底部）
-        else if selectedIndex >= results.count - middleOffset {
-            tableView.scrollRowToVisible(results.count - 1)
-        }
-        // 否则滚动使选中行居中
-        else {
-            scrollView.contentView.scroll(to: NSPoint(x: 0, y: targetRect.origin.y))
-            scrollView.reflectScrolledClipView(scrollView.contentView)
-        }
+        // 边界处理：确保不会滚动超出范围
+        let maxY = max(0, tableView.frame.height - visibleRect.height)
+        let clampedY = max(0, min(targetY, maxY))
+
+        scrollView.contentView.scroll(to: NSPoint(x: 0, y: clampedY))
+        scrollView.reflectScrolledClipView(scrollView.contentView)
     }
 
     /// 加载最近使用的项目（支持所有工具类型）
