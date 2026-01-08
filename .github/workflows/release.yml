@@ -21,6 +21,12 @@ jobs:
               with:
                   xcode-version: latest-stable
 
+            - name: Set version with agvtool
+              run: |
+                  VERSION=$(echo "${{ github.ref_name }}" | sed 's/^v//')
+                  agvtool new-marketing-version "$VERSION"
+                  agvtool new-version -all "${{ github.run_number }}"
+
             - name: Build app (Apple Silicon)
               run: |
                   xcodebuild -scheme LaunchX \

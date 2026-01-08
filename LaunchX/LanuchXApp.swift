@@ -56,6 +56,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // 2. Check permissions first before setting up hotkey
         checkPermissionsAndSetup()
+
+        // 3. 启动时静默检查更新 (不了不了，做一个不打扰的小朋友)
+        // UpdateService.shared.checkForUpdates(manual: false)
     }
 
     /// 创建隐藏窗口来承载 SettingsOpenerView
@@ -401,6 +404,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         settingsItem.keyEquivalentModifierMask = .command
         menu.addItem(settingsItem)
 
+        let updateItem = NSMenuItem(
+            title: "检查更新...", action: #selector(checkForUpdates), keyEquivalent: "")
+        updateItem.target = self
+        updateItem.isEnabled = true
+        menu.addItem(updateItem)
+
         menu.addItem(NSMenuItem.separator())
 
         let quitItem = NSMenuItem(title: "退出", action: #selector(explicitQuit), keyEquivalent: "q")
@@ -433,6 +442,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @objc func explicitQuit() {
         isQuitting = true
         NSApp.terminate(nil)
+    }
+
+    @objc func checkForUpdates() {
+        UpdateService.shared.checkForUpdates(manual: true)
     }
 
     // Intercept termination request (Cmd+Q) to keep the app running in the background
