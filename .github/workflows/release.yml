@@ -151,3 +151,38 @@ jobs:
                       build/LaunchX-${{ github.ref_name }}-x86_64.zip
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Update Appcast
+              run: |
+                  VERSION="${{ github.ref_name }}"
+                  # Generate a basic Sparkle Appcast XML file
+                  # This points to the newly created GitHub Release assets
+
+                  cat <<EOF > appcast.xml
+                  <?xml version="1.0" standalone="yes"?>
+                  <rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+                      <channel>
+                          <title>LaunchX</title>
+                          <item>
+                              <title>Version ${VERSION}</title>
+                              <sparkle:releaseNotesLink>https://github.com/twotwoba/LaunchX/releases/tag/${VERSION}</sparkle:releaseNotesLink>
+                              <pubDate>$(date -u +"%a, %d %b %Y %H:%M:%S %z")</pubDate>
+                              <sparkle:version>${VERSION#v}</sparkle:version>
+                              <sparkle:shortVersionString>${VERSION#v}</sparkle:shortVersionString>
+                              <enclosure
+                                  url="https://github.com/twotwoba/LaunchX/releases/download/${VERSION}/LaunchX-${VERSION}-arm64.dmg"
+                                  sparkle:os="macos"
+                                  sparkle:version="${VERSION#v}"
+                                  type="application/octet-stream" />
+                          </item>
+                      </channel>
+                  </rss>
+                  EOF
+
+            - name: Commit and Push Appcast
+              run: |
+                  git config --local user.email "github-actions[bot]@users.noreply.github.com"
+                  git config --local user.name "github-actions[bot]"
+                  git add appcast.xml
+                  git commit -m "chore: update appcast.xml for ${VERSION}" || echo "No changes to commit"
+                  git push origin HEAD:main

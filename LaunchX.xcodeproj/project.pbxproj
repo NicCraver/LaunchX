@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		07FD581F2F0FC68100DC6A32 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 07FD581E2F0FC68100DC6A32 /* Sparkle */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		0757749D2EF153E3004AAFF9 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -52,6 +56,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				07FD581F2F0FC68100DC6A32 /* Sparkle in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -78,6 +83,7 @@
 				0757748C2EF153E1004AAFF9 /* LaunchX */,
 				0757749F2EF153E3004AAFF9 /* LaunchXTests */,
 				075774A92EF153E3004AAFF9 /* LaunchXUITests */,
+				07FD581D2F0FC68100DC6A32 /* Frameworks */,
 				0757748B2EF153E1004AAFF9 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -90,6 +96,13 @@
 				075774A62EF153E3004AAFF9 /* LaunchXUITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		07FD581D2F0FC68100DC6A32 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -112,6 +125,7 @@
 			);
 			name = LaunchX;
 			packageProductDependencies = (
+				07FD581E2F0FC68100DC6A32 /* Sparkle */,
 			);
 			productName = LaunchX;
 			productReference = 0757748A2EF153E1004AAFF9 /* LaunchX.app */;
@@ -195,6 +209,9 @@
 			);
 			mainGroup = 075774812EF153E1004AAFF9;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				07FD581C2F0FC53F00DC6A32 /* XCRemoteSwiftPackageReference "Sparkle" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 0757748B2EF153E1004AAFF9 /* Products */;
 			projectDirPath = "";
@@ -413,6 +430,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUFeedURL = "https://raw.githubusercontent.com/twotwoba/LaunchX/main/appcast.xml";
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -448,6 +466,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUFeedURL = "https://raw.githubusercontent.com/twotwoba/LaunchX/main/appcast.xml";
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -577,6 +596,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		07FD581C2F0FC53F00DC6A32 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.8.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		07FD581E2F0FC68100DC6A32 /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 07FD581C2F0FC53F00DC6A32 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 075774822EF153E1004AAFF9 /* Project object */;
 }

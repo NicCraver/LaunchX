@@ -544,7 +544,7 @@ final class MemoryIndex {
         // 3b. 线性扫描补充 contains 匹配（仅在结果不足时）
         if matchedFiles.count < 20 {
             let maxFileIterations = min(currentFiles.count, 5000)
-            var scannedPaths = Set(matchedFiles.map { $0.item.path })
+            let scannedPaths = Set(matchedFiles.map { $0.item.path })
 
             for i in 0..<maxFileIterations {
                 if matchedFiles.count >= 20 { break }
