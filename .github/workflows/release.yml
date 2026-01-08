@@ -167,12 +167,12 @@ jobs:
                               <title>Version ${VERSION}</title>
                               <sparkle:releaseNotesLink>https://github.com/twotwoba/LaunchX/releases/tag/${VERSION}</sparkle:releaseNotesLink>
                               <pubDate>$(date -u +"%a, %d %b %Y %H:%M:%S %z")</pubDate>
-                              <sparkle:version>${VERSION#v}</sparkle:version>
+                              <sparkle:version>${{ github.run_number }}</sparkle:version>
                               <sparkle:shortVersionString>${VERSION#v}</sparkle:shortVersionString>
                               <enclosure
                                   url="https://github.com/twotwoba/LaunchX/releases/download/${VERSION}/LaunchX-${VERSION}-arm64.dmg"
                                   sparkle:os="macos"
-                                  sparkle:version="${VERSION#v}"
+                                  sparkle:version="${{ github.run_number }}"
                                   type="application/octet-stream" />
                           </item>
                       </channel>
@@ -183,8 +183,10 @@ jobs:
               run: |
                   git config --local user.email "github-actions[bot]@users.noreply.github.com"
                   git config --local user.name "github-actions[bot]"
-                  git add .
-                  git commit -m "chore: update appcast.xml for ${VERSION}"
+                  git add appcast.xml
+                  # Rebase to handle remote changes, stashing any build artifacts
+                  git stash push --all
                   git fetch origin main
                   git rebase origin/main
+                  git stash pop || true
                   git push origin HEAD:main

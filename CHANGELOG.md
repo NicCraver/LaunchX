@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.1.11
+### 优化
+- release 发布脚本优化
+- 修复 Sparkle 的版本比较逻辑
+
 ## v0.1.9
 ### 新功能
 - 修复 github actions / Commit and Push Appcast 阶段问题
