@@ -185,4 +185,6 @@ jobs:
                   git config --local user.name "github-actions[bot]"
                   git add appcast.xml
                   git commit -m "chore: update appcast.xml for ${VERSION}" || echo "No changes to commit"
+                  git fetch origin main
+                  git rebase origin/main
                   git push origin HEAD:main
