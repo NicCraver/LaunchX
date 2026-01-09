@@ -166,15 +166,27 @@ jobs:
                   VERSION="${{ github.ref_name }}"
                   DMG_PATH="build/LaunchX-${VERSION}-arm64.dmg"
 
+                  # 检查 DMG 是否存在
+                  if [ ! -f "$DMG_PATH" ]; then
+                    echo "Error: DMG file not found at $DMG_PATH"
+                    ls -R build/
+                    exit 1
+                  fi
+
                   # 下载 Sparkle 工具以获取 sign_update
                   curl -L -o Sparkle.tar.xz https://github.com/sparkle-project/Sparkle/releases/download/2.6.4/Sparkle-2.6.4.tar.xz
                   tar -xf Sparkle.tar.xz bin/sign_update
+                  chmod +x bin/sign_update
 
                   SIGN_ATTRIBUTES=""
                   if [ -n "$SPARKLE_PRIVATE_KEY" ]; then
                     # sign_update 会输出类似 sparkle:edSignature="..." length="..." 的字符串
-                    export SUPrivateEDKey="$SPARKLE_PRIVATE_KEY"
-                    SIGN_ATTRIBUTES=$(./bin/sign_update "$DMG_PATH")
+                    # 使用 env 命令传递环境变量，避免 shell 导出问题
+                    SIGN_ATTRIBUTES=$(SUPrivateEDKey="${SPARKLE_PRIVATE_KEY}" ./bin/sign_update "$DMG_PATH")
+                    if [ $? -ne 0 ]; then
+                      echo "Error: sign_update failed"
+                      exit 1
+                    fi
                   else
                     echo "Warning: SPARKLE_PRIVATE_KEY is not set. Update will not be signed correctly."
                     FILE_SIZE=$(stat -f%z "$DMG_PATH")

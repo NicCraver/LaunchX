@@ -431,8 +431,7 @@
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SUFeedURL = "https://raw.githubusercontent.com/twotwoba/LaunchX/main/appcast.xml";
-				SUPublicEDKey = "";
-				"SUPublicEDKey[sdk=macosx*]" = "u09i3ukzZB+84ns9RdiryTO0PNV9yRLK/iKT0ijnDjE=";
+				INFOPLIST_KEY_SUPublicEDKey = "u09i3ukzZB+84ns9RdiryTO0PNV9yRLK/iKT0ijnDjE=";
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -469,8 +468,7 @@
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SUFeedURL = "https://raw.githubusercontent.com/twotwoba/LaunchX/main/appcast.xml";
-				SUPublicEDKey = "";
-				"SUPublicEDKey[sdk=macosx*]" = "u09i3ukzZB+84ns9RdiryTO0PNV9yRLK/iKT0ijnDjE=";
+				INFOPLIST_KEY_SUPublicEDKey = "u09i3ukzZB+84ns9RdiryTO0PNV9yRLK/iKT0ijnDjE=";
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
