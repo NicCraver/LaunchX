@@ -160,10 +160,26 @@ jobs:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Update Appcast
+              env:
+                  SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
               run: |
                   VERSION="${{ github.ref_name }}"
-                  # Generate a basic Sparkle Appcast XML file
-                  # This points to the newly created GitHub Release assets
+                  DMG_PATH="build/LaunchX-${VERSION}-arm64.dmg"
+
+                  # 下载 Sparkle 工具以获取 sign_update
+                  curl -L -o Sparkle.tar.xz https://github.com/sparkle-project/Sparkle/releases/download/2.6.4/Sparkle-2.6.4.tar.xz
+                  tar -xf Sparkle.tar.xz bin/sign_update
+
+                  SIGN_ATTRIBUTES=""
+                  if [ -n "$SPARKLE_PRIVATE_KEY" ]; then
+                    # sign_update 会输出类似 sparkle:edSignature="..." length="..." 的字符串
+                    export SUPrivateEDKey="$SPARKLE_PRIVATE_KEY"
+                    SIGN_ATTRIBUTES=$(./bin/sign_update "$DMG_PATH")
+                  else
+                    echo "Warning: SPARKLE_PRIVATE_KEY is not set. Update will not be signed correctly."
+                    FILE_SIZE=$(stat -f%z "$DMG_PATH")
+                    SIGN_ATTRIBUTES="length=\"$FILE_SIZE\""
+                  fi
 
                   cat <<EOF > appcast.xml
                   <?xml version="1.0" standalone="yes"?>
@@ -180,6 +196,7 @@ jobs:
                                   url="https://github.com/twotwoba/LaunchX/releases/download/${VERSION}/LaunchX-${VERSION}-arm64.dmg"
                                   sparkle:os="macos"
                                   sparkle:version="${{ github.run_number }}"
+                                  $SIGN_ATTRIBUTES
                                   type="application/octet-stream" />
                           </item>
                       </channel>
