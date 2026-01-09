@@ -173,26 +173,56 @@ jobs:
                     exit 1
                   fi
 
-                  # 下载 Sparkle 工具以获取 sign_update
-                  curl -L -o Sparkle.tar.xz https://github.com/sparkle-project/Sparkle/releases/download/2.6.4/Sparkle-2.6.4.tar.xz
-                  tar -xf Sparkle.tar.xz bin/sign_update
-                  chmod +x bin/sign_update
+                  # 下载 Sparkle 工具 (使用与项目相同的版本 2.8.1)
+                  echo "Downloading Sparkle 2.8.1..."
+                  curl -L -o Sparkle.tar.xz https://github.com/sparkle-project/Sparkle/releases/download/2.8.1/Sparkle-2.8.1.tar.xz
+
+                  echo "Extracting Sparkle..."
+                  tar -xf Sparkle.tar.xz
+
+                  # 查找 sign_update 工具的实际位置
+                  echo "Looking for sign_update..."
+                  find . -name "sign_update" -type f
+
+                  # sign_update 可能在 bin/ 或其他目录
+                  if [ -f "bin/sign_update" ]; then
+                    SIGN_UPDATE_PATH="./bin/sign_update"
+                  elif [ -f "sign_update" ]; then
+                    SIGN_UPDATE_PATH="./sign_update"
+                  else
+                    echo "Error: sign_update not found"
+                    ls -la
+                    exit 1
+                  fi
+
+                  chmod +x "$SIGN_UPDATE_PATH"
+                  echo "Using sign_update at: $SIGN_UPDATE_PATH"
 
                   SIGN_ATTRIBUTES=""
                   if [ -n "$SPARKLE_PRIVATE_KEY" ]; then
-                    # sign_update 会输出类似 sparkle:edSignature="..." length="..." 的字符串
-                    # 使用 env 命令传递环境变量，避免 shell 导出问题
-                    SIGN_ATTRIBUTES=$(SUPrivateEDKey="${SPARKLE_PRIVATE_KEY}" ./bin/sign_update "$DMG_PATH")
-                    if [ $? -ne 0 ]; then
-                      echo "Error: sign_update failed"
+                    echo "Signing update with Sparkle private key..."
+
+                    # 使用 sign_update 签名 (通过标准输入传递私钥)
+                    # 从 Sparkle 2.2.2 开始，推荐使用 --ed-key-file - 并通过 stdin 传递密钥
+                    SIGN_OUTPUT=$(echo "$SPARKLE_PRIVATE_KEY" | "$SIGN_UPDATE_PATH" --ed-key-file - "$DMG_PATH" 2>&1)
+                    SIGN_EXIT_CODE=$?
+
+                    echo "Sign output: $SIGN_OUTPUT"
+
+                    if [ $SIGN_EXIT_CODE -ne 0 ]; then
+                      echo "Error: sign_update failed with exit code $SIGN_EXIT_CODE"
                       exit 1
                     fi
+
+                    # sign_update 输出格式: sparkle:edSignature="..." length="..."
+                    SIGN_ATTRIBUTES="$SIGN_OUTPUT"
                   else
                     echo "Warning: SPARKLE_PRIVATE_KEY is not set. Update will not be signed correctly."
                     FILE_SIZE=$(stat -f%z "$DMG_PATH")
                     SIGN_ATTRIBUTES="length=\"$FILE_SIZE\""
                   fi
 
+                  echo "Creating appcast.xml..."
                   cat <<EOF > appcast.xml
                   <?xml version="1.0" standalone="yes"?>
                   <rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
@@ -214,6 +244,9 @@ jobs:
                       </channel>
                   </rss>
                   EOF
+
+                  echo "Appcast.xml created successfully:"
+                  cat appcast.xml
 
             - name: Commit and Push Version Changes
               run: |
