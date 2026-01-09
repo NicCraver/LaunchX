@@ -3,15 +3,15 @@
     <channel>
         <title>LaunchX</title>
         <item>
-            <title>Version v0.1.13</title>
-            <sparkle:releaseNotesLink>https://github.com/twotwoba/LaunchX/releases/tag/v0.1.13</sparkle:releaseNotesLink>
-            <pubDate>Fri, 09 Jan 2026 02:46:00 +0000</pubDate>
-            <sparkle:version>42</sparkle:version>
-            <sparkle:shortVersionString>0.1.13</sparkle:shortVersionString>
+            <title>Version v0.1.14</title>
+            <sparkle:releaseNotesLink>https://github.com/twotwoba/LaunchX/releases/tag/v0.1.14</sparkle:releaseNotesLink>
+            <pubDate>Fri, 09 Jan 2026 05:55:44 +0000</pubDate>
+            <sparkle:version>43</sparkle:version>
+            <sparkle:shortVersionString>0.1.14</sparkle:shortVersionString>
             <enclosure
-                url="https://github.com/twotwoba/LaunchX/releases/download/v0.1.13/LaunchX-v0.1.13-arm64.dmg"
+                url="https://github.com/twotwoba/LaunchX/releases/download/v0.1.14/LaunchX-v0.1.14-arm64.dmg"
                 sparkle:os="macos"
-                sparkle:version="42"
+                sparkle:version="43"
                 type="application/octet-stream" />
         </item>
     </channel>
