@@ -21,11 +21,18 @@ jobs:
               with:
                   xcode-version: latest-stable
 
-            - name: Set version with agvtool
+            - name: Set version
               run: |
                   VERSION=$(echo "${{ github.ref_name }}" | sed 's/^v//')
-                  agvtool new-marketing-version "$VERSION"
-                  agvtool new-version -all "${{ github.run_number }}"
+                  BUILD_NUMBER="${{ github.run_number }}"
+
+                  # Update MARKETING_VERSION in project.pbxproj
+                  sed -i '' "s/MARKETING_VERSION = [^;]*;/MARKETING_VERSION = $VERSION;/g" LaunchX.xcodeproj/project.pbxproj
+
+                  # Update CURRENT_PROJECT_VERSION in project.pbxproj
+                  sed -i '' "s/CURRENT_PROJECT_VERSION = [^;]*;/CURRENT_PROJECT_VERSION = $BUILD_NUMBER;/g" LaunchX.xcodeproj/project.pbxproj
+
+                  echo "Updated version to $VERSION (build $BUILD_NUMBER)"
 
             - name: Build app (Apple Silicon)
               run: |
@@ -181,19 +188,24 @@ jobs:
 
             - name: Commit and Push Version Changes
               run: |
+                  VERSION="${{ github.ref_name }}"
+
                   git config --local user.email "github-actions[bot]@users.noreply.github.com"
                   git config --local user.name "github-actions[bot]"
 
-                  # Add appcast and the project file modified by agvtool
+                  # Checkout main branch (we're currently in detached HEAD state from the tag)
+                  git fetch origin main
+                  git checkout main
+                  git pull origin main
+
+                  # Add appcast and the project file with updated version
                   git add appcast.xml
                   git add LaunchX.xcodeproj/project.pbxproj || echo "Project file not found"
 
-                  git commit -m "chore: bump version and update appcast for ${VERSION}" || echo "No changes to commit"
-
-                  # Rebase to handle remote changes, stashing build artifacts
-                  git stash push --all
-                  git fetch origin main
-                  git rebase origin/main
-                  git stash pop || true
-
-                  git push origin HEAD:main
+                  # Check if there are changes to commit
+                  if git diff --staged --quiet; then
+                    echo "No changes to commit"
+                  else
+                    git commit -m "chore: bump version to ${VERSION} and update appcast"
+                    git push origin main
+                  fi
