@@ -48,12 +48,15 @@ final class IndexDatabase {
             return
         }
 
-        // Performance optimizations
+        // Enhanced performance optimizations for 600k+ files
         executeSQL("PRAGMA journal_mode = WAL")  // Write-Ahead Logging for concurrency
         executeSQL("PRAGMA synchronous = NORMAL")  // Balance safety and speed
-        executeSQL("PRAGMA cache_size = -64000")  // 64MB cache
+        executeSQL("PRAGMA cache_size = -128000")  // 128MB cache (increased for large datasets)
         executeSQL("PRAGMA temp_store = MEMORY")  // Temp tables in memory
-        executeSQL("PRAGMA mmap_size = 268435456")  // 256MB memory-mapped I/O
+        executeSQL("PRAGMA mmap_size = 536870912")  // 512MB memory-mapped I/O (increased)
+        executeSQL("PRAGMA locking_mode = NORMAL")  // Allow multiple readers
+        executeSQL("PRAGMA page_size = 4096")  // Optimize page size
+        executeSQL("PRAGMA optimize")  // Auto-optimize query planner
 
         print("IndexDatabase: Opened database at \(dbPath)")
     }
@@ -291,19 +294,48 @@ final class IndexDatabase {
         }
     }
 
-    /// Load all records synchronously (for startup)
+    /// Synchronously load all records
     func loadAllSync() -> [FileRecord] {
         var records: [FileRecord] = []
 
         dbQueue.sync { [weak self] in
             guard let self = self, let stmt = self.selectAllStmt else { return }
 
-            records.reserveCapacity(100000)
             sqlite3_reset(stmt)
 
             while sqlite3_step(stmt) == SQLITE_ROW {
                 let record = self.recordFromStatement(stmt)
                 records.append(record)
+            }
+        }
+
+        return records
+    }
+
+    /// Load records in batches for optimized startup performance
+    /// 分批加载记录，优化启动性能
+    func loadBatch(offset: Int, limit: Int) -> [FileRecord] {
+        var records: [FileRecord] = []
+        records.reserveCapacity(limit)
+
+        dbQueue.sync { [weak self] in
+            guard let self = self else { return }
+
+            var stmt: OpaquePointer?
+            let sql = "SELECT * FROM files ORDER BY id LIMIT ? OFFSET ?"
+
+            if sqlite3_prepare_v2(self.db, sql, -1, &stmt, nil) == SQLITE_OK {
+                if let stmt = stmt {
+                    sqlite3_bind_int(stmt, 1, Int32(limit))
+                    sqlite3_bind_int(stmt, 2, Int32(offset))
+
+                    while sqlite3_step(stmt) == SQLITE_ROW {
+                        let record = self.recordFromStatement(stmt)
+                        records.append(record)
+                    }
+
+                    sqlite3_finalize(stmt)
+                }
             }
         }
 
@@ -342,20 +374,24 @@ final class IndexDatabase {
             if sqlite3_prepare_v2(self.db, "SELECT COUNT(*) FROM files", -1, &stmt, nil)
                 == SQLITE_OK
             {
-                if sqlite3_step(stmt) == SQLITE_ROW {
-                    total = Int(sqlite3_column_int(stmt, 0))
+                if let stmt = stmt {
+                    if sqlite3_step(stmt) == SQLITE_ROW {
+                        total = Int(sqlite3_column_int(stmt, 0))
+                    }
+                    sqlite3_finalize(stmt)
                 }
-                sqlite3_finalize(stmt)
             }
 
             // Apps count
             if sqlite3_prepare_v2(
                 self.db, "SELECT COUNT(*) FROM files WHERE is_app = 1", -1, &stmt, nil) == SQLITE_OK
             {
-                if sqlite3_step(stmt) == SQLITE_ROW {
-                    apps = Int(sqlite3_column_int(stmt, 0))
+                if let stmt = stmt {
+                    if sqlite3_step(stmt) == SQLITE_ROW {
+                        apps = Int(sqlite3_column_int(stmt, 0))
+                    }
+                    sqlite3_finalize(stmt)
                 }
-                sqlite3_finalize(stmt)
             }
 
             files = total - apps
@@ -411,18 +447,18 @@ final class IndexDatabase {
 // MARK: - File Record Model
 
 /// Represents a file record in the index database
-struct FileRecord {
-    let name: String
-    let path: String
-    let `extension`: String?
-    let isApp: Bool
-    let isDirectory: Bool
-    let pinyinFull: String?
-    let pinyinAcronym: String?
-    let modifiedDate: Date?
-    let fileSize: Int
+public struct FileRecord {
+    public let name: String
+    public let path: String
+    public let `extension`: String?
+    public let isApp: Bool
+    public let isDirectory: Bool
+    public let pinyinFull: String?
+    public let pinyinAcronym: String?
+    public let modifiedDate: Date?
+    public let fileSize: Int
 
-    init(
+    public init(
         name: String,
         path: String,
         extension: String? = nil,

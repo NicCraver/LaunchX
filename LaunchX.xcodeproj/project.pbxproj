@@ -420,6 +420,7 @@
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_SUPublicEDKey = "u09i3ukzZB+84ns9RdiryTO0PNV9yRLK/iKT0ijnDjE=";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -431,7 +432,6 @@
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SUFeedURL = "https://raw.githubusercontent.com/twotwoba/LaunchX/main/appcast.xml";
-				INFOPLIST_KEY_SUPublicEDKey = "u09i3ukzZB+84ns9RdiryTO0PNV9yRLK/iKT0ijnDjE=";
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -457,6 +457,7 @@
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_SUPublicEDKey = "u09i3ukzZB+84ns9RdiryTO0PNV9yRLK/iKT0ijnDjE=";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -468,7 +469,6 @@
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SUFeedURL = "https://raw.githubusercontent.com/twotwoba/LaunchX/main/appcast.xml";
-				INFOPLIST_KEY_SUPublicEDKey = "u09i3ukzZB+84ns9RdiryTO0PNV9yRLK/iKT0ijnDjE=";
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;

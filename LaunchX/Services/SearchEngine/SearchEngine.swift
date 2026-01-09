@@ -26,6 +26,8 @@ final class SearchEngine: ObservableObject {
     private let indexer = FileIndexer()
     private let memoryIndex = MemoryIndex()
     private let fsMonitor = FSEventsMonitor()
+    private let searchCache = SearchCache()
+    private let performanceMonitor = SearchPerformanceMonitor.shared
 
     // MARK: - Thread-safe Configuration
 
@@ -227,10 +229,43 @@ final class SearchEngine: ObservableObject {
         if stats.totalCount > 0 {
             print("SearchEngine: Found existing index with \(stats.totalCount) items, loading...")
 
-            // Load from database
-            let records = database.loadAllSync()
+            // Optimized: Load in batches for better performance with large datasets
+            loadIndexInBatches(startTime: startTime)
+        } else {
+            print("SearchEngine: No existing index, building fresh...")
+            Task { @MainActor [weak self] in
+                self?.buildFreshIndex()
+            }
+        }
+    }
 
-            memoryIndex.build(from: records) { [weak self] in
+    /// Optimized batch loading for large datasets (600k+ files)
+    /// 分批加载索引，优化大数据集的启动性能
+    private func loadIndexInBatches(startTime: Date) {
+        let batchSize = 10000  // Load 10k records at a time
+        
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+
+            // Get total count first
+            let stats = self.database.getStatistics()
+            var allRecords: [FileRecord] = []
+            allRecords.reserveCapacity(stats.totalCount)
+
+            // Load all records in batches
+            var offset = 0
+            while offset < stats.totalCount {
+                let batch = self.database.loadBatch(offset: offset, limit: batchSize)
+                allRecords.append(contentsOf: batch)
+                offset += batch.count
+                
+                print("SearchEngine: Loaded \(offset)/\(stats.totalCount) records...")
+            }
+
+            // All records loaded, build memory index
+            print("SearchEngine: Loaded all \(allRecords.count) records, building memory index...")
+            
+            self.memoryIndex.build(from: allRecords) { [weak self] in
                 guard let self = self else { return }
 
                 Task { @MainActor [weak self] in
@@ -249,11 +284,6 @@ final class SearchEngine: ObservableObject {
 
                 // Start file system monitoring
                 self.startMonitoring()
-            }
-        } else {
-            print("SearchEngine: No existing index, building fresh...")
-            Task { @MainActor [weak self] in
-                self?.buildFreshIndex()
             }
         }
     }
@@ -438,28 +468,43 @@ final class SearchEngine: ObservableObject {
 
     // MARK: - Search
 
-    /// Synchronous search for immediate results
+    /// Optimized synchronous search with caching and performance monitoring
     /// This is the main search API, called on every keystroke
     func searchSync(text: String) -> [SearchResult] {
         guard !text.isEmpty else { return [] }
 
-        let config = searchConfig
+        // Check cache first for frequently accessed queries
+        if let cachedResults = searchCache.getCachedResults(for: text) {
+            searchCache.recordAccess(for: text)  // Record access for learning
+            return performanceMonitor.measureSearch(
+                query: text,
+                cacheHit: true
+            ) { cachedResults }
+        }
 
-        let items = memoryIndex.search(
-            query: text,
-            excludedApps: config.excludedApps,
-            excludedPaths: config.excludedPaths,
-            excludedExtensions: Set(config.excludedExtensions),
-            excludedFolderNames: Set(config.excludedFolderNames)
-        )
+        return performanceMonitor.measureSearch(query: text, cacheHit: false) {
+            let config = searchConfig
 
-        var results = items.map { $0.toSearchResult() }
+            // Use optimized search
+            let items = memoryIndex.search(
+                query: text,
+                excludedApps: config.excludedApps,
+                excludedPaths: config.excludedPaths,
+                excludedExtensions: Set(config.excludedExtensions),
+                excludedFolderNames: Set(config.excludedFolderNames)
+            )
 
-        // 添加书签搜索结果
-        let bookmarkResults = searchBookmarks(query: text)
-        results.append(contentsOf: bookmarkResults)
+            var results = items.map { $0.toSearchResult() }
 
-        return results
+            // 添加书签搜索结果
+            let bookmarkResults = searchBookmarks(query: text)
+            results.append(contentsOf: bookmarkResults)
+
+            // Cache results if beneficial
+            searchCache.cacheResults(results, for: text, accessCount: 1)
+
+            return results
+        }
     }
 
     // MARK: - 书签搜索

@@ -99,17 +99,17 @@ struct CachedSearchableString {
 // MARK: - Extensions
 
 extension String {
-    var hasMultiByteCharacters: Bool {
+    public var hasMultiByteCharacters: Bool {
         // Simple heuristic: if utf8 count is different from character count, it likely has multibyte chars (like Emoji or Chinese)
         return self.utf8.count != self.count
     }
 
-    var isAscii: Bool {
+    public var isAscii: Bool {
         return self.allSatisfy { $0.isASCII }
     }
 
     /// Converts "微信" to "Wei Xin"
-    var pinyin: String {
+    public var pinyin: String {
         let mutableString = NSMutableString(string: self)
         // Convert to Latin (Pinyin)
         CFStringTransform(mutableString, nil, kCFStringTransformToLatin, false)
@@ -119,7 +119,7 @@ extension String {
     }
 
     /// Converts "微信" to "wx"
-    var pinyinAcronym: String {
+    public var pinyinAcronym: String {
         let pinyinStr = self.pinyin
         let components = pinyinStr.components(separatedBy: " ")
         var acronym = ""
