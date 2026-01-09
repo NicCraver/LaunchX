@@ -434,6 +434,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @objc func openSettings() {
         PanelManager.shared.hidePanel()
 
+        // 激活应用，确保设置窗口在当前活跃的空间/屏幕打开
+        NSApp.activate(ignoringOtherApps: true)
+
         // 发送通知，让 SettingsOpenerView 通过 @Environment(\.openSettings) 打开设置
         // 不需要切换到 regular 模式，避免 Dock 图标出现
         NotificationCenter.default.post(name: .openSettingsNotification, object: nil)

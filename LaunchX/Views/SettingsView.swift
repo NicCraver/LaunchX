@@ -29,6 +29,19 @@ struct SettingsView: View {
         .padding()
         .onAppear {
             PanelManager.shared.hidePanel()
+
+            // 配置设置窗口，使其能在全屏应用上显示并跟随到当前空间
+            DispatchQueue.main.async {
+                for window in NSApp.windows where window.isVisible {
+                    // 找到设置窗口（排除搜索主面板和 1x1 的辅助窗口）
+                    let className = String(describing: type(of: window))
+                    if !className.contains("Panel") && window.frame.width >= 700 {
+                        window.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
+                        // 确保设置窗口在全屏应用上方显示并移动到当前活跃空间
+                        window.orderFrontRegardless()
+                    }
+                }
+            }
         }
     }
 }
