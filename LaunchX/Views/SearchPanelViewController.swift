@@ -3615,6 +3615,8 @@ class ResultCellView: NSView {
     private var nameLabelTrailingToArrow: NSLayoutConstraint!
     private var nameLabelTrailingToEdge: NSLayoutConstraint!
     private var nameLabelTrailingToStats: NSLayoutConstraint!
+    private var pathLabelTrailingToArrow: NSLayoutConstraint!
+    private var pathLabelTrailingToEdge: NSLayoutConstraint!
 
     // 分组标题模式的约束
     private var nameLabelLeadingNormal: NSLayoutConstraint!
@@ -3730,6 +3732,12 @@ class ResultCellView: NSView {
         nameLabelTrailingToStats = nameLabel.trailingAnchor.constraint(
             lessThanOrEqualTo: statsContainerView.leadingAnchor, constant: -12)
 
+        // 路径的 trailing 约束
+        pathLabelTrailingToArrow = pathLabel.trailingAnchor.constraint(
+            lessThanOrEqualTo: arrowIndicator.leadingAnchor, constant: -8)
+        pathLabelTrailingToEdge = pathLabel.trailingAnchor.constraint(
+            lessThanOrEqualTo: trailingAnchor, constant: -20)
+
         // 名称的 leading 约束
         nameLabelLeadingNormal = nameLabel.leadingAnchor.constraint(
             equalTo: iconView.trailingAnchor, constant: 12)
@@ -3804,7 +3812,6 @@ class ResultCellView: NSView {
             statsContainerView.bottomAnchor.constraint(equalTo: portLabel.bottomAnchor),
 
             pathLabel.leadingAnchor.constraint(equalTo: nameLabel.leadingAnchor),
-            pathLabel.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -20),
             pathLabel.topAnchor.constraint(equalTo: nameLabel.bottomAnchor, constant: 2),
         ])
     }
@@ -3891,6 +3898,15 @@ class ResultCellView: NSView {
             nameLabelTrailingToArrow.isActive = true
         } else {
             nameLabelTrailingToEdge.isActive = true
+        }
+
+        // 切换 pathLabel trailing 约束
+        pathLabelTrailingToEdge.isActive = false
+        pathLabelTrailingToArrow.isActive = false
+        if showArrow {
+            pathLabelTrailingToArrow.isActive = true
+        } else {
+            pathLabelTrailingToEdge.isActive = true
         }
 
         // 切换布局：App、网页直达、实用工具、系统命令、书签入口、2FA 入口、有进程统计的项垂直居中，其他顶部对齐
