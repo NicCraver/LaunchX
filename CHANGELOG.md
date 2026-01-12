@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.1.27
+- 修复AI翻译可能引起的崩溃问题
+
 ## v0.1.26
 - 完善 release.yml
 
