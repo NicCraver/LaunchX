@@ -429,9 +429,7 @@ class SearchSettingsViewModel: ObservableObject {
                         }
 
                         // 获取本地化名称
-                        let name =
-                            self?.getLocalizedAppName(at: appURL.path)
-                            ?? appURL.deletingPathExtension().lastPathComponent
+                        let name = FileManager.default.getAppDisplayName(at: appURL.path)
                         let icon = NSWorkspace.shared.icon(forFile: appURL.path)
                         icon.size = NSSize(width: 24, height: 24)
                         apps.append(
@@ -451,74 +449,6 @@ class SearchSettingsViewModel: ObservableObject {
                 self?.allApps = apps
             }
         }
-    }
-
-    /// 获取应用的本地化名称（支持中文名如"微信"、"企业微信"、"活动监视器"）
-    private func getLocalizedAppName(at appPath: String) -> String? {
-        let fm = FileManager.default
-
-        // Method 1: 检查 InfoPlist.strings 中的中文本地化
-        let resourcesPath = appPath + "/Contents/Resources"
-        let lprojDirs = ["zh-Hans.lproj", "zh_CN.lproj", "zh-Hant.lproj", "zh_TW.lproj"]
-
-        for lproj in lprojDirs {
-            let stringsPath = resourcesPath + "/" + lproj + "/InfoPlist.strings"
-            guard fm.fileExists(atPath: stringsPath),
-                let data = fm.contents(atPath: stringsPath)
-            else { continue }
-
-            // 尝试作为 plist 解析
-            if let plist = try? PropertyListSerialization.propertyList(from: data, format: nil)
-                as? [String: String],
-                let displayName = plist["CFBundleDisplayName"] ?? plist["CFBundleName"]
-            {
-                return displayName
-            }
-
-            // 尝试作为 UTF-16 编码的 strings 文件解析
-            if let str = String(data: data, encoding: .utf16) {
-                let pattern = "\"CFBundleDisplayName\"\\s*=\\s*\"([^\"]+)\""
-                if let regex = try? NSRegularExpression(pattern: pattern),
-                    let match = regex.firstMatch(
-                        in: str, range: NSRange(str.startIndex..., in: str)),
-                    let range = Range(match.range(at: 1), in: str)
-                {
-                    return String(str[range])
-                }
-
-                let namePattern = "\"CFBundleName\"\\s*=\\s*\"([^\"]+)\""
-                if let regex = try? NSRegularExpression(pattern: namePattern),
-                    let match = regex.firstMatch(
-                        in: str, range: NSRange(str.startIndex..., in: str)),
-                    let range = Range(match.range(at: 1), in: str)
-                {
-                    return String(str[range])
-                }
-            }
-        }
-
-        // Method 2: 检查 Info.plist 中的 CFBundleDisplayName（如企业微信）
-        let infoPlistPath = appPath + "/Contents/Info.plist"
-        if let infoPlistData = fm.contents(atPath: infoPlistPath),
-            let plist = try? PropertyListSerialization.propertyList(
-                from: infoPlistData, format: nil) as? [String: Any]
-        {
-            if let displayName = plist["CFBundleDisplayName"] as? String,
-                displayName.utf8.count != displayName.count  // hasMultiByteCharacters
-            {
-                return displayName
-            }
-        }
-
-        // Method 3: 使用 Spotlight 元数据（如系统应用 Activity Monitor -> 活动监视器）
-        if let mdItem = MDItemCreate(nil, appPath as CFString),
-            let displayName = MDItemCopyAttribute(mdItem, kMDItemDisplayName) as? String,
-            displayName.utf8.count != displayName.count
-        {  // hasMultiByteCharacters
-            return displayName
-        }
-
-        return nil
     }
 
     /// Check if an app has a custom icon defined in Info.plist

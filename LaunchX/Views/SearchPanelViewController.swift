@@ -3236,8 +3236,7 @@ class SearchPanelViewController: NSViewController {
     private func createSearchResult(from path: String) -> SearchResult? {
         guard FileManager.default.fileExists(atPath: path) else { return nil }
 
-        let name = FileManager.default.displayName(atPath: path)
-            .replacingOccurrences(of: ".app", with: "")
+        let name = FileManager.default.getAppDisplayName(at: path)
         let icon = NSWorkspace.shared.icon(forFile: path)
         icon.size = NSSize(width: 32, height: 32)
 

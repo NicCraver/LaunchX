@@ -67,7 +67,7 @@ final class MemoryIndex {
             self._displayAlias = alias
 
             // 为中文名称生成拼音
-            if name.hasMultiByteCharacters {
+            if name.utf8.count != name.count {
                 self.pinyinFull = name.pinyin.lowercased().replacingOccurrences(of: " ", with: "")
                 self.pinyinAcronym = name.pinyinAcronym.lowercased()
             } else {

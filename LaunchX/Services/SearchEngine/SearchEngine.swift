@@ -301,6 +301,7 @@ final class SearchEngine: ObservableObject {
         isIndexing = true
         isReady = false
         let startTime = Date()
+        searchCache.clear()
 
         // Clear existing data
         database.deleteAll { [weak self] _ in
@@ -368,6 +369,7 @@ final class SearchEngine: ObservableObject {
     func rebuildIndex() {
         indexer.cancel()
         fsMonitor.stop()
+        searchCache.clear()
         buildFreshIndex()
     }
 
@@ -427,7 +429,7 @@ final class SearchEngine: ObservableObject {
 
         var pinyinFull: String? = nil
         var pinyinAcronym: String? = nil
-        if name.hasMultiByteCharacters {
+        if name.utf8.count != name.count {
             pinyinFull = name.pinyin.lowercased().replacingOccurrences(of: " ", with: "")
             pinyinAcronym = name.pinyinAcronym.lowercased()
         }

@@ -50,77 +50,6 @@ final class FileIndexer {
         return result
     }
 
-    // MARK: - Localized Name Helper
-
-    /// Get localized app name (supports Chinese names like "微信", "企业微信", "活动监视器")
-    private func getLocalizedAppName(at appPath: String) -> String? {
-        let fm = FileManager.default
-
-        // Method 1: Check InfoPlist.strings in Chinese localization directories
-        let resourcesPath = appPath + "/Contents/Resources"
-        let lprojDirs = ["zh-Hans.lproj", "zh_CN.lproj", "zh-Hant.lproj", "zh_TW.lproj"]
-
-        for lproj in lprojDirs {
-            let stringsPath = resourcesPath + "/" + lproj + "/InfoPlist.strings"
-            guard fm.fileExists(atPath: stringsPath),
-                let data = fm.contents(atPath: stringsPath)
-            else { continue }
-
-            // Try as property list first
-            if let plist = try? PropertyListSerialization.propertyList(from: data, format: nil)
-                as? [String: String],
-                let displayName = plist["CFBundleDisplayName"] ?? plist["CFBundleName"]
-            {
-                return displayName
-            }
-
-            // Try reading as UTF-16 (common encoding for .strings files)
-            if let str = String(data: data, encoding: .utf16) {
-                let pattern = "\"CFBundleDisplayName\"\\s*=\\s*\"([^\"]+)\""
-                if let regex = try? NSRegularExpression(pattern: pattern),
-                    let match = regex.firstMatch(
-                        in: str, range: NSRange(str.startIndex..., in: str)),
-                    let range = Range(match.range(at: 1), in: str)
-                {
-                    return String(str[range])
-                }
-
-                // Try CFBundleName if CFBundleDisplayName not found
-                let namePattern = "\"CFBundleName\"\\s*=\\s*\"([^\"]+)\""
-                if let regex = try? NSRegularExpression(pattern: namePattern),
-                    let match = regex.firstMatch(
-                        in: str, range: NSRange(str.startIndex..., in: str)),
-                    let range = Range(match.range(at: 1), in: str)
-                {
-                    return String(str[range])
-                }
-            }
-        }
-
-        // Method 2: Check Info.plist CFBundleDisplayName (some apps like 企业微信 use this)
-        let infoPlistPath = appPath + "/Contents/Info.plist"
-        if let infoPlistData = fm.contents(atPath: infoPlistPath),
-            let plist = try? PropertyListSerialization.propertyList(
-                from: infoPlistData, format: nil) as? [String: Any]
-        {
-            if let displayName = plist["CFBundleDisplayName"] as? String,
-                displayName.hasMultiByteCharacters
-            {
-                return displayName
-            }
-        }
-
-        // Method 3: Use Spotlight metadata (for system apps like Activity Monitor -> 活动监视器)
-        if let mdItem = MDItemCreate(nil, appPath as CFString),
-            let displayName = MDItemCopyAttribute(mdItem, kMDItemDisplayName) as? String,
-            displayName.hasMultiByteCharacters
-        {
-            return displayName
-        }
-
-        return nil
-    }
-
     // MARK: - Public API
 
     /// Scan directories and build index
@@ -356,10 +285,7 @@ final class FileIndexer {
         let name: String
         if isApp {
             // For apps, use localized display name (e.g., "微信" instead of "WeChat")
-            name =
-                getLocalizedAppName(at: url.path)
-                ?? FileManager.default.displayName(atPath: url.path)
-                .replacingOccurrences(of: ".app", with: "")
+            name = FileManager.default.getAppDisplayName(at: url.path)
         } else {
             name = url.lastPathComponent
         }
@@ -368,7 +294,7 @@ final class FileIndexer {
         var pinyinFull: String? = nil
         var pinyinAcronym: String? = nil
 
-        if name.hasMultiByteCharacters {
+        if name.utf8.count != name.count {
             pinyinFull = name.pinyin.lowercased().replacingOccurrences(of: " ", with: "")
             pinyinAcronym = name.pinyinAcronym.lowercased()
         }
@@ -395,16 +321,13 @@ final class FileIndexer {
         let resourceValues = try? url.resourceValues(forKeys: [.contentModificationDateKey])
 
         // Get localized display name (prefer Chinese localization, fallback to system display name)
-        let name =
-            getLocalizedAppName(at: url.path)
-            ?? FileManager.default.displayName(atPath: url.path)
-            .replacingOccurrences(of: ".app", with: "")
+        let name = FileManager.default.getAppDisplayName(at: url.path)
 
         // Calculate pinyin for Chinese characters
         var pinyinFull: String? = nil
         var pinyinAcronym: String? = nil
 
-        if name.hasMultiByteCharacters {
+        if name.utf8.count != name.count {
             pinyinFull = name.pinyin.lowercased().replacingOccurrences(of: " ", with: "")
             pinyinAcronym = name.pinyinAcronym.lowercased()
         }
