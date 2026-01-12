@@ -161,6 +161,10 @@ LaunchX/
 └── Assets.xcassets/        # 资源文件
 ```
 
+## 交流
+
+如果您在使用过程中有任何建议、疑问或困难，可以提 issue 或者加我wx：EricYuan228
+
 ## 贡献
 
 欢迎提交 Issue 和 Pull Request！
