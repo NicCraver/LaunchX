@@ -117,6 +117,9 @@ final class SearchEngine: ObservableObject {
 
     /// 加载别名映射到内存索引
     private func loadAliasMap() {
+        // 配置发生变化时，清除搜索缓存，确保别名和启用状态立即生效
+        searchCache.clear()
+
         // 优先使用新的 ToolsConfig
         let toolsConfig = ToolsConfig.load()
         if !toolsConfig.tools.isEmpty {
@@ -243,7 +246,7 @@ final class SearchEngine: ObservableObject {
     /// 分批加载索引，优化大数据集的启动性能
     private func loadIndexInBatches(startTime: Date) {
         let batchSize = 10000  // Load 10k records at a time
-        
+
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
 
@@ -258,13 +261,13 @@ final class SearchEngine: ObservableObject {
                 let batch = self.database.loadBatch(offset: offset, limit: batchSize)
                 allRecords.append(contentsOf: batch)
                 offset += batch.count
-                
+
                 print("SearchEngine: Loaded \(offset)/\(stats.totalCount) records...")
             }
 
             // All records loaded, build memory index
             print("SearchEngine: Loaded all \(allRecords.count) records, building memory index...")
-            
+
             self.memoryIndex.build(from: allRecords) { [weak self] in
                 guard let self = self else { return }
 

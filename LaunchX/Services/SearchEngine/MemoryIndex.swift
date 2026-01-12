@@ -708,6 +708,11 @@ final class MemoryIndex {
         queue.async { [weak self] in
             guard let self = self else { return }
 
+            // 清除旧的所有显示别名，确保更改立即生效
+            for item in self.allItems.values {
+                item.setDisplayAlias(nil)
+            }
+
             self.aliasMap = map.reduce(into: [String: String]()) { result, pair in
                 result[pair.key.lowercased()] = pair.value
             }
@@ -723,6 +728,11 @@ final class MemoryIndex {
     func setAliasMapWithTools(_ toolsMap: [String: AliasToolInfo]) {
         queue.async { [weak self] in
             guard let self = self else { return }
+
+            // 清除旧的所有显示别名，确保更改立即生效
+            for item in self.allItems.values {
+                item.setDisplayAlias(nil)
+            }
 
             self.aliasToolMap = toolsMap.reduce(into: [String: AliasToolInfo]()) { result, pair in
                 result[pair.key.lowercased()] = pair.value
