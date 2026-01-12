@@ -54,6 +54,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // 1. Initialize the Search Panel (pure AppKit, no SwiftUI)
         PanelManager.shared.setup()
 
+        // 拦截系统默认的 Cmd+Q 行为，防止其干扰菜单栏图标
+        if let mainMenu = NSApp.mainMenu {
+            for item in mainMenu.items {
+                if let submenu = item.submenu {
+                    for subItem in submenu.items {
+                        if subItem.action == #selector(NSApplication.terminate(_:)) {
+                            subItem.target = self
+                            subItem.action = #selector(handleQuitMenuClick)
+                        }
+                    }
+                }
+            }
+        }
+
         // 2. Check permissions first before setting up hotkey
         checkPermissionsAndSetup()
 
@@ -431,6 +445,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         PanelManager.shared.togglePanel()
     }
 
+    @objc func handleQuitMenuClick() {
+        print("LaunchX: Cmd+Q intercepted, hiding instead of quitting")
+        PanelManager.shared.hidePanel()
+    }
+
     @objc func openSettings() {
         PanelManager.shared.hidePanel()
 
@@ -453,18 +472,31 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     // Intercept termination request (Cmd+Q) to keep the app running in the background
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        print(
+            "LaunchX: applicationShouldTerminate called, isQuitting: \(isQuitting), isPreparingForUpdate: \(UpdateService.shared.isPreparingForUpdate)"
+        )
+
+        // 只有明确通过“退出”菜单或者更新流程触发时才允许退出
         if isQuitting || UpdateService.shared.isPreparingForUpdate {
             print("LaunchX: Terminating now")
             return .terminateNow
         }
 
-        // Close all windows (Settings, Onboarding, etc.) but keep the app running
-        for window in NSApp.windows {
-            window.close()
-        }
+        print("LaunchX: Intercepting termination, performing safe hide")
 
-        // Hide the application
-        NSApp.hide(nil)
+        // 异步执行隐藏逻辑，避免在终止回调中同步阻塞导致 UI 状态异常
+        DispatchQueue.main.async {
+            // 隐藏所有窗口
+            for window in NSApp.windows {
+                if window.isVisible {
+                    window.close()
+                }
+            }
+            // 确保面板也隐藏
+            PanelManager.shared.hidePanel()
+            // 隐藏应用
+            NSApp.hide(nil)
+        }
 
         return .terminateCancel
     }
