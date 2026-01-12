@@ -12,17 +12,23 @@ enum IDEType: String, CaseIterable {
     case jetbrainsRider = "Rider"
     case jetbrainsClion = "CLion"
 
-    /// 应用的 bundle identifier
-    var bundleIdentifier: String {
+    /// 应用的 bundle identifier (支持多个版本)
+    var bundleIdentifiers: [String] {
         switch self {
-        case .vscode: return "com.microsoft.VSCode"
-        case .zed: return "dev.zed.Zed"
-        case .jetbrainsIntelliJ: return "com.jetbrains.intellij"
-        case .jetbrainsPyCharm: return "com.jetbrains.pycharm"
-        case .jetbrainsWebStorm: return "com.jetbrains.WebStorm"
-        case .jetbrainsGoLand: return "com.jetbrains.goland"
-        case .jetbrainsRider: return "com.jetbrains.rider"
-        case .jetbrainsClion: return "com.jetbrains.CLion"
+        case .vscode: return ["com.microsoft.VSCode", "com.microsoft.VSCodeInsiders"]
+        case .zed: return ["dev.zed.Zed", "dev.zed.Zed-Preview", "dev.zed.Zed-Nightly"]
+        case .jetbrainsIntelliJ:
+            return [
+                "com.jetbrains.intellij", "com.jetbrains.intellij.ce", "com.jetbrains.intellij-EAP",
+            ]
+        case .jetbrainsPyCharm:
+            return [
+                "com.jetbrains.pycharm", "com.jetbrains.pycharm.ce", "com.jetbrains.pycharm-EAP",
+            ]
+        case .jetbrainsWebStorm: return ["com.jetbrains.WebStorm", "com.jetbrains.WebStorm-EAP"]
+        case .jetbrainsGoLand: return ["com.jetbrains.goland", "com.jetbrains.goland-EAP"]
+        case .jetbrainsRider: return ["com.jetbrains.rider", "com.jetbrains.rider-EAP"]
+        case .jetbrainsClion: return ["com.jetbrains.CLion", "com.jetbrains.CLion-EAP"]
         }
     }
 

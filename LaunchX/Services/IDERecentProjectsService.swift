@@ -32,31 +32,20 @@ final class IDERecentProjectsService {
                 FolderOpenerApp(name: "Finder", path: finderPath, icon: icon, ideType: nil))
         }
 
-        // 2. 检测已安装的 IDE
-        let ideApps: [(IDEType, [String])] = [
-            (.vscode, ["/Applications/Visual Studio Code.app"]),
-            (.zed, ["/Applications/Zed.app"]),
-            (
-                .jetbrainsIntelliJ,
-                ["/Applications/IntelliJ IDEA.app", "/Applications/IntelliJ IDEA CE.app"]
-            ),
-            (.jetbrainsPyCharm, ["/Applications/PyCharm.app", "/Applications/PyCharm CE.app"]),
-            (.jetbrainsWebStorm, ["/Applications/WebStorm.app"]),
-            (.jetbrainsGoLand, ["/Applications/GoLand.app"]),
-            (.jetbrainsRider, ["/Applications/Rider.app"]),
-            (.jetbrainsClion, ["/Applications/CLion.app"]),
-        ]
-
-        for (ideType, possiblePaths) in ideApps {
-            for path in possiblePaths {
-                if FileManager.default.fileExists(atPath: path) {
+        // 2. 检测已安装的 IDE (通过 Bundle ID)
+        for ideType in IDEType.allCases {
+            for bundleId in ideType.bundleIdentifiers {
+                if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId)
+                {
+                    let path = appURL.path
                     let icon = NSWorkspace.shared.icon(forFile: path)
                     icon.size = NSSize(width: 32, height: 32)
                     let name = FileManager.default.displayName(atPath: path)
                         .replacingOccurrences(of: ".app", with: "")
+
                     openers.append(
                         FolderOpenerApp(name: name, path: path, icon: icon, ideType: ideType))
-                    break  // 每种 IDE 只取第一个找到的
+                    break  // 每种 IDE 类型只添加一个（如已安装多个版本，取检测到的第一个）
                 }
             }
         }
