@@ -255,10 +255,19 @@ jobs:
                   git config --local user.email "github-actions[bot]@users.noreply.github.com"
                   git config --local user.name "github-actions[bot]"
 
-                  # Checkout main branch (we're currently in detached HEAD state from the tag)
+                  # 备份已修改的文件，避免检出分支时冲突
+                  cp appcast.xml appcast.xml.tmp
+                  cp LaunchX.xcodeproj/project.pbxproj project.pbxproj.tmp
+
+                  # 切换到 main 分支（当前在 tag 的 detached HEAD 状态）
+                  git checkout .
                   git fetch origin main
                   git checkout main
                   git pull origin main
+
+                  # 还原备份的文件
+                  mv appcast.xml.tmp appcast.xml
+                  mv project.pbxproj.tmp LaunchX.xcodeproj/project.pbxproj
 
                   # Add appcast and the project file with updated version
                   git add appcast.xml
