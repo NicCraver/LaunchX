@@ -7,27 +7,27 @@ class AITranslatePanelViewController: NSViewController {
 
     // MARK: - UI 组件
 
-    private var containerView: NSVisualEffectView!
-    private var titleBar: NSView!
-    private var titleLabel: NSTextField!
+    private var containerView: NSVisualEffectView?
+    private var titleBar: NSView?
+    private var titleLabel: NSTextField?
 
-    private var pinButton: NSButton!
+    private var pinButton: NSButton?
 
-    private var inputScrollView: NSScrollView!
-    private var inputTextView: NSTextView!
-    private var inputPlaceholder: NSTextField!
-    private var inputHeightConstraint: NSLayoutConstraint!
+    private var inputScrollView: NSScrollView?
+    private var inputTextView: NSTextView?
+    private var inputPlaceholder: NSTextField?
+    private var inputHeightConstraint: NSLayoutConstraint?
 
-    private var languageBar: NSView!
-    private var fromLangButton: NSButton!
-    private var swapButton: NSButton!
-    private var toLangButton: NSButton!
+    private var languageBar: NSView?
+    private var fromLangButton: NSButton?
+    private var swapButton: NSButton?
+    private var toLangButton: NSButton?
 
-    private var resultScrollView: NSScrollView!
-    private var resultStackView: NSStackView!
-    private var resultHeightConstraint: NSLayoutConstraint!
+    private var resultScrollView: NSScrollView?
+    private var resultStackView: NSStackView?
+    private var resultHeightConstraint: NSLayoutConstraint?
 
-    private var loadingIndicator: NSProgressIndicator!
+    private var loadingIndicator: NSProgressIndicator?
 
     // 是否有翻译结果
     private var hasTranslationResult: Bool = false
@@ -36,14 +36,14 @@ class AITranslatePanelViewController: NSViewController {
     var onContentHeightChanged: ((CGFloat) -> Void)?
 
     // 语言菜单
-    private var fromLangMenu: NSMenu!
-    private var toLangMenu: NSMenu!
+    private var fromLangMenu: NSMenu?
+    private var toLangMenu: NSMenu?
 
     // MARK: - 状态
 
     private var settings = AITranslateSettings.load()
-    private var fromLang: TranslateLanguage = .auto
-    private var toLang: TranslateLanguage = .auto
+    private var fromLang: TranslateLanguage = TranslateLanguage.auto
+    private var toLang: TranslateLanguage = TranslateLanguage.auto
     private var cancellables = Set<AnyCancellable>()
 
     // 输入框高度限制
@@ -68,14 +68,15 @@ class AITranslatePanelViewController: NSViewController {
 
     private func setupUI() {
         // 容器视图（毛玻璃效果）
-        containerView = NSVisualEffectView(frame: view.bounds)
-        containerView.autoresizingMask = [.width, .height]
-        containerView.material = .sidebar
-        containerView.blendingMode = .behindWindow
-        containerView.state = .active
-        containerView.wantsLayer = true
-        containerView.layer?.cornerRadius = 12
-        view.addSubview(containerView)
+        let container = NSVisualEffectView(frame: view.bounds)
+        container.autoresizingMask = [.width, .height]
+        container.material = .sidebar
+        container.blendingMode = .behindWindow
+        container.state = .active
+        container.wantsLayer = true
+        container.layer?.cornerRadius = 12
+        view.addSubview(container)
+        self.containerView = container
 
         setupTitleBar()
         setupInputArea()
@@ -85,158 +86,176 @@ class AITranslatePanelViewController: NSViewController {
     }
 
     private func setupTitleBar() {
-        titleBar = NSView()
-        titleBar.translatesAutoresizingMaskIntoConstraints = false
-        containerView.addSubview(titleBar)
+        guard let containerView = containerView else { return }
+
+        let bar = NSView()
+        bar.translatesAutoresizingMaskIntoConstraints = false
+        containerView.addSubview(bar)
+        self.titleBar = bar
 
         // 标题
-        titleLabel = NSTextField(labelWithString: "AI 翻译")
-        titleLabel.font = .systemFont(ofSize: 14, weight: .semibold)
-        titleLabel.textColor = .labelColor
-        titleLabel.translatesAutoresizingMaskIntoConstraints = false
-        titleBar.addSubview(titleLabel)
+        let label = NSTextField(labelWithString: "AI 翻译")
+        label.font = .systemFont(ofSize: 14, weight: .semibold)
+        label.textColor = .labelColor
+        label.translatesAutoresizingMaskIntoConstraints = false
+        bar.addSubview(label)
+        self.titleLabel = label
 
         // 固定按钮
-        pinButton = NSButton()
-        pinButton.image = NSImage(systemSymbolName: "pin", accessibilityDescription: "固定")
-        pinButton.bezelStyle = .inline
-        pinButton.isBordered = false
-        pinButton.target = self
-        pinButton.action = #selector(togglePin)
-        pinButton.translatesAutoresizingMaskIntoConstraints = false
-        titleBar.addSubview(pinButton)
+        let btn = NSButton()
+        btn.image = NSImage(systemSymbolName: "pin", accessibilityDescription: "固定")
+        btn.bezelStyle = .inline
+        btn.isBordered = false
+        btn.target = self
+        btn.action = #selector(togglePin)
+        btn.translatesAutoresizingMaskIntoConstraints = false
+        bar.addSubview(btn)
+        self.pinButton = btn
 
         NSLayoutConstraint.activate([
-            titleBar.topAnchor.constraint(equalTo: containerView.topAnchor),
-            titleBar.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
-            titleBar.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
-            titleBar.heightAnchor.constraint(equalToConstant: 44),
+            bar.topAnchor.constraint(equalTo: containerView.topAnchor),
+            bar.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
+            bar.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
+            bar.heightAnchor.constraint(equalToConstant: 44),
 
-            titleLabel.centerYAnchor.constraint(equalTo: titleBar.centerYAnchor),
-            titleLabel.leadingAnchor.constraint(equalTo: titleBar.leadingAnchor, constant: 16),
+            label.centerYAnchor.constraint(equalTo: bar.centerYAnchor),
+            label.leadingAnchor.constraint(equalTo: bar.leadingAnchor, constant: 16),
 
-            pinButton.centerYAnchor.constraint(equalTo: titleBar.centerYAnchor),
-            pinButton.trailingAnchor.constraint(equalTo: titleBar.trailingAnchor, constant: -12),
-            pinButton.widthAnchor.constraint(equalToConstant: 24),
-            pinButton.heightAnchor.constraint(equalToConstant: 24),
+            btn.centerYAnchor.constraint(equalTo: bar.centerYAnchor),
+            btn.trailingAnchor.constraint(equalTo: bar.trailingAnchor, constant: -12),
+            btn.widthAnchor.constraint(equalToConstant: 24),
+            btn.heightAnchor.constraint(equalToConstant: 24),
         ])
     }
 
     private func setupInputArea() {
+        guard let containerView = containerView, let titleBar = titleBar else { return }
+
         // 输入滚动视图
-        inputScrollView = NSScrollView()
-        inputScrollView.hasVerticalScroller = true
-        inputScrollView.hasHorizontalScroller = false
-        inputScrollView.autohidesScrollers = true
-        inputScrollView.borderType = .noBorder
-        inputScrollView.backgroundColor = .clear
-        inputScrollView.drawsBackground = false
-        inputScrollView.horizontalScrollElasticity = .none
-        inputScrollView.translatesAutoresizingMaskIntoConstraints = false
-        containerView.addSubview(inputScrollView)
+        let scroll = NSScrollView()
+        scroll.hasVerticalScroller = true
+        scroll.hasHorizontalScroller = false
+        scroll.autohidesScrollers = true
+        scroll.borderType = .noBorder
+        scroll.backgroundColor = .clear
+        scroll.drawsBackground = false
+        scroll.horizontalScrollElasticity = .none
+        scroll.translatesAutoresizingMaskIntoConstraints = false
+        containerView.addSubview(scroll)
+        self.inputScrollView = scroll
 
         // 输入文本视图
-        inputTextView = NSTextView()
-        inputTextView.minSize = NSSize(width: 0, height: inputMinHeight)
-        inputTextView.maxSize = NSSize(
+        let tv = NSTextView()
+        tv.minSize = NSSize(width: 0, height: inputMinHeight)
+        tv.maxSize = NSSize(
             width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
-        inputTextView.isVerticallyResizable = true
-        inputTextView.isHorizontallyResizable = false
-        inputTextView.autoresizingMask = [.width]
-        inputTextView.textContainer?.containerSize = NSSize(
+        tv.isVerticallyResizable = true
+        tv.isHorizontallyResizable = false
+        tv.autoresizingMask = [.width]
+        tv.textContainer?.containerSize = NSSize(
             width: 0, height: CGFloat.greatestFiniteMagnitude)
-        inputTextView.textContainer?.widthTracksTextView = true
-        inputTextView.textContainer?.lineFragmentPadding = 0
-        inputTextView.font = .systemFont(ofSize: 15)
-        inputTextView.textColor = .labelColor
-        inputTextView.backgroundColor = .clear
-        inputTextView.drawsBackground = false
-        inputTextView.isRichText = false
-        inputTextView.allowsUndo = true
-        inputTextView.delegate = self
-
-        inputScrollView.documentView = inputTextView
+        tv.textContainer?.widthTracksTextView = true
+        tv.textContainer?.lineFragmentPadding = 0
+        tv.font = .systemFont(ofSize: 15)
+        tv.textColor = .labelColor
+        tv.backgroundColor = .clear
+        tv.drawsBackground = false
+        tv.isRichText = false
+        tv.allowsUndo = true
+        tv.delegate = self
+        scroll.documentView = tv
+        self.inputTextView = tv
 
         // 占位符
-        inputPlaceholder = NSTextField(labelWithString: "输入文本并按回车，↑↓ 翻看历史记录")
-        inputPlaceholder.font = .systemFont(ofSize: 15)
-        inputPlaceholder.textColor = NSColor.placeholderTextColor
-        inputPlaceholder.translatesAutoresizingMaskIntoConstraints = false
-        containerView.addSubview(inputPlaceholder)
+        let placeholder = NSTextField(labelWithString: "输入文本并按回车，↑↓ 翻看历史记录")
+        placeholder.font = .systemFont(ofSize: 15)
+        placeholder.textColor = NSColor.placeholderTextColor
+        placeholder.translatesAutoresizingMaskIntoConstraints = false
+        containerView.addSubview(placeholder)
+        self.inputPlaceholder = placeholder
 
-        inputHeightConstraint = inputScrollView.heightAnchor.constraint(
-            equalToConstant: inputMinHeight)
+        let constraint = scroll.heightAnchor.constraint(equalToConstant: inputMinHeight)
+        self.inputHeightConstraint = constraint
 
         NSLayoutConstraint.activate([
-            inputScrollView.topAnchor.constraint(equalTo: titleBar.bottomAnchor, constant: 4),
-            inputScrollView.leadingAnchor.constraint(
+            scroll.topAnchor.constraint(equalTo: titleBar.bottomAnchor, constant: 4),
+            scroll.leadingAnchor.constraint(
                 equalTo: containerView.leadingAnchor, constant: 16),
-            inputScrollView.trailingAnchor.constraint(
+            scroll.trailingAnchor.constraint(
                 equalTo: containerView.trailingAnchor, constant: -16),
-            inputHeightConstraint,
+            constraint,
 
-            inputPlaceholder.topAnchor.constraint(equalTo: inputScrollView.topAnchor, constant: 0),
-            inputPlaceholder.leadingAnchor.constraint(
-                equalTo: inputScrollView.leadingAnchor, constant: 5),
+            placeholder.topAnchor.constraint(equalTo: scroll.topAnchor, constant: 0),
+            placeholder.leadingAnchor.constraint(
+                equalTo: scroll.leadingAnchor, constant: 5),
         ])
     }
 
     private func setupLanguageBar() {
-        languageBar = NSView()
-        languageBar.translatesAutoresizingMaskIntoConstraints = false
-        containerView.addSubview(languageBar)
+        guard let containerView = containerView, let inputScrollView = inputScrollView else {
+            return
+        }
+
+        let bar = NSView()
+        bar.translatesAutoresizingMaskIntoConstraints = false
+        containerView.addSubview(bar)
+        self.languageBar = bar
 
         // 源语言选择按钮
-        fromLangButton = createLanguageButton()
-        fromLangButton.target = self
-        fromLangButton.action = #selector(showFromLangMenu(_:))
-        languageBar.addSubview(fromLangButton)
+        let fromBtn = createLanguageButton()
+        fromBtn.target = self
+        fromBtn.action = #selector(showFromLangMenu(_:))
+        bar.addSubview(fromBtn)
+        self.fromLangButton = fromBtn
 
         // 交换按钮
-        swapButton = NSButton()
-        swapButton.image = NSImage(
+        let sBtn = NSButton()
+        sBtn.image = NSImage(
             systemSymbolName: "arrow.left.arrow.right", accessibilityDescription: "交换")
-        swapButton.bezelStyle = .inline
-        swapButton.isBordered = false
-        swapButton.contentTintColor = .secondaryLabelColor
-        swapButton.target = self
-        swapButton.action = #selector(swapLanguages)
-        swapButton.translatesAutoresizingMaskIntoConstraints = false
-        languageBar.addSubview(swapButton)
+        sBtn.bezelStyle = .inline
+        sBtn.isBordered = false
+        sBtn.contentTintColor = .secondaryLabelColor
+        sBtn.target = self
+        sBtn.action = #selector(swapLanguages)
+        sBtn.translatesAutoresizingMaskIntoConstraints = false
+        bar.addSubview(sBtn)
+        self.swapButton = sBtn
 
         // 目标语言选择按钮
-        toLangButton = createLanguageButton()
-        toLangButton.target = self
-        toLangButton.action = #selector(showToLangMenu(_:))
-        languageBar.addSubview(toLangButton)
+        let toBtn = createLanguageButton()
+        toBtn.target = self
+        toBtn.action = #selector(showToLangMenu(_:))
+        bar.addSubview(toBtn)
+        self.toLangButton = toBtn
 
         // 创建语言菜单
-        fromLangMenu = createLanguageMenu(isSource: true)
-        toLangMenu = createLanguageMenu(isSource: false)
+        self.fromLangMenu = createLanguageMenu(isSource: true)
+        self.toLangMenu = createLanguageMenu(isSource: false)
 
         NSLayoutConstraint.activate([
-            languageBar.topAnchor.constraint(equalTo: inputScrollView.bottomAnchor, constant: 8),
-            languageBar.leadingAnchor.constraint(
+            bar.topAnchor.constraint(equalTo: inputScrollView.bottomAnchor, constant: 8),
+            bar.leadingAnchor.constraint(
                 equalTo: containerView.leadingAnchor, constant: 16),
-            languageBar.trailingAnchor.constraint(
+            bar.trailingAnchor.constraint(
                 equalTo: containerView.trailingAnchor, constant: -16),
-            languageBar.heightAnchor.constraint(equalToConstant: 40),
+            bar.heightAnchor.constraint(equalToConstant: 40),
 
-            fromLangButton.leadingAnchor.constraint(equalTo: languageBar.leadingAnchor),
-            fromLangButton.centerYAnchor.constraint(equalTo: languageBar.centerYAnchor),
-            fromLangButton.trailingAnchor.constraint(
-                equalTo: swapButton.leadingAnchor, constant: -12),
-            fromLangButton.heightAnchor.constraint(equalToConstant: 36),
+            fromBtn.leadingAnchor.constraint(equalTo: bar.leadingAnchor),
+            fromBtn.centerYAnchor.constraint(equalTo: bar.centerYAnchor),
+            fromBtn.trailingAnchor.constraint(
+                equalTo: sBtn.leadingAnchor, constant: -12),
+            fromBtn.heightAnchor.constraint(equalToConstant: 36),
 
-            swapButton.centerXAnchor.constraint(equalTo: languageBar.centerXAnchor),
-            swapButton.centerYAnchor.constraint(equalTo: languageBar.centerYAnchor),
-            swapButton.widthAnchor.constraint(equalToConstant: 32),
-            swapButton.heightAnchor.constraint(equalToConstant: 32),
+            sBtn.centerXAnchor.constraint(equalTo: bar.centerXAnchor),
+            sBtn.centerYAnchor.constraint(equalTo: bar.centerYAnchor),
+            sBtn.widthAnchor.constraint(equalToConstant: 32),
+            sBtn.heightAnchor.constraint(equalToConstant: 32),
 
-            toLangButton.leadingAnchor.constraint(equalTo: swapButton.trailingAnchor, constant: 12),
-            toLangButton.trailingAnchor.constraint(equalTo: languageBar.trailingAnchor),
-            toLangButton.centerYAnchor.constraint(equalTo: languageBar.centerYAnchor),
-            toLangButton.heightAnchor.constraint(equalToConstant: 36),
+            toBtn.leadingAnchor.constraint(equalTo: sBtn.trailingAnchor, constant: 12),
+            toBtn.trailingAnchor.constraint(equalTo: bar.trailingAnchor),
+            toBtn.centerYAnchor.constraint(equalTo: bar.centerYAnchor),
+            toBtn.heightAnchor.constraint(equalToConstant: 36),
+            toBtn.widthAnchor.constraint(equalTo: fromBtn.widthAnchor),
         ])
 
         updateLanguageButtons()
@@ -257,7 +276,7 @@ class AITranslatePanelViewController: NSViewController {
 
     private func createLanguageMenu(isSource: Bool) -> NSMenu {
         let menu = NSMenu()
-        for lang in TranslateLanguage.allCases {
+        for lang: TranslateLanguage in TranslateLanguage.allCases {
             let item = NSMenuItem(
                 title: lang.displayName,
                 action: isSource ? #selector(selectFromLang(_:)) : #selector(selectToLang(_:)),
@@ -270,74 +289,84 @@ class AITranslatePanelViewController: NSViewController {
     }
 
     private func setupResultArea() {
-        resultScrollView = NSScrollView()
-        resultScrollView.hasVerticalScroller = true
-        resultScrollView.hasHorizontalScroller = false
-        resultScrollView.autohidesScrollers = true
-        resultScrollView.borderType = .noBorder
-        resultScrollView.backgroundColor = .clear
-        resultScrollView.drawsBackground = false
-        resultScrollView.translatesAutoresizingMaskIntoConstraints = false
-        containerView.addSubview(resultScrollView)
+        guard let containerView = containerView, let languageBar = languageBar else { return }
+
+        let scroll = NSScrollView()
+        scroll.hasVerticalScroller = true
+        scroll.hasHorizontalScroller = false
+        scroll.autohidesScrollers = true
+        scroll.borderType = .noBorder
+        scroll.backgroundColor = .clear
+        scroll.drawsBackground = false
+        scroll.translatesAutoresizingMaskIntoConstraints = false
+        containerView.addSubview(scroll)
+        self.resultScrollView = scroll
 
         // 使用 flipped view 让内容从顶部开始
         let flippedContainer = FlippedView()
         flippedContainer.translatesAutoresizingMaskIntoConstraints = false
 
-        resultStackView = NSStackView()
-        resultStackView.orientation = .vertical
-        resultStackView.alignment = .leading
-        resultStackView.spacing = 0
-        resultStackView.setHuggingPriority(.required, for: .vertical)
-        resultStackView.translatesAutoresizingMaskIntoConstraints = false
-        resultStackView.setHuggingPriority(.defaultLow, for: .horizontal)
-        flippedContainer.addSubview(resultStackView)
+        let stack = NSStackView()
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 0
+        stack.setHuggingPriority(.required, for: .vertical)
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        stack.setHuggingPriority(.defaultLow, for: .horizontal)
+        flippedContainer.addSubview(stack)
+        self.resultStackView = stack
 
         // 让 flippedContainer 自动适应 stackView 的高度，确保点击事件能穿透到子视图
         NSLayoutConstraint.activate([
-            resultStackView.bottomAnchor.constraint(equalTo: flippedContainer.bottomAnchor)
+            stack.bottomAnchor.constraint(equalTo: flippedContainer.bottomAnchor)
         ])
 
-        resultScrollView.documentView = flippedContainer
+        scroll.documentView = flippedContainer
 
         // 初始状态下结果区域高度为 0（优先级低于底部约束，这样展开时可以正常工作）
-        resultHeightConstraint = resultScrollView.heightAnchor.constraint(equalToConstant: 0)
-        resultHeightConstraint.priority = .defaultHigh
+        let constraint = scroll.heightAnchor.constraint(equalToConstant: 0)
+        constraint.priority = .defaultHigh
+        self.resultHeightConstraint = constraint
 
         NSLayoutConstraint.activate([
-            resultScrollView.topAnchor.constraint(equalTo: languageBar.bottomAnchor, constant: 4),
-            resultScrollView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
-            resultScrollView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
-            resultScrollView.bottomAnchor.constraint(
+            scroll.topAnchor.constraint(equalTo: languageBar.bottomAnchor, constant: 4),
+            scroll.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
+            scroll.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
+            scroll.bottomAnchor.constraint(
                 equalTo: containerView.bottomAnchor, constant: -8),
 
-            resultStackView.topAnchor.constraint(equalTo: flippedContainer.topAnchor),
-            resultStackView.leadingAnchor.constraint(equalTo: flippedContainer.leadingAnchor),
-            resultStackView.trailingAnchor.constraint(equalTo: flippedContainer.trailingAnchor),
-            resultStackView.widthAnchor.constraint(equalTo: flippedContainer.widthAnchor),
+            stack.topAnchor.constraint(equalTo: flippedContainer.topAnchor),
+            stack.leadingAnchor.constraint(equalTo: flippedContainer.leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: flippedContainer.trailingAnchor),
+            stack.widthAnchor.constraint(equalTo: flippedContainer.widthAnchor),
 
-            flippedContainer.widthAnchor.constraint(equalTo: resultScrollView.widthAnchor),
+            flippedContainer.widthAnchor.constraint(equalTo: scroll.widthAnchor),
         ])
 
         // 初始激活高度约束
-        resultHeightConstraint.isActive = true
+        constraint.isActive = true
 
         // 初始状态隐藏结果区域
-        resultScrollView.isHidden = true
+        scroll.isHidden = true
     }
 
     private func setupLoadingIndicator() {
-        loadingIndicator = NSProgressIndicator()
-        loadingIndicator.style = .spinning
-        loadingIndicator.isIndeterminate = true
-        loadingIndicator.controlSize = .small
-        loadingIndicator.isHidden = true
-        loadingIndicator.translatesAutoresizingMaskIntoConstraints = false
-        containerView.addSubview(loadingIndicator)
+        guard let containerView = containerView, let titleBar = titleBar, let pinButton = pinButton
+        else { return }
+
+        let indicator = NSProgressIndicator()
+        indicator.style = .spinning
+        indicator.controlSize = .small
+        indicator.isHidden = true
+        indicator.translatesAutoresizingMaskIntoConstraints = false
+        containerView.addSubview(indicator)
+        self.loadingIndicator = indicator
 
         NSLayoutConstraint.activate([
-            loadingIndicator.centerXAnchor.constraint(equalTo: resultScrollView.centerXAnchor),
-            loadingIndicator.centerYAnchor.constraint(equalTo: resultScrollView.centerYAnchor),
+            indicator.centerYAnchor.constraint(equalTo: titleBar.centerYAnchor),
+            indicator.trailingAnchor.constraint(equalTo: pinButton.leadingAnchor, constant: -8),
+            indicator.widthAnchor.constraint(equalToConstant: 16),
+            indicator.heightAnchor.constraint(equalToConstant: 16),
         ])
     }
 
@@ -369,14 +398,20 @@ class AITranslatePanelViewController: NSViewController {
     /// 重置面板状态（清空输入和结果）
     func resetPanelState() {
         // 清空输入
-        inputTextView.string = ""
-        inputPlaceholder.isHidden = false
+        if let tv = inputTextView {
+            tv.string = ""
+        }
+        if let placeholder = inputPlaceholder {
+            placeholder.isHidden = false
+        }
         updateInputHeight()
 
         // 清空结果
-        for view in resultStackView.arrangedSubviews {
-            resultStackView.removeArrangedSubview(view)
-            view.removeFromSuperview()
+        if let stack = resultStackView {
+            for view in stack.arrangedSubviews {
+                stack.removeArrangedSubview(view)
+                view.removeFromSuperview()
+            }
         }
 
         // 收起结果区域
@@ -386,8 +421,12 @@ class AITranslatePanelViewController: NSViewController {
 
     /// 收起结果区域
     private func collapseResultArea() {
-        resultScrollView.isHidden = true
-        resultHeightConstraint.isActive = true
+        if let scrollView = resultScrollView {
+            scrollView.isHidden = true
+        }
+        if let constraint = resultHeightConstraint {
+            constraint.isActive = true
+        }
         view.layoutSubtreeIfNeeded()
 
         // 调整窗口为紧凑高度
@@ -405,40 +444,49 @@ class AITranslatePanelViewController: NSViewController {
     // MARK: - 公开方法
 
     func setInputText(_ text: String) {
-        inputTextView.string = text
-        inputPlaceholder.isHidden = !text.isEmpty
+        inputTextView?.string = text
+        inputPlaceholder?.isHidden = !text.isEmpty
         updateInputHeight()
     }
 
     func focusInput() {
-        view.window?.makeFirstResponder(inputTextView)
+        if let tv = inputTextView {
+            view.window?.makeFirstResponder(tv)
+        }
     }
 
     func performTranslation() {
-        let text = inputTextView.string.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let tv = inputTextView else { return }
+        let text = tv.string.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         translate(text: text)
     }
 
     func updatePinnedState(_ isPinned: Bool) {
         let imageName = isPinned ? "pin.fill" : "pin"
-        pinButton.image = NSImage(systemSymbolName: imageName, accessibilityDescription: "固定")
+        if let btn = pinButton {
+            btn.image = NSImage(systemSymbolName: imageName, accessibilityDescription: "固定")
+        }
     }
 
     // MARK: - 输入框高度自适应
 
     private func updateInputHeight() {
-        guard let layoutManager = inputTextView.layoutManager,
-            let textContainer = inputTextView.textContainer
+        guard let tv = inputTextView,
+            let layoutManager = tv.layoutManager,
+            let textContainer = tv.textContainer
         else { return }
 
         layoutManager.ensureLayout(for: textContainer)
         let textHeight = layoutManager.usedRect(for: textContainer).height
         let newHeight = min(max(textHeight + 8, inputMinHeight), inputMaxHeight)
 
-        if inputHeightConstraint.constant != newHeight {
-            inputHeightConstraint.constant = newHeight
-            view.layoutSubtreeIfNeeded()
+        if let constraint = inputHeightConstraint {
+            if constraint.constant != newHeight {
+                constraint.constant = newHeight
+                view.layoutSubtreeIfNeeded()
+                updateContentHeight()
+            }
         }
     }
 
@@ -536,8 +584,10 @@ class AITranslatePanelViewController: NSViewController {
     // MARK: - 服务显示
 
     private func updateServicesDisplay() {
-        for view in resultStackView.arrangedSubviews {
-            resultStackView.removeArrangedSubview(view)
+        guard let stack = resultStackView else { return }
+
+        for view in stack.arrangedSubviews {
+            stack.removeArrangedSubview(view)
             view.removeFromSuperview()
         }
 
@@ -557,27 +607,29 @@ class AITranslatePanelViewController: NSViewController {
                 emptyLabel.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor, constant: 16),
                 emptyLabel.bottomAnchor.constraint(equalTo: wrapper.bottomAnchor, constant: -16),
             ])
-            resultStackView.addArrangedSubview(wrapper)
+            stack.addArrangedSubview(wrapper)
             return
         }
 
         for (index, service) in enabledServices.enumerated() {
             let serviceView = createServiceRowView(service: service, isLoading: false, content: nil)
-            resultStackView.addArrangedSubview(serviceView)
-            serviceView.widthAnchor.constraint(equalTo: resultStackView.widthAnchor).isActive = true
+            stack.addArrangedSubview(serviceView)
+            serviceView.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 
             if index < enabledServices.count - 1 {
                 let separator = createSeparator()
-                resultStackView.addArrangedSubview(separator)
-                separator.widthAnchor.constraint(equalTo: resultStackView.widthAnchor).isActive =
+                stack.addArrangedSubview(separator)
+                separator.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive =
                     true
             }
         }
     }
 
     private func showServicesWithLoading(showWordTranslate: Bool) {
-        for view in resultStackView.arrangedSubviews {
-            resultStackView.removeArrangedSubview(view)
+        guard let stack = resultStackView else { return }
+
+        for view in stack.arrangedSubviews {
+            stack.removeArrangedSubview(view)
             view.removeFromSuperview()
         }
 
@@ -604,13 +656,13 @@ class AITranslatePanelViewController: NSViewController {
         for (index, service) in enabledServices.enumerated() {
             let serviceView = createServiceRowView(service: service, isLoading: true, content: nil)
             serviceView.identifier = NSUserInterfaceItemIdentifier("service_\(service.id)")
-            resultStackView.addArrangedSubview(serviceView)
-            serviceView.widthAnchor.constraint(equalTo: resultStackView.widthAnchor).isActive = true
+            stack.addArrangedSubview(serviceView)
+            serviceView.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 
             if index < enabledServices.count - 1 {
                 let separator = createSeparator()
-                resultStackView.addArrangedSubview(separator)
-                separator.widthAnchor.constraint(equalTo: resultStackView.widthAnchor).isActive =
+                stack.addArrangedSubview(separator)
+                separator.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive =
                     true
             }
         }
@@ -622,8 +674,12 @@ class AITranslatePanelViewController: NSViewController {
 
     /// 展开结果区域
     private func expandResultArea() {
-        resultScrollView.isHidden = false
-        resultHeightConstraint.isActive = false
+        if let scrollView = resultScrollView {
+            scrollView.isHidden = false
+        }
+        if let constraint = resultHeightConstraint {
+            constraint.isActive = false
+        }
         view.layoutSubtreeIfNeeded()
 
         // 延迟计算内容高度，等布局完成
@@ -638,14 +694,16 @@ class AITranslatePanelViewController: NSViewController {
 
         // 计算各部分高度
         let titleBarHeight: CGFloat = 44
-        let inputHeight: CGFloat = inputHeightConstraint.constant
+        let inputHeight: CGFloat = inputHeightConstraint?.constant ?? 60
         let languageBarHeight: CGFloat = 40
         let padding: CGFloat = 30  // 上下间距
 
         // 计算结果区域的实际内容高度
         var resultContentHeight: CGFloat = 0
-        for subview in resultStackView.arrangedSubviews {
-            resultContentHeight += subview.fittingSize.height
+        if let stack = resultStackView {
+            for subview in stack.arrangedSubviews {
+                resultContentHeight += subview.fittingSize.height
+            }
         }
 
         // 给结果区域一些额外空间
@@ -661,18 +719,19 @@ class AITranslatePanelViewController: NSViewController {
     private func updateServiceResult(
         serviceConfig: TranslateServiceConfig, content: String, isError: Bool
     ) {
+        guard let stack = resultStackView else { return }
         let identifier = NSUserInterfaceItemIdentifier("service_\(serviceConfig.id)")
 
-        for (index, subview) in resultStackView.arrangedSubviews.enumerated() {
+        for (index, subview) in stack.arrangedSubviews.enumerated() {
             if subview.identifier == identifier {
-                resultStackView.removeArrangedSubview(subview)
+                stack.removeArrangedSubview(subview)
                 subview.removeFromSuperview()
 
                 let newView = createServiceRowView(
                     service: serviceConfig, isLoading: false, content: content, isError: isError)
                 newView.identifier = identifier
-                resultStackView.insertArrangedSubview(newView, at: index)
-                newView.widthAnchor.constraint(equalTo: resultStackView.widthAnchor).isActive = true
+                stack.insertArrangedSubview(newView, at: index)
+                newView.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
                 break
             }
         }
@@ -730,22 +789,23 @@ class AITranslatePanelViewController: NSViewController {
         // 内容区域
         var contentLabel: NSTextField?
         if let content = content {
-            contentLabel = NSTextField(wrappingLabelWithString: content)
-            contentLabel!.font = .systemFont(ofSize: 14)
-            contentLabel!.textColor = isError ? .systemRed : .labelColor
-            contentLabel!.isEditable = false
-            contentLabel!.isSelectable = true
-            contentLabel!.focusRingType = .none
-            contentLabel!.drawsBackground = false
-            contentLabel!.isBordered = false
-            contentLabel!.allowsEditingTextAttributes = true
-            contentLabel!.translatesAutoresizingMaskIntoConstraints = false
-            contentLabel!.identifier = NSUserInterfaceItemIdentifier("content_\(service.id)")
-            container.addSubview(contentLabel!)
+            let label = NSTextField(wrappingLabelWithString: content)
+            label.font = NSFont.systemFont(ofSize: 14)
+            label.textColor = isError ? NSColor.systemRed : NSColor.labelColor
+            label.isEditable = false
+            label.isSelectable = true
+            label.focusRingType = .none
+            label.drawsBackground = false
+            label.isBordered = false
+            label.allowsEditingTextAttributes = true
+            label.translatesAutoresizingMaskIntoConstraints = false
+            label.identifier = NSUserInterfaceItemIdentifier("content_\(service.id)")
+            container.addSubview(label)
+            contentLabel = label
         } else if isLoading {
             let loadingLabel = NSTextField(labelWithString: "翻译中...")
-            loadingLabel.font = .systemFont(ofSize: 13)
-            loadingLabel.textColor = .secondaryLabelColor
+            loadingLabel.font = NSFont.systemFont(ofSize: 13)
+            loadingLabel.textColor = NSColor.secondaryLabelColor
             loadingLabel.translatesAutoresizingMaskIntoConstraints = false
             container.addSubview(loadingLabel)
             contentLabel = loadingLabel
@@ -807,8 +867,10 @@ class AITranslatePanelViewController: NSViewController {
     }
 
     private func showError(_ message: String) {
-        for view in resultStackView.arrangedSubviews {
-            resultStackView.removeArrangedSubview(view)
+        guard let stack = resultStackView else { return }
+
+        for view in stack.arrangedSubviews {
+            stack.removeArrangedSubview(view)
             view.removeFromSuperview()
         }
 
@@ -825,54 +887,63 @@ class AITranslatePanelViewController: NSViewController {
             errorLabel.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor, constant: 16),
             errorLabel.bottomAnchor.constraint(equalTo: wrapper.bottomAnchor, constant: -16),
         ])
-        resultStackView.addArrangedSubview(wrapper)
+        stack.addArrangedSubview(wrapper)
     }
 
     private func updateLoadingState(_ isLoading: Bool) {
-        loadingIndicator.isHidden = !isLoading
+        guard let indicator = loadingIndicator else { return }
+        indicator.isHidden = !isLoading
         if isLoading {
-            loadingIndicator.startAnimation(nil)
+            indicator.startAnimation(nil)
         } else {
-            loadingIndicator.stopAnimation(nil)
+            indicator.stopAnimation(nil)
         }
     }
 
     private func updateLanguageButtons() {
         let fromText: String
-        if fromLang == .auto {
-            let detected = getDetectedLanguageDisplay()
+        if fromLang == TranslateLanguage.auto {
+            let detected: String = getDetectedLanguageDisplay()
             fromText = "自动：\(detected)"
         } else {
             fromText = fromLang.displayName
         }
-        fromLangButton.title = "\(fromText)  ▾"
+
+        if let fromBtn: NSButton = fromLangButton {
+            fromBtn.title = "\(fromText)  ▾"
+        }
 
         let toText: String
-        if toLang == .auto {
-            let target = getTargetLanguageDisplay()
+        if toLang == TranslateLanguage.auto {
+            let target: String = getTargetLanguageDisplay()
             toText = "自动：\(target)"
         } else {
             toText = toLang.displayName
         }
-        toLangButton.title = "\(toText)  ▾"
+
+        if let toBtn: NSButton = toLangButton {
+            toBtn.title = "\(toText)  ▾"
+        }
     }
 
     private func getDetectedLanguageDisplay() -> String {
-        let text = inputTextView.string.trimmingCharacters(in: .whitespacesAndNewlines)
+        let text: String =
+            inputTextView?.string.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if text.isEmpty {
             return "英语"
         }
-        let detected = AITranslateService.shared.detectLanguage(text)
-        return detected == .chinese ? "中文" : "英语"
+        let detected: TranslateLanguage = AITranslateService.shared.detectLanguage(text)
+        return detected == TranslateLanguage.chinese ? "中文" : "英语"
     }
 
     private func getTargetLanguageDisplay() -> String {
-        let text = inputTextView.string.trimmingCharacters(in: .whitespacesAndNewlines)
+        let text: String =
+            inputTextView?.string.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if text.isEmpty {
             return "中文"
         }
-        let detected = AITranslateService.shared.detectLanguage(text)
-        return detected == .chinese ? "英语" : "中文"
+        let detected: TranslateLanguage = AITranslateService.shared.detectLanguage(text)
+        return detected == TranslateLanguage.chinese ? "英语" : "中文"
     }
 
     // MARK: - 操作
@@ -882,12 +953,12 @@ class AITranslatePanelViewController: NSViewController {
     }
 
     @objc private func showFromLangMenu(_ sender: NSButton) {
-        fromLangMenu.popUp(
+        fromLangMenu?.popUp(
             positioning: nil, at: NSPoint(x: 0, y: sender.bounds.height + 4), in: sender)
     }
 
     @objc private func showToLangMenu(_ sender: NSButton) {
-        toLangMenu.popUp(
+        toLangMenu?.popUp(
             positioning: nil, at: NSPoint(x: 0, y: sender.bounds.height + 4), in: sender)
     }
 
@@ -906,7 +977,7 @@ class AITranslatePanelViewController: NSViewController {
     }
 
     @objc private func swapLanguages() {
-        guard fromLang != .auto && toLang != .auto else { return }
+        guard fromLang != TranslateLanguage.auto && toLang != TranslateLanguage.auto else { return }
         let temp = fromLang
         fromLang = toLang
         toLang = temp
@@ -953,14 +1024,16 @@ class AITranslatePanelViewController: NSViewController {
                     !textField.stringValue.isEmpty
                 {
                     if bestMatch == nil
-                        || textField.stringValue.count > bestMatch!.stringValue.count
+                        || textField.stringValue.count > (bestMatch?.stringValue.count ?? 0)
                     {
                         bestMatch = textField
                     }
                 }
                 // 递归查找子视图
                 if let found = findContentLabel(in: subview) {
-                    if bestMatch == nil || found.stringValue.count > bestMatch!.stringValue.count {
+                    if bestMatch == nil
+                        || found.stringValue.count > (bestMatch?.stringValue.count ?? 0)
+                    {
                         bestMatch = found
                     }
                 }
@@ -1028,14 +1101,16 @@ class FlippedView: NSView {
 
 extension AITranslatePanelViewController: NSTextViewDelegate {
     func textDidChange(_ notification: Notification) {
-        inputPlaceholder.isHidden = !inputTextView.string.isEmpty
+        if let tv = inputTextView {
+            inputPlaceholder?.isHidden = !tv.string.isEmpty
+        }
         updateInputHeight()
 
         if AITranslateService.shared.currentHistoryIndex >= 0 {
             AITranslateService.shared.resetHistoryNavigation()
         }
 
-        if fromLang == .auto || toLang == .auto {
+        if fromLang == TranslateLanguage.auto || toLang == TranslateLanguage.auto {
             updateLanguageButtons()
         }
     }
@@ -1054,8 +1129,10 @@ extension AITranslatePanelViewController: NSTextViewDelegate {
 
         if commandSelector == #selector(NSResponder.moveUp(_:)) {
             if let item = AITranslateService.shared.navigateHistory(direction: 1) {
-                inputTextView.string = item.sourceText
-                inputPlaceholder.isHidden = true
+                if let tv = inputTextView {
+                    tv.string = item.sourceText
+                }
+                inputPlaceholder?.isHidden = true
                 updateInputHeight()
                 // 显示历史记录中的翻译结果
                 showHistoryTranslationResult(item)
@@ -1065,14 +1142,18 @@ extension AITranslatePanelViewController: NSTextViewDelegate {
 
         if commandSelector == #selector(NSResponder.moveDown(_:)) {
             if let item = AITranslateService.shared.navigateHistory(direction: -1) {
-                inputTextView.string = item.sourceText
-                inputPlaceholder.isHidden = true
+                if let tv = inputTextView {
+                    tv.string = item.sourceText
+                }
+                inputPlaceholder?.isHidden = true
                 updateInputHeight()
                 // 显示历史记录中的翻译结果
                 showHistoryTranslationResult(item)
             } else {
-                inputTextView.string = ""
-                inputPlaceholder.isHidden = false
+                if let tv = inputTextView {
+                    tv.string = ""
+                }
+                inputPlaceholder?.isHidden = false
                 updateInputHeight()
                 // 清空结果区域
                 collapseResultArea()
@@ -1084,10 +1165,11 @@ extension AITranslatePanelViewController: NSTextViewDelegate {
     }
 
     /// 显示历史记录中的翻译结果
-    private func showHistoryTranslationResult(_ item: TranslateHistoryItem) {
-        // 清空当前结果
-        for view in resultStackView.arrangedSubviews {
-            resultStackView.removeArrangedSubview(view)
+    func showHistoryTranslationResult(_ item: TranslateHistoryItem) {
+        guard let stack = resultStackView else { return }
+
+        for view in stack.arrangedSubviews {
+            stack.removeArrangedSubview(view)
             view.removeFromSuperview()
         }
 
@@ -1096,11 +1178,15 @@ extension AITranslatePanelViewController: NSTextViewDelegate {
         // 如果有多个服务结果，显示所有结果
         if let serviceResults = item.serviceResults, !serviceResults.isEmpty {
             // 固定顺序：单词翻译在前，AI翻译在后
-            let sortedResults = serviceResults.sorted { r1, r2 in
-                if r1.serviceType == .wordTranslate && r2.serviceType != .wordTranslate {
+            let sortedResults: [TranslateServiceResult] = serviceResults.sorted { r1, r2 in
+                if r1.serviceType == TranslateServiceType.wordTranslate
+                    && r2.serviceType != TranslateServiceType.wordTranslate
+                {
                     return true
                 }
-                if r1.serviceType != .wordTranslate && r2.serviceType == .wordTranslate {
+                if r1.serviceType != TranslateServiceType.wordTranslate
+                    && r2.serviceType == TranslateServiceType.wordTranslate
+                {
                     return false
                 }
                 return false
@@ -1108,12 +1194,14 @@ extension AITranslatePanelViewController: NSTextViewDelegate {
 
             for (index, result) in sortedResults.enumerated() {
                 // 找到对应的服务配置
-                if let serviceConfig = settings.serviceConfigs.first(where: {
-                    $0.serviceType == result.serviceType && $0.isEnabled
-                }) {
+                if let serviceConfig: TranslateServiceConfig = settings.serviceConfigs.first(
+                    where: {
+                        $0.serviceType == result.serviceType && $0.isEnabled
+                    })
+                {
                     // 对于单词翻译，在翻译结果前加上原始单词
-                    var displayText = result.translatedText
-                    if result.serviceType == .wordTranslate {
+                    var displayText: String = result.translatedText
+                    if result.serviceType == TranslateServiceType.wordTranslate {
                         displayText = "「\(item.sourceText)」\n\n\(result.translatedText)"
                     }
 
@@ -1121,15 +1209,14 @@ extension AITranslatePanelViewController: NSTextViewDelegate {
                         service: serviceConfig, isLoading: false, content: displayText)
                     serviceView.identifier = NSUserInterfaceItemIdentifier(
                         "service_\(serviceConfig.id)")
-                    resultStackView.addArrangedSubview(serviceView)
-                    serviceView.widthAnchor.constraint(equalTo: resultStackView.widthAnchor)
-                        .isActive = true
+                    stack.addArrangedSubview(serviceView)
+                    serviceView.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 
                     // 添加分隔线
                     if index < sortedResults.count - 1 {
                         let separator = createSeparator()
-                        resultStackView.addArrangedSubview(separator)
-                        separator.widthAnchor.constraint(equalTo: resultStackView.widthAnchor)
+                        stack.addArrangedSubview(separator)
+                        separator.widthAnchor.constraint(equalTo: stack.widthAnchor)
                             .isActive = true
                     }
                 }
@@ -1140,8 +1227,8 @@ extension AITranslatePanelViewController: NSTextViewDelegate {
                 $0.serviceType == item.serviceType && $0.isEnabled
             }) {
                 // 对于单词翻译，在翻译结果前加上原始单词
-                var displayText = item.translatedText
-                if item.serviceType == .wordTranslate {
+                var displayText: String = item.translatedText
+                if item.serviceType == TranslateServiceType.wordTranslate {
                     displayText = "「\(item.sourceText)」\n\n\(item.translatedText)"
                 }
 
@@ -1149,21 +1236,21 @@ extension AITranslatePanelViewController: NSTextViewDelegate {
                     service: serviceConfig, isLoading: false, content: displayText)
                 serviceView.identifier = NSUserInterfaceItemIdentifier(
                     "service_\(serviceConfig.id)")
-                resultStackView.addArrangedSubview(serviceView)
-                serviceView.widthAnchor.constraint(equalTo: resultStackView.widthAnchor).isActive =
+                stack.addArrangedSubview(serviceView)
+                serviceView.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive =
                     true
             } else {
                 // 如果找不到对应的服务配置，使用默认显示
                 let defaultConfig = TranslateServiceConfig.defaultAITranslate
-                var displayText = item.translatedText
-                if item.serviceType == .wordTranslate {
+                var displayText: String = item.translatedText
+                if item.serviceType == TranslateServiceType.wordTranslate {
                     displayText = "「\(item.sourceText)」\n\n\(item.translatedText)"
                 }
 
                 let serviceView = createServiceRowView(
                     service: defaultConfig, isLoading: false, content: displayText)
-                resultStackView.addArrangedSubview(serviceView)
-                serviceView.widthAnchor.constraint(equalTo: resultStackView.widthAnchor).isActive =
+                stack.addArrangedSubview(serviceView)
+                serviceView.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive =
                     true
             }
         }
