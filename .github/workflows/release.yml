@@ -34,6 +34,7 @@ jobs:
 
                   echo "Updated version to $VERSION (build $BUILD_NUMBER)"
 
+            # 修改 Build app (Apple Silicon) 步骤
             - name: Build app (Apple Silicon)
               run: |
                   xcodebuild -scheme LaunchX \
@@ -43,9 +44,9 @@ jobs:
                     archive \
                     ONLY_ACTIVE_ARCH=NO \
                     CODE_SIGN_IDENTITY="-" \
-                    CODE_SIGNING_REQUIRED=NO \
-                    CODE_SIGNING_ALLOWED=NO
+                    AD_HOC_CODE_SIGNING_ALLOWED=YES
 
+            # 修改 Build app (Intel) 步骤
             - name: Build app (Intel)
               run: |
                   xcodebuild -scheme LaunchX \
@@ -55,8 +56,7 @@ jobs:
                     archive \
                     ONLY_ACTIVE_ARCH=NO \
                     CODE_SIGN_IDENTITY="-" \
-                    CODE_SIGNING_REQUIRED=NO \
-                    CODE_SIGNING_ALLOWED=NO
+                    AD_HOC_CODE_SIGNING_ALLOWED=YES
 
             - name: Export apps
               run: |
