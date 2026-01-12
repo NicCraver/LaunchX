@@ -9,6 +9,8 @@ final class UpdateService: NSObject, ObservableObject {
     private var updaterController: SPUStandardUpdaterController?
 
     @Published var canCheckForUpdates = false
+    /// 标记是否正在准备更新重启，用于在 AppDelegate 中允许程序退出
+    var isPreparingForUpdate = false
 
     private override init() {
         super.init()
@@ -25,6 +27,7 @@ final class UpdateService: NSObject, ObservableObject {
     /// 检查更新
     /// - Parameter manual: 是否由用户点击触发（手动触发会显示详细进度 UI）
     func checkForUpdates(manual: Bool = false) {
+        print("UpdateService: Checking for updates (manual: \(manual))")
         if manual {
             updaterController?.checkForUpdates(nil)
         } else {
@@ -48,5 +51,23 @@ extension UpdateService: SPUUpdaterDelegate {
     /// 可以在这里自定义是否允许在特定情况下检查更新
     func updaterShouldPromptForPermissionToCheck(forUpdates updates: SPUUpdater) -> Bool {
         return false  // 我们已经在逻辑中控制了检查时机
+    }
+
+    func updaterWillRelaunchApplication(_ updater: SPUUpdater) {
+        print("UpdateService: Will relaunch application for update")
+        isPreparingForUpdate = true
+    }
+
+    func updater(_ updater: SPUUpdater, didAbortWithError error: Error) {
+        print("UpdateService: Update aborted with error: \(error.localizedDescription)")
+        isPreparingForUpdate = false
+    }
+
+    func updaterDidNotFindUpdate(_ updater: SPUUpdater) {
+        print("UpdateService: No update found")
+    }
+
+    func updater(_ updater: SPUUpdater, willInstallUpdate item: SUAppcastItem) {
+        print("UpdateService: Will install update: \(item.displayVersionString)")
     }
 }

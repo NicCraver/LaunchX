@@ -453,7 +453,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     // Intercept termination request (Cmd+Q) to keep the app running in the background
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        if isQuitting {
+        if isQuitting || UpdateService.shared.isPreparingForUpdate {
+            print("LaunchX: Terminating now")
             return .terminateNow
         }
 
