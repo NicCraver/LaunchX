@@ -139,7 +139,7 @@ jobs:
 
                   echo "" >> $GITHUB_OUTPUT
                   echo "### Downloads" >> $GITHUB_OUTPUT
-                  echo "- **Apple Silicon (M1/M2/M3)**: LaunchX-${VERSION}-arm64.dmg" >> $GITHUB_OUTPUT
+                  echo "- **Apple Silicon**: LaunchX-${VERSION}-arm64.dmg" >> $GITHUB_OUTPUT
                   echo "- **Intel**: LaunchX-${VERSION}-x86_64.dmg" >> $GITHUB_OUTPUT
 
                   echo "EOF" >> $GITHUB_OUTPUT
