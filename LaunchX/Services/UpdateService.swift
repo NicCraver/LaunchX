@@ -56,6 +56,9 @@ extension UpdateService: SPUUpdaterDelegate {
     func updaterWillRelaunchApplication(_ updater: SPUUpdater) {
         print("UpdateService: Will relaunch application for update")
         isPreparingForUpdate = true
+
+        // 标记应用即将因更新而重启
+        UserDefaults.standard.set(true, forKey: "didJustUpdateAndRelaunch")
     }
 
     func updater(_ updater: SPUUpdater, didAbortWithError error: Error) {

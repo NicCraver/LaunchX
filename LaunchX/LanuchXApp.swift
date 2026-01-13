@@ -144,8 +144,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidBecomeActive(_ notification: Notification) {
         print("LaunchX: applicationDidBecomeActive called")
-        // 如果引导页窗口存在但不可见，强制显示
-        if let window = onboardingWindow, !window.isKeyWindow {
+        // 只有在权限未授予时才强制显示授权窗口
+        // 避免在用户已授权后仍然弹出授权窗口
+        if let window = onboardingWindow,
+           !window.isKeyWindow,
+           !PermissionService.shared.isAccessibilityGranted {
             window.makeKeyAndOrderFront(nil)
             window.orderFrontRegardless()
         }
@@ -153,17 +156,26 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func checkPermissionsAndSetup() {
         let isFirstLaunch = !UserDefaults.standard.bool(forKey: "hasLaunchedBefore")
+        let didJustUpdate = UserDefaults.standard.bool(forKey: "didJustUpdateAndRelaunch")
 
         // 同步检查辅助功能权限（这是最重要的权限）
         let hasAccessibility = AXIsProcessTrusted()
 
-        print("LaunchX: isFirstLaunch=\(isFirstLaunch), hasAccessibility=\(hasAccessibility)")
+        print("LaunchX: isFirstLaunch=\(isFirstLaunch), hasAccessibility=\(hasAccessibility), didJustUpdate=\(didJustUpdate)")
 
         // 异步更新其他权限状态（用于 UI 显示）
         PermissionService.shared.checkAllPermissions()
 
+        // 如果是更新后重启，等待更长时间让系统重新验证签名和权限
+        let delay: TimeInterval = didJustUpdate ? 2.0 : 0.5
+
+        // 清除更新标记
+        if didJustUpdate {
+            UserDefaults.standard.removeObject(forKey: "didJustUpdateAndRelaunch")
+        }
+
         // 等待权限状态更新后检查是否所有权限都已授予
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
             guard let self = self else { return }
 
             let accessibility = PermissionService.shared.isAccessibilityGranted
@@ -204,8 +216,28 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         permissionObserver = PermissionService.shared.$isAccessibilityGranted
             .removeDuplicates()
             .sink { [weak self] isGranted in
+                guard let self = self else { return }
+
                 if isGranted {
-                    self?.setupHotKey()
+                    self.setupHotKey()
+
+                    // 如果授权窗口正在显示，自动关闭它并启动应用
+                    if let window = self.onboardingWindow, window.isVisible {
+                        print("LaunchX: Permission granted, auto-closing onboarding window")
+
+                        // 关闭授权窗口
+                        self.onboardingWindow?.close()
+                        self.onboardingWindow = nil
+
+                        // 切换为 accessory 模式（不在 Dock 显示）
+                        NSApp.setActivationPolicy(.accessory)
+
+                        // 重新设置状态栏
+                        self.setupStatusItem()
+
+                        // 显示搜索面板
+                        PanelManager.shared.togglePanel()
+                    }
                 }
             }
     }
