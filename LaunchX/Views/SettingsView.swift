@@ -54,11 +54,12 @@ struct GeneralSettingsView: View {
     @State private var isLaunchAtLoginEnabled: Bool = false
 
     var body: some View {
-        Form {
-            Section {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
                 // 1. Launch at Login
-                HStack {
+                HStack(spacing: 12) {
                     Text("登录时打开:")
+                        .frame(width: 85, alignment: .leading)
                     Toggle("开启", isOn: $isLaunchAtLoginEnabled)
                         .toggleStyle(CheckboxToggleStyle())
                         .onChange(of: isLaunchAtLoginEnabled) { _, newValue in
@@ -71,19 +72,47 @@ struct GeneralSettingsView: View {
                 }
 
                 // 2. HotKey Configuration
-                HStack {
+                HStack(spacing: 12) {
                     Text("启动快捷键:")
+                        .frame(width: 85, alignment: .leading)
                     HotKeyRecorderView()
                     Spacer()
                 }
-            }
 
-            Divider()
-                .padding(.vertical, 10)
+                // 3. Configuration Backup
+                HStack(spacing: 12) {
+                    Text("配置备份:")
+                        .frame(width: 85, alignment: .leading)
 
-            Section {
-                // 3. Default Window Mode
-                VStack(alignment: .leading, spacing: 10) {
+                    Button(action: {
+                        BackupService.shared.exportConfiguration()
+                    }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "square.and.arrow.up")
+                            Text("导出")
+                        }
+                    }
+                    .buttonStyle(.bordered)
+
+                    Button(action: {
+                        BackupService.shared.importConfiguration()
+                    }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "square.and.arrow.down")
+                            Text("导入")
+                        }
+                    }
+                    .buttonStyle(.bordered)
+
+                    Spacer()
+                }
+                .padding(.top, 4)
+
+                Divider()
+                    .padding(.vertical, 4)
+
+                // 4. Default Window Mode
+                VStack(alignment: .leading, spacing: 8) {
                     Text("默认窗口模式:")
 
                     Picker("", selection: $windowModeString) {
@@ -159,16 +188,15 @@ struct GeneralSettingsView: View {
                     }
                     .padding(.top, 5)
                 }
-            }
+                Divider()
+                    .padding(.vertical, 4)
 
-            Divider()
-                .padding(.vertical, 10)
-
-            Section {
                 PermissionSettingsView()
             }
+            .padding(.horizontal, 20)
+            .padding(.top, 20)
+            .padding(.bottom, 20)
         }
-        .padding(20)
     }
 
     // MARK: - Launch at Login Logic

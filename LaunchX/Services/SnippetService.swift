@@ -407,6 +407,16 @@ final class SnippetService: ObservableObject {
         }
     }
 
+    /// 导入后重新加载
+    func reloadAfterImport() {
+        loadSnippets()
+        if isMonitoring {
+            restartMonitoring()
+        }
+        NotificationCenter.default.post(
+            name: NSNotification.Name("SnippetsDidChange"), object: nil)
+    }
+
     /// 添加默认示例 snippets
     private func addDefaultSnippets() {
         let defaults = [

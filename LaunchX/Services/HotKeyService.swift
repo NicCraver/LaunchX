@@ -223,6 +223,34 @@ class HotKeyService: ObservableObject {
         let c4 = UInt32(byteAt("X", 0))
 
         self.hotKeySignature = OSType((c1 << 24) | (c2 << 16) | (c3 << 8) | c4)
+
+        // 监听配置导入通知
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(handleConfigImport),
+            name: NSNotification.Name("AppConfigDidImport"), object: nil)
+    }
+
+    @objc private func handleConfigImport() {
+        print("HotKeyService: Config imported, reloading all hotkeys")
+        DispatchQueue.main.async {
+            // 1. 重新加载主快捷键
+            self.loadHotKeySettings()
+
+            // 2. 重新加载自定义项目快捷键
+            let customConfig = CustomItemsConfig.load()
+            self.reloadCustomHotKeys(from: customConfig)
+
+            // 3. 重新加载工具快捷键
+            let toolsConfig = ToolsConfig.load()
+            self.reloadToolHotKeys(from: toolsConfig)
+
+            // 4. 重新加载其他特定功能快捷键
+            self.loadBookmarkHotKey()
+            self.load2FAHotKey()
+            self.loadClipboardHotKey()
+            self.loadPlainTextPasteHotKey()
+            self.loadTranslateHotKeys()
+        }
     }
 
     // MARK: - 主快捷键方法
