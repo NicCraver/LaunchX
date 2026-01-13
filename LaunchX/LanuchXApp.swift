@@ -147,8 +147,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // 只有在权限未授予时才强制显示授权窗口
         // 避免在用户已授权后仍然弹出授权窗口
         if let window = onboardingWindow,
-           !window.isKeyWindow,
-           !PermissionService.shared.isAccessibilityGranted {
+            !window.isKeyWindow,
+            !PermissionService.shared.isAccessibilityGranted
+        {
             window.makeKeyAndOrderFront(nil)
             window.orderFrontRegardless()
         }
@@ -161,7 +162,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // 同步检查辅助功能权限（这是最重要的权限）
         let hasAccessibility = AXIsProcessTrusted()
 
-        print("LaunchX: isFirstLaunch=\(isFirstLaunch), hasAccessibility=\(hasAccessibility), didJustUpdate=\(didJustUpdate)")
+        print(
+            "LaunchX: isFirstLaunch=\(isFirstLaunch), hasAccessibility=\(hasAccessibility), didJustUpdate=\(didJustUpdate)"
+        )
 
         // 异步更新其他权限状态（用于 UI 显示）
         PermissionService.shared.checkAllPermissions()
@@ -220,24 +223,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
                 if isGranted {
                     self.setupHotKey()
-
-                    // 如果授权窗口正在显示，自动关闭它并启动应用
-                    if let window = self.onboardingWindow, window.isVisible {
-                        print("LaunchX: Permission granted, auto-closing onboarding window")
-
-                        // 关闭授权窗口
-                        self.onboardingWindow?.close()
-                        self.onboardingWindow = nil
-
-                        // 切换为 accessory 模式（不在 Dock 显示）
-                        NSApp.setActivationPolicy(.accessory)
-
-                        // 重新设置状态栏
-                        self.setupStatusItem()
-
-                        // 显示搜索面板
-                        PanelManager.shared.togglePanel()
-                    }
+                    // 不自动关闭授权窗口，让用户完成所有授权后手动点击"开始使用"
+                    print("LaunchX: Accessibility granted, hotkey setup complete")
                 }
             }
     }
