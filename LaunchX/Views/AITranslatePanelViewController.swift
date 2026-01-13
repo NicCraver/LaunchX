@@ -64,6 +64,17 @@ class AITranslatePanelViewController: NSViewController {
         loadSettings()
     }
 
+    deinit {
+        // 清理 Combine 订阅
+        cancellables.removeAll()
+
+        // 移除所有通知观察者
+        NotificationCenter.default.removeObserver(self)
+
+        // 清理 NSTextView delegate
+        inputTextView?.delegate = nil
+    }
+
     // MARK: - UI 设置
 
     private func setupUI() {

@@ -1427,9 +1427,13 @@ class SearchPanelViewController: NSViewController {
     }
 
     deinit {
+        // 移除键盘监听器
         if let monitor = keyboardMonitor {
             NSEvent.removeMonitor(monitor)
         }
+
+        // 移除所有通知观察者
+        NotificationCenter.default.removeObserver(self)
     }
 
     // MARK: - Public Methods

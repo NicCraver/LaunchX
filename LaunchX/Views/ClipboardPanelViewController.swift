@@ -105,6 +105,11 @@ class ClipboardPanelViewController: NSViewController {
         loadItems()
     }
 
+    deinit {
+        // 移除所有通知观察者
+        NotificationCenter.default.removeObserver(self)
+    }
+
     // MARK: - UI 设置
 
     private func setupUI() {

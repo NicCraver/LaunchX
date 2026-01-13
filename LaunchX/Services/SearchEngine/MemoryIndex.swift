@@ -132,8 +132,16 @@ final class MemoryIndex {
         /// Generate acronym from first letter of each word
         /// "Visual Studio Code" -> "vsc", "Activity Monitor" -> "am"
         private static func generateWordAcronym(from name: String) -> String? {
+            // 添加空字符串检查
+            guard !name.isEmpty else { return nil }
+
             // Split by spaces, hyphens, underscores
-            let words = name.components(separatedBy: CharacterSet(charactersIn: " -_"))
+            // 添加异常保护，防止在字符串处理时崩溃
+            guard let characterSet = CharacterSet(charactersIn: " -_") as CharacterSet? else {
+                return nil
+            }
+
+            let words = name.components(separatedBy: characterSet)
                 .filter { !$0.isEmpty }
 
             // Only generate if multiple words
