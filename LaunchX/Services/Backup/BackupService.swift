@@ -15,7 +15,7 @@ final class BackupService {
         let savePanel = NSSavePanel()
         savePanel.allowedContentTypes = [.json]
         savePanel.canCreateDirectories = true
-        savePanel.nameFieldStringValue = "LaunchX_Backup_\(formatDate(Date())).json"
+        savePanel.nameFieldStringValue = "LaunchX_\(formatDate(Date())).json"
         savePanel.title = "导出配置备份"
         savePanel.message = "请选择备份文件的保存位置"
 

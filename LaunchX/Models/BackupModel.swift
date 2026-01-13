@@ -1,6 +1,6 @@
 import Foundation
 
-/// 应用配置备份模型，包含所有用户自定义设置和数据
+/// 应用配置备份模型，包含核心用户自定义设置和数据（排除设备相关的路径配置，如自定义项目和搜索范围）
 struct BackupModel: Codable {
     /// 备份元数据
     struct Metadata: Codable {
@@ -15,18 +15,11 @@ struct BackupModel: Codable {
     // 1. 基础设置 (UserDefaults)
     let generalSettings: GeneralSettings
 
-    // 2. 搜索配置 (SearchConfig)
-    let searchConfig: SearchConfig
-
-    // 3. 自定义项目和工具 (CustomItemsConfig & ToolsConfig)
-    let customItemsConfig: CustomItemsConfig
-    let toolsConfig: ToolsConfig
-
-    // 4. 高级扩展 - Snippets (SnippetSettings & [SnippetItem])
+    // 2. 高级扩展 - Snippets (SnippetSettings & [SnippetItem])
     let snippetSettings: SnippetSettings
     let snippets: [SnippetItem]
 
-    // 5. 高级扩展 - AI 翻译 (AITranslateSettings)
+    // 3. 高级扩展 - AI 翻译 (AITranslateSettings)
     let aiTranslateSettings: AITranslateSettings
 
     struct GeneralSettings: Codable {
@@ -53,15 +46,12 @@ extension BackupModel {
 
         return BackupModel(
             metadata: Metadata(
-                version: "1.0",
+                version: "1.1",
                 exportDate: Date(),
                 appVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String,
                 deviceName: Host.current().localizedName
             ),
             generalSettings: general,
-            searchConfig: SearchConfig.load(),
-            customItemsConfig: CustomItemsConfig.load(),
-            toolsConfig: ToolsConfig.load(),
             snippetSettings: SnippetSettings.load(),
             snippets: SnippetService.shared.snippets,
             aiTranslateSettings: AITranslateSettings.load()
@@ -85,31 +75,25 @@ extension BackupModel {
             defaults.set(doubleTapMod, forKey: "hotKeyDoubleTapModifier")
         }
 
-        // 2. 还原搜索配置
-        searchConfig.save()
-
-        // 3. 还原项目和工具
-        customItemsConfig.save()
-        toolsConfig.save()
-
-        // 4. 还原 Snippets
+        // 2. 还原 Snippets
         snippetSettings.save()
-        // 这里需要通过 Service 来批量添加/替换，确保触发通知和文件保存
-        // 我们假设 SnippetService 有能力直接保存这一组 snippets
-        // 实际上 SnippetService.shared 目前没有批量设置的方法，我们需要稍后在 Service 中添加
-        // 先手动保存到文件以保持一致性
+
+        // 保存 snippets 数组到文件
         let appSupport = FileManager.default.urls(
             for: .applicationSupportDirectory, in: .userDomainMask
         ).first!
-        let snippetsURL = appSupport.appendingPathComponent("LaunchX/Snippets/snippets.json")
+        let snippetsDir = appSupport.appendingPathComponent("LaunchX/Snippets", isDirectory: true)
+        try? FileManager.default.createDirectory(at: snippetsDir, withIntermediateDirectories: true)
+        let snippetsURL = snippetsDir.appendingPathComponent("snippets.json")
+
         if let data = try? JSONEncoder().encode(snippets) {
             try? data.write(to: snippetsURL)
         }
 
-        // 5. 还原 AI 翻译
+        // 3. 还原 AI 翻译 (包含模型和别名设置)
         aiTranslateSettings.save()
 
-        // 6. 触发全局刷新通知
+        // 4. 触发全局刷新通知（如 HotKeyService 会重新加载快捷键）
         NotificationCenter.default.post(
             name: NSNotification.Name("AppConfigDidImport"), object: nil)
     }
