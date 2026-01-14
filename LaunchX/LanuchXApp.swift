@@ -552,19 +552,36 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             "LaunchX: applicationShouldTerminate called, isQuitting: \(isQuitting), isPreparingForUpdate: \(UpdateService.shared.isPreparingForUpdate)"
         )
 
-        // 只有明确通过“退出”菜单、更新流程触发，或者是由系统发起的（如注销、重启、权限变更）才允许退出
-        // 我们不应该拦截非用户手动触发的关闭请求（例如 Cmd+W 不会触发这里，但 Cmd+Q 会）
+        // 1. 明确点击“退出”菜单或正在更新，允许退出
         if isQuitting || UpdateService.shared.isPreparingForUpdate {
             print("LaunchX: Explicit quit or update, terminating now")
             return .terminateNow
         }
 
-        // 检查是否是由于系统原因（例如权限变更导致的退出请求）
-        // 如果是用户点击了 Dock 图标右键退出或者 Cmd+Q，通常我们希望它真的退出
-        // 除非我们想做一个“永不退出”的应用。
-        // 鉴于目前出现了重启后图标消失的问题，很可能是因为之前的进程没有真正退出
+        // 2. 检查退出原因 (NSEvent.modifierFlags 无法在这里直接判断是否是 Cmd+Q)
+        // 但我们可以根据 NSApp.currentEvent 来判断触发来源
+        let currentEvent = NSApp.currentEvent
+        let isCommandQ =
+            currentEvent?.type == .keyDown && currentEvent?.modifierFlags.contains(.command) == true
+            && currentEvent?.charactersIgnoringModifiers == "q"
 
-        print("LaunchX: Terminating application")
+        // 如果是 Cmd+Q 触发的，且当前已经授权（在后台运行模式），则拦截并隐藏
+        // 这样可以避免 Xcode 调试中断，同时符合常驻工具的习惯
+        if isCommandQ && PermissionService.shared.isAccessibilityGranted {
+            print("LaunchX: Intercepting Cmd+Q, performing safe hide")
+            DispatchQueue.main.async {
+                PanelManager.shared.hidePanel()
+                for window in NSApp.windows where window.isVisible {
+                    window.close()
+                }
+                NSApp.hide(nil)
+            }
+            return .terminateCancel
+        }
+
+        // 3. 其他情况（如系统关机、重启、权限变更导致强制退出）允许退出
+        // 这解决了之前“授权后重启图标消失”的问题
+        print("LaunchX: System initiated termination, allowing...")
         return .terminateNow
     }
 }
