@@ -41,11 +41,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var isStatusItemSetup = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        setupStatusItem()
         setupSettingsOpenerWindow()
         observeHotKeyChanges()
 
-        // 先不设置 activation policy，等权限检查后决定
+        // Activation policy and status item setup are handled in checkPermissionsAndSetup
         // 如果需要显示引导页，保持 regular 模式
         // 如果权限已全部授予，再切换到 accessory 模式
 
@@ -145,15 +144,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidBecomeActive(_ notification: Notification) {
         print("LaunchX: applicationDidBecomeActive called")
-        // 强制设置 accessory 模式，确保 menubar 图标可见
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            if NSApp.activationPolicy().rawValue != 0 {
-                print("LaunchX: Forcing accessory mode (current: \(NSApp.activationPolicy().rawValue))")
-                NSApp.setActivationPolicy(.accessory)
-                print("LaunchX: Accessory mode forced (new: \(NSApp.activationPolicy().rawValue))")
+        // 只有在辅助功能已授权且没有显示引导页时，才强制设为 accessory 模式
+        if PermissionService.shared.isAccessibilityGranted && onboardingWindow == nil {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                if NSApp.activationPolicy() != .accessory {
+                    print(
+                        "LaunchX: Forcing accessory mode (current: \(NSApp.activationPolicy().rawValue))"
+                    )
+                    NSApp.setActivationPolicy(.accessory)
+                    print(
+                        "LaunchX: Accessory mode forced (new: \(NSApp.activationPolicy().rawValue))"
+                    )
+                }
             }
         }
-        
+
         // 只有在权限未授予时才强制显示授权窗口
         // 避免在用户已授权后仍然弹出授权窗口
         if let window = onboardingWindow,
@@ -182,11 +187,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // 如果是更新后重启，等待更长时间让系统重新验证签名和权限
         let delay: TimeInterval = didJustUpdate ? 2.0 : 0.5
 
-        // 立即设置 menubar 图标，不等待权限检查延迟
-        print("LaunchX: Setting activation policy to accessory (current: \(NSApp.activationPolicy().rawValue))")
-        NSApp.setActivationPolicy(.accessory)
-        print("LaunchX: Activation policy set to accessory (new: \(NSApp.activationPolicy().rawValue))")
-        print("LaunchX: About to create status item immediately, resetting isStatusItemSetup from \(self.isStatusItemSetup)")
+        // 根据辅助功能权限状态设置初始运行模式
+        // 如果没有权限，设为 regular 以便正确显示引导窗口；如果有权限，设为 accessory
+        let initialPolicy: NSApplication.ActivationPolicy = hasAccessibility ? .accessory : .regular
+
+        print(
+            "LaunchX: Setting activation policy to \(initialPolicy == .accessory ? "accessory" : "regular") (current: \(NSApp.activationPolicy().rawValue))"
+        )
+        NSApp.setActivationPolicy(initialPolicy)
+        print(
+            "LaunchX: About to create status item immediately, resetting isStatusItemSetup from \(self.isStatusItemSetup)"
+        )
         self.isStatusItemSetup = false
         self.setupStatusItem()
         print("LaunchX: Status item created immediately on app launch")
@@ -209,7 +220,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
             if isFirstLaunch {
                 UserDefaults.standard.set(true, forKey: "hasLaunchedBefore")
-                
+
                 if accessibility {
                     // 首次启动且辅助功能已授予，直接进入应用
                     print("LaunchX: First launch and accessibility granted, showing panel")
@@ -220,11 +231,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             } else if !accessibility {
                 print("LaunchX: Accessibility not granted, opening onboarding")
-                // 确保 accessory 模式生效
-                NSApp.setActivationPolicy(.accessory)
-                print("LaunchX: Re-setting activation policy to accessory in delay handler")
+                // 确保没有权限时处于 regular 模式，以便显示引导窗口
+                NSApp.setActivationPolicy(.regular)
                 self.openOnboarding()
             } else {
+                // 权限已授予，确保处于 accessory 模式
+                NSApp.setActivationPolicy(.accessory)
                 print("LaunchX: Accessibility granted, showing panel")
                 self.setupHotKeyAndShowPanel()
             }
@@ -366,7 +378,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let rootView = OnboardingView { [weak self] in
                 guard let self = self else { return }
                 print("LaunchX: Onboarding onFinish callback called")
-                
+
                 // 1. 设置热键并显示面板
                 self.setupHotKeyAndShowPanel()
 
@@ -378,7 +390,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
             let window = NSWindow(
                 contentRect: NSRect(x: 0, y: 0, width: 500, height: 520),
-                styleMask: [.titled, .fullSizeContentView], // 移除 .closable - 去掉关闭按钮
+                styleMask: [.titled, .fullSizeContentView],  // 移除 .closable - 去掉关闭按钮
                 backing: .buffered, defer: false)
             window.contentView = NSHostingView(rootView: rootView)
             window.isReleasedWhenClosed = false
@@ -403,8 +415,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func setupStatusItem() {
-        print("LaunchX: setupStatusItem called, isStatusItemSetup=\(isStatusItemSetup), statusItem!=nil=\(statusItem != nil)")
-        
+        print(
+            "LaunchX: setupStatusItem called, isStatusItemSetup=\(isStatusItemSetup), statusItem!=nil=\(statusItem != nil)"
+        )
+
         // Prevent multiple setups
         if isStatusItemSetup && statusItem != nil {
             print("LaunchX: StatusItem already setup, skipping")
@@ -491,7 +505,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         print(
             "LaunchX: StatusItem setup complete, button: \(statusItem.button != nil), menu: \(statusItem.menu != nil)"
         )
-        
+
         // Mark as properly setup
         isStatusItemSetup = true
     }
@@ -538,28 +552,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             "LaunchX: applicationShouldTerminate called, isQuitting: \(isQuitting), isPreparingForUpdate: \(UpdateService.shared.isPreparingForUpdate)"
         )
 
-        // 只有明确通过“退出”菜单或者更新流程触发时才允许退出
+        // 只有明确通过“退出”菜单、更新流程触发，或者是由系统发起的（如注销、重启、权限变更）才允许退出
+        // 我们不应该拦截非用户手动触发的关闭请求（例如 Cmd+W 不会触发这里，但 Cmd+Q 会）
         if isQuitting || UpdateService.shared.isPreparingForUpdate {
-            print("LaunchX: Terminating now")
+            print("LaunchX: Explicit quit or update, terminating now")
             return .terminateNow
         }
 
-        print("LaunchX: Intercepting termination, performing safe hide")
+        // 检查是否是由于系统原因（例如权限变更导致的退出请求）
+        // 如果是用户点击了 Dock 图标右键退出或者 Cmd+Q，通常我们希望它真的退出
+        // 除非我们想做一个“永不退出”的应用。
+        // 鉴于目前出现了重启后图标消失的问题，很可能是因为之前的进程没有真正退出
 
-        // 异步执行隐藏逻辑，避免在终止回调中同步阻塞导致 UI 状态异常
-        DispatchQueue.main.async {
-            // 隐藏所有窗口
-            for window in NSApp.windows {
-                if window.isVisible {
-                    window.close()
-                }
-            }
-            // 确保面板也隐藏
-            PanelManager.shared.hidePanel()
-            // 隐藏应用
-            NSApp.hide(nil)
-        }
-
-        return .terminateCancel
+        print("LaunchX: Terminating application")
+        return .terminateNow
     }
 }
