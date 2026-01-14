@@ -110,12 +110,7 @@ struct OnboardingView: View {
                 .controlSize(.large)
                 .padding(.horizontal, 40)
 
-                // Skip hint
-                if !permissionService.isAccessibilityGranted {
-                    Text("稍后可在系统设置中授予权限")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
+                // 移除"稍后"提示，强制用户必须授权辅助功能
             }
             .padding(.bottom, 32)
         }
@@ -125,11 +120,8 @@ struct OnboardingView: View {
             Button("去授权") {
                 permissionService.requestAccessibility()
             }
-            Button("稍后再说", role: .cancel) {
-                onFinish()
-            }
         } message: {
-            Text("没有辅助功能权限，快捷键 ⌥Space 将无法唤起搜索面板。\n\n确定要跳过吗？")
+            Text("辅助功能权限是必需的，快捷键 ⌥Space 将无法唤起搜索面板。\n\n请点击上方\"去授权\"按钮。")
         }
     }
 }

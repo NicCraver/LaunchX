@@ -38,6 +38,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var isQuitting = false
     private var permissionObserver: AnyCancellable?
     private var hotKeyObservers: Set<AnyCancellable> = []
+    private var isStatusItemSetup = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupStatusItem()
@@ -144,6 +145,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidBecomeActive(_ notification: Notification) {
         print("LaunchX: applicationDidBecomeActive called")
+        // 强制设置 accessory 模式，确保 menubar 图标可见
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            if NSApp.activationPolicy().rawValue != 0 {
+                print("LaunchX: Forcing accessory mode (current: \(NSApp.activationPolicy().rawValue))")
+                NSApp.setActivationPolicy(.accessory)
+                print("LaunchX: Accessory mode forced (new: \(NSApp.activationPolicy().rawValue))")
+            }
+        }
+        
         // 只有在权限未授予时才强制显示授权窗口
         // 避免在用户已授权后仍然弹出授权窗口
         if let window = onboardingWindow,
@@ -172,6 +182,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // 如果是更新后重启，等待更长时间让系统重新验证签名和权限
         let delay: TimeInterval = didJustUpdate ? 2.0 : 0.5
 
+        // 立即设置 menubar 图标，不等待权限检查延迟
+        print("LaunchX: Setting activation policy to accessory (current: \(NSApp.activationPolicy().rawValue))")
+        NSApp.setActivationPolicy(.accessory)
+        print("LaunchX: Activation policy set to accessory (new: \(NSApp.activationPolicy().rawValue))")
+        print("LaunchX: About to create status item immediately, resetting isStatusItemSetup from \(self.isStatusItemSetup)")
+        self.isStatusItemSetup = false
+        self.setupStatusItem()
+        print("LaunchX: Status item created immediately on app launch")
+
         // 清除更新标记
         if didJustUpdate {
             UserDefaults.standard.removeObject(forKey: "didJustUpdateAndRelaunch")
@@ -190,11 +209,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
             if isFirstLaunch {
                 UserDefaults.standard.set(true, forKey: "hasLaunchedBefore")
+                
                 if accessibility {
                     // 首次启动且辅助功能已授予，直接进入应用
                     print("LaunchX: First launch and accessibility granted, showing panel")
-                    NSApp.setActivationPolicy(.accessory)
-                    self.setupStatusItem()
                     self.setupHotKeyAndShowPanel()
                 } else {
                     print("LaunchX: First launch, opening onboarding")
@@ -202,11 +220,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             } else if !accessibility {
                 print("LaunchX: Accessibility not granted, opening onboarding")
+                // 确保 accessory 模式生效
+                NSApp.setActivationPolicy(.accessory)
+                print("LaunchX: Re-setting activation policy to accessory in delay handler")
                 self.openOnboarding()
             } else {
                 print("LaunchX: Accessibility granted, showing panel")
-                NSApp.setActivationPolicy(.accessory)
-                self.setupStatusItem()
                 self.setupHotKeyAndShowPanel()
             }
 
@@ -222,9 +241,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 guard let self = self else { return }
 
                 if isGranted {
+                    // 权限被授予时立即设置 menubar 图标和热键
+                    NSApp.setActivationPolicy(.accessory)
+                    // 强制重置标志以确保 menubar 图标被创建
+                    self.isStatusItemSetup = false
+                    self.setupStatusItem()
                     self.setupHotKey()
                     // 不自动关闭授权窗口，让用户完成所有授权后手动点击"开始使用"
-                    print("LaunchX: Accessibility granted, hotkey setup complete")
+                    print("LaunchX: Accessibility granted, statusItem and hotkey setup complete")
                 }
             }
     }
@@ -341,23 +365,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if onboardingWindow == nil {
             let rootView = OnboardingView { [weak self] in
                 guard let self = self else { return }
+                print("LaunchX: Onboarding onFinish callback called")
+                
                 // 1. 设置热键并显示面板
                 self.setupHotKeyAndShowPanel()
 
                 // 2. 关闭引导页窗口并清理引用
                 self.onboardingWindow?.close()
                 self.onboardingWindow = nil
-
-                // 3. 切换为 accessory app (不在 Dock 显示)
-                NSApp.setActivationPolicy(.accessory)
-
-                // 4. 重新设置状态栏以确保在切换模式后正确显示
-                self.setupStatusItem()
+                print("LaunchX: Onboarding window closed")
             }
 
             let window = NSWindow(
                 contentRect: NSRect(x: 0, y: 0, width: 500, height: 520),
-                styleMask: [.titled, .closable, .fullSizeContentView],
+                styleMask: [.titled, .fullSizeContentView], // 移除 .closable - 去掉关闭按钮
                 backing: .buffered, defer: false)
             window.contentView = NSHostingView(rootView: rootView)
             window.isReleasedWhenClosed = false
@@ -382,7 +403,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func setupStatusItem() {
-        print("LaunchX: setupStatusItem called")
+        print("LaunchX: setupStatusItem called, isStatusItemSetup=\(isStatusItemSetup), statusItem!=nil=\(statusItem != nil)")
+        
+        // Prevent multiple setups
+        if isStatusItemSetup && statusItem != nil {
+            print("LaunchX: StatusItem already setup, skipping")
+            return
+        }
+
+        // Clean up existing status item if it exists
+        if let existingItem = statusItem {
+            NSStatusBar.system.removeStatusItem(existingItem)
+            print("LaunchX: Removed existing status item")
+        }
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         print("LaunchX: statusItem created: \(statusItem != nil)")
@@ -458,9 +491,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         print(
             "LaunchX: StatusItem setup complete, button: \(statusItem.button != nil), menu: \(statusItem.menu != nil)"
         )
+        
+        // Mark as properly setup
+        isStatusItemSetup = true
     }
 
     @objc func togglePanel() {
+        print("LaunchX: togglePanel called via menubar")
         PanelManager.shared.togglePanel()
     }
 
@@ -481,6 +518,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc func explicitQuit() {
+        // Clean up status item before quitting
+        if let statusItem = statusItem {
+            NSStatusBar.system.removeStatusItem(statusItem)
+            self.statusItem = nil
+        }
+        isStatusItemSetup = false
         isQuitting = true
         NSApp.terminate(nil)
     }
