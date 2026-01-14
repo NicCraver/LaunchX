@@ -16,6 +16,7 @@ struct SearchResult: Identifiable, Hashable {
     let isBookmarkEntry: Bool  // 是否为书签搜索入口（通过别名进入）
     let is2FACode: Bool  // 是否为 2FA 验证码
     let is2FAEntry: Bool  // 是否为 2FA 入口（通过别名进入）
+    let isMemeEntry: Bool  // 是否为表情包入口（通过别名进入）
     let supportsQueryExtension: Bool  // 是否支持 query 扩展
     let defaultUrl: String?  // 默认 URL（用于 query 扩展）
     let isSectionHeader: Bool  // 是否为分组标题
@@ -26,7 +27,7 @@ struct SearchResult: Identifiable, Hashable {
         displayAlias: String? = nil, isWebLink: Bool = false, isUtility: Bool = false,
         isSystemCommand: Bool = false, isBookmark: Bool = false, bookmarkSource: String? = nil,
         isBookmarkEntry: Bool = false, is2FACode: Bool = false, is2FAEntry: Bool = false,
-        supportsQueryExtension: Bool = false, defaultUrl: String? = nil,
+        isMemeEntry: Bool = false, supportsQueryExtension: Bool = false, defaultUrl: String? = nil,
         isSectionHeader: Bool = false, processStats: String? = nil
     ) {
         self.id = id
@@ -43,6 +44,7 @@ struct SearchResult: Identifiable, Hashable {
         self.isBookmarkEntry = isBookmarkEntry
         self.is2FACode = is2FACode
         self.is2FAEntry = is2FAEntry
+        self.isMemeEntry = isMemeEntry
         self.supportsQueryExtension = supportsQueryExtension
         self.defaultUrl = defaultUrl
         self.isSectionHeader = isSectionHeader

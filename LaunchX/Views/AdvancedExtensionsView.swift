@@ -10,6 +10,7 @@ enum AdvancedExtensionType: String, CaseIterable, Identifiable {
     case bookmarkSearch = "搜索书签"
     // case terminalCommand = "执行终端命令"
     case twoFactorAuth = "2FA 短信"
+    case memeSearch = "表情包"
 
     var id: String { rawValue }
 
@@ -26,8 +27,8 @@ enum AdvancedExtensionType: String, CaseIterable, Identifiable {
         return allCases
     }
 
-    /// 资源图标名称
-    var iconImageName: String {
+    /// 资源图标名称（返回 nil 表示使用 SF Symbol）
+    var iconImageName: String? {
         switch self {
         case .bookmarkSearch: return "Extension_bookmark"
         // case .terminalCommand: return "Extension_terminal"
@@ -35,6 +36,15 @@ enum AdvancedExtensionType: String, CaseIterable, Identifiable {
         case .snippet: return "Extension_snippet"
         case .twoFactorAuth: return "Extension_2FA"
         case .aiTranslate: return "Extension_ai_translate"
+        case .memeSearch: return nil  // 使用 SF Symbol
+        }
+    }
+
+    /// SF Symbol 名称（用于没有自定义图标的扩展）
+    var sfSymbolName: String? {
+        switch self {
+        case .memeSearch: return "face.smiling"
+        default: return nil
         }
     }
 }
@@ -64,6 +74,7 @@ struct AdvancedExtensionsView: View {
             ForEach(AdvancedExtensionType.availableCases) { type in
                 ExtensionSidebarItem(
                     iconImageName: type.iconImageName,
+                    sfSymbolName: type.sfSymbolName,
                     title: type.rawValue,
                     isSelected: selectedExtension == type
                 ) {
@@ -94,6 +105,8 @@ struct AdvancedExtensionsView: View {
             TwoFactorAuthSettingsView()
         case .aiTranslate:
             AITranslateSettingsView()
+        case .memeSearch:
+            MemeSearchSettingsView()
         }
     }
 }
@@ -537,7 +550,8 @@ struct BrowserToggleRow: View {
 // MARK: - 扩展侧边栏项
 
 struct ExtensionSidebarItem: View {
-    let iconImageName: String
+    let iconImageName: String?
+    let sfSymbolName: String?
     let title: String
     let isSelected: Bool
     let action: () -> Void
@@ -545,10 +559,18 @@ struct ExtensionSidebarItem: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 8) {
-                Image(iconImageName)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 16, height: 16)
+                if let imageName = iconImageName {
+                    Image(imageName)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 16, height: 16)
+                } else if let symbolName = sfSymbolName {
+                    Image(systemName: symbolName)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 16, height: 16)
+                        .foregroundColor(.orange)
+                }
                 Text(title)
                     .foregroundColor(.primary)
                 Spacer()

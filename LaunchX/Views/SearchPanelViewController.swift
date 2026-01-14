@@ -54,6 +54,19 @@ class SearchPanelViewController: NSViewController {
     private var isIn2FAMode: Bool = false
     private var twoFAResults: [TwoFactorCodeItem] = []
 
+    // 表情包搜索模式状态
+    private var isInMemeMode: Bool = false
+    private var memeResults: [MemeItem] = []
+    private var memeSelectedRow: Int = 0
+    private var memeSelectedCol: Int = 0
+    private let memeColumnCount: Int = 4  // 每行显示 4 个
+    private var memeSearchDebounceWorkItem: DispatchWorkItem?  // 搜索防抖
+
+    // 表情包搜索 UI 组件
+    private let memeCollectionView = NSCollectionView()
+    private let memeScrollView = NSScrollView()
+    private var memeLoadingIndicator: NSProgressIndicator?
+
     // IP 查询结果
     private var ipQueryResults: [(label: String, ip: String)] = []
 
@@ -262,6 +275,14 @@ class SearchPanelViewController: NSViewController {
             self,
             selector: #selector(handleEnter2FAModeDirectly),
             name: .enter2FAModeDirectly,
+            object: nil
+        )
+
+        // 监听直接进入表情包模式的通知（由快捷键触发）
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleEnterMemeModeDirectly),
+            name: .enterMemeModeDirectly,
             object: nil
         )
 
@@ -795,6 +816,334 @@ class SearchPanelViewController: NSViewController {
         resetState()
     }
 
+    // MARK: - 表情包搜索模式
+
+    /// 处理直接进入表情包模式的通知
+    @objc private func handleEnterMemeModeDirectly() {
+        print("SearchPanelViewController: handleEnterMemeModeDirectly called")
+
+        // 如果在其他扩展模式中，先清理
+        if isInIDEProjectMode || isInFolderOpenMode || isInWebLinkQueryMode || isInUtilityMode
+            || isInBookmarkMode || isIn2FAMode
+        {
+            cleanupAllExtensionModes()
+        }
+
+        // 如果已经在表情包模式中，忽略
+        if isInMemeMode {
+            print("SearchPanelViewController: Already in meme mode, ignoring")
+            return
+        }
+
+        // 进入表情包模式
+        isInMemeMode = true
+
+        // 更新 UI
+        updateMemeModeUI()
+
+        // 清空结果，等待用户搜索
+        memeResults = []
+        memeSelectedRow = 0
+        memeSelectedCol = 0
+        reloadMemeCollectionView()
+
+        print("SearchPanelViewController: Meme mode setup complete")
+    }
+
+    /// 进入表情包模式（通过别名搜索选择）
+    private func enterMemeMode() {
+        // 如果在其他扩展模式中，先清理
+        if isInIDEProjectMode || isInFolderOpenMode || isInWebLinkQueryMode || isInUtilityMode
+            || isInBookmarkMode || isIn2FAMode
+        {
+            cleanupAllExtensionModes()
+        }
+
+        // 进入表情包模式
+        isInMemeMode = true
+
+        // 更新 UI
+        updateMemeModeUI()
+
+        // 清空结果，等待用户搜索
+        memeResults = []
+        memeSelectedRow = 0
+        memeSelectedCol = 0
+        reloadMemeCollectionView()
+
+        print("SearchPanelViewController: Entered meme mode via alias")
+    }
+
+    /// 更新表情包模式 UI
+    private func updateMemeModeUI() {
+        // 显示标签
+        ideTagView.isHidden = false
+        let memeIcon =
+            NSImage(systemSymbolName: "face.smiling", accessibilityDescription: "Meme")
+            ?? NSImage()
+        memeIcon.size = NSSize(width: 16, height: 16)
+        ideIconView.image = memeIcon
+        ideNameLabel.stringValue = "表情包"
+
+        // 切换 searchField 的 leading 约束
+        searchFieldLeadingToIcon?.isActive = false
+        searchFieldLeadingToTag?.isActive = true
+
+        // 更新搜索框
+        searchField.stringValue = ""
+        setPlaceholder("搜索表情包...")
+
+        // 隐藏普通列表，显示表情包网格
+        scrollView.isHidden = true
+        memeScrollView.isHidden = false
+        divider.isHidden = false
+
+        // 更新窗口高度
+        updateWindowHeight(expanded: true)
+
+        // 聚焦搜索框
+        view.window?.makeFirstResponder(searchField)
+    }
+
+    /// 退出表情包模式
+    private func exitMemeMode() {
+        guard isInMemeMode else { return }
+
+        isInMemeMode = false
+        memeResults = []
+        memeSelectedRow = 0
+        memeSelectedCol = 0
+
+        // 隐藏表情包视图
+        memeScrollView.isHidden = true
+
+        // 取消正在进行的搜索
+        memeSearchDebounceWorkItem?.cancel()
+
+        // 恢复 UI
+        restoreNormalModeUI()
+
+        // 恢复搜索状态
+        searchField.stringValue = ""
+        setPlaceholder("搜索应用或文档...")
+        resetState()
+    }
+
+    /// 执行表情包搜索
+    private func performMemeSearch(_ query: String) {
+        guard !query.isEmpty else {
+            memeResults = []
+            reloadMemeCollectionView()
+            return
+        }
+
+        // 显示加载指示器
+        showMemeLoadingIndicator()
+
+        MemeSearchService.shared.search(keyword: query) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self = self, self.isInMemeMode else { return }
+
+                self.hideMemeLoadingIndicator()
+
+                switch result {
+                case .success(let items):
+                    self.memeResults = items
+                    self.memeSelectedRow = 0
+                    self.memeSelectedCol = 0
+                    self.reloadMemeCollectionView()
+
+                    // 选中第一个
+                    if !items.isEmpty {
+                        self.updateMemeSelection()
+                    }
+                case .failure(let error):
+                    print(
+                        "SearchPanelViewController: Meme search failed - \(error.localizedDescription)"
+                    )
+                    self.memeResults = []
+                    self.reloadMemeCollectionView()
+                }
+            }
+        }
+    }
+
+    /// 重新加载表情包集合视图
+    private func reloadMemeCollectionView() {
+        memeCollectionView.reloadData()
+
+        // 更新 no results 状态
+        if isInMemeMode && memeResults.isEmpty && !searchField.stringValue.isEmpty {
+            noResultsLabel.stringValue = "未找到表情包"
+            noResultsLabel.isHidden = false
+        } else {
+            noResultsLabel.isHidden = true
+        }
+    }
+
+    /// 显示加载指示器
+    private func showMemeLoadingIndicator() {
+        if memeLoadingIndicator == nil {
+            let indicator = NSProgressIndicator()
+            indicator.style = .spinning
+            indicator.controlSize = .regular
+            indicator.translatesAutoresizingMaskIntoConstraints = false
+            memeScrollView.addSubview(indicator)
+            NSLayoutConstraint.activate([
+                indicator.centerXAnchor.constraint(equalTo: memeScrollView.centerXAnchor),
+                indicator.centerYAnchor.constraint(equalTo: memeScrollView.centerYAnchor),
+            ])
+            memeLoadingIndicator = indicator
+        }
+        memeLoadingIndicator?.startAnimation(nil)
+        memeLoadingIndicator?.isHidden = false
+    }
+
+    /// 隐藏加载指示器
+    private func hideMemeLoadingIndicator() {
+        memeLoadingIndicator?.stopAnimation(nil)
+        memeLoadingIndicator?.isHidden = true
+    }
+
+    /// 更新表情包选中状态
+    private func updateMemeSelection() {
+        let index = memeSelectedRow * memeColumnCount + memeSelectedCol
+        guard index < memeResults.count else { return }
+
+        let indexPath = IndexPath(item: index, section: 0)
+        memeCollectionView.selectItems(at: [indexPath], scrollPosition: .centeredVertically)
+    }
+
+    /// 表情包模式键盘导航 - 向上
+    private func moveMemeSelectionUp() {
+        guard !memeResults.isEmpty else { return }
+        if memeSelectedRow > 0 {
+            memeSelectedRow -= 1
+            // 调整列以确保不超出范围
+            let index = memeSelectedRow * memeColumnCount + memeSelectedCol
+            if index >= memeResults.count {
+                memeSelectedCol = (memeResults.count - 1) % memeColumnCount
+            }
+            updateMemeSelection()
+        }
+    }
+
+    /// 表情包模式键盘导航 - 向下
+    private func moveMemeSelectionDown() {
+        guard !memeResults.isEmpty else { return }
+        let totalRows = (memeResults.count + memeColumnCount - 1) / memeColumnCount
+        if memeSelectedRow < totalRows - 1 {
+            memeSelectedRow += 1
+            // 调整列以确保不超出范围
+            let index = memeSelectedRow * memeColumnCount + memeSelectedCol
+            if index >= memeResults.count {
+                memeSelectedCol = (memeResults.count - 1) % memeColumnCount
+            }
+            updateMemeSelection()
+        }
+    }
+
+    /// 表情包模式键盘导航 - 向左
+    private func moveMemeSelectionLeft() {
+        guard !memeResults.isEmpty else { return }
+        if memeSelectedCol > 0 {
+            memeSelectedCol -= 1
+            updateMemeSelection()
+        } else if memeSelectedRow > 0 {
+            // 移到上一行末尾
+            memeSelectedRow -= 1
+            memeSelectedCol = memeColumnCount - 1
+            updateMemeSelection()
+        }
+    }
+
+    /// 表情包模式键盘导航 - 向右
+    private func moveMemeSelectionRight() {
+        guard !memeResults.isEmpty else { return }
+        let currentIndex = memeSelectedRow * memeColumnCount + memeSelectedCol
+        if currentIndex < memeResults.count - 1 {
+            if memeSelectedCol < memeColumnCount - 1 {
+                memeSelectedCol += 1
+            } else {
+                // 移到下一行开头
+                memeSelectedRow += 1
+                memeSelectedCol = 0
+            }
+            updateMemeSelection()
+        }
+    }
+
+    /// 处理表情包双击事件
+    @objc private func handleMemeDoubleClick(_ gesture: NSClickGestureRecognizer) {
+        let point = gesture.location(in: memeCollectionView)
+        guard let indexPath = memeCollectionView.indexPathForItem(at: point) else { return }
+
+        // 更新选中状态
+        memeSelectedRow = indexPath.item / memeColumnCount
+        memeSelectedCol = indexPath.item % memeColumnCount
+        updateMemeSelection()
+
+        // 复制到剪贴板
+        copySelectedMeme()
+    }
+
+    /// 复制选中的表情包到剪贴板
+    private func copySelectedMeme() {
+        let index = memeSelectedRow * memeColumnCount + memeSelectedCol
+        guard index < memeResults.count else { return }
+
+        let meme = memeResults[index]
+
+        // 显示加载指示器
+        showMemeLoadingIndicator()
+
+        // 下载图片并复制到剪贴板
+        MemeSearchService.shared.loadImage(url: meme.imageURL) { [weak self] image, data in
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                self.hideMemeLoadingIndicator()
+
+                if let image = image {
+                    // 使用返回的原始数据用于 GIF
+                    let gifData = meme.isGif ? data : nil
+                    MemeSearchService.shared.copyToClipboard(
+                        image: image, isGif: meme.isGif, gifData: gifData)
+                    PanelManager.shared.hidePanel()
+                } else {
+                    // 复制失败，显示提示
+                    print("SearchPanelViewController: Failed to copy meme image")
+                }
+            }
+        }
+    }
+
+    /// 检查表情包别名匹配
+    private func checkMemeAliasMatch(query: String) -> SearchResult? {
+        let settings = MemeSearchSettings.load()
+        guard settings.isEnabled, !settings.alias.isEmpty else { return nil }
+
+        let queryLower = query.lowercased()
+        let aliasLower = settings.alias.lowercased()
+
+        // 检查是否匹配别名（前缀匹配或完全匹配）
+        guard aliasLower.hasPrefix(queryLower) || queryLower == aliasLower else { return nil }
+
+        // 创建表情包入口结果
+        let memeIcon =
+            NSImage(systemSymbolName: "face.smiling", accessibilityDescription: "Meme")
+            ?? NSImage()
+        memeIcon.size = NSSize(width: 32, height: 32)
+
+        return SearchResult(
+            name: "表情包搜索",
+            path: "meme-entry",
+            icon: memeIcon,
+            isDirectory: false,
+            displayAlias: settings.alias,
+            isMemeEntry: true
+        )
+    }
+
     // MARK: - Setup
 
     private func setupUI() {
@@ -935,6 +1284,56 @@ class SearchPanelViewController: NSViewController {
 
         // Base64 编码解码 UI 设置
         setupBase64CoderUI()
+
+        // 表情包搜索 UI 设置
+        setupMemeSearchUI()
+    }
+
+    /// 设置表情包搜索 UI
+    private func setupMemeSearchUI() {
+        // 配置 CollectionView 的流布局
+        let flowLayout = NSCollectionViewFlowLayout()
+        flowLayout.itemSize = NSSize(width: 140, height: 140)
+        flowLayout.minimumInteritemSpacing = 10
+        flowLayout.minimumLineSpacing = 10
+        flowLayout.sectionInset = NSEdgeInsets(top: 10, left: 10, bottom: 10, right: 10)
+
+        memeCollectionView.collectionViewLayout = flowLayout
+        memeCollectionView.delegate = self
+        memeCollectionView.dataSource = self
+        memeCollectionView.backgroundColors = [.clear]
+        memeCollectionView.isSelectable = true
+        memeCollectionView.allowsMultipleSelection = false
+
+        // 添加双击手势识别器
+        let doubleClickGesture = NSClickGestureRecognizer(
+            target: self, action: #selector(handleMemeDoubleClick(_:)))
+        doubleClickGesture.numberOfClicksRequired = 2
+        memeCollectionView.addGestureRecognizer(doubleClickGesture)
+
+        // 注册 Cell
+        memeCollectionView.register(
+            MemeCollectionViewItem.self,
+            forItemWithIdentifier: NSUserInterfaceItemIdentifier("MemeCell")
+        )
+
+        // 配置 ScrollView
+        memeScrollView.documentView = memeCollectionView
+        memeScrollView.hasVerticalScroller = true
+        memeScrollView.hasHorizontalScroller = false
+        memeScrollView.autohidesScrollers = true
+        memeScrollView.drawsBackground = false
+        memeScrollView.translatesAutoresizingMaskIntoConstraints = false
+        memeScrollView.isHidden = true
+        contentView.addSubview(memeScrollView)
+
+        // 约束
+        NSLayoutConstraint.activate([
+            memeScrollView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            memeScrollView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            memeScrollView.topAnchor.constraint(equalTo: divider.bottomAnchor),
+            memeScrollView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
+        ])
     }
 
     /// 设置 UUID 生成器 UI
@@ -1453,7 +1852,7 @@ class SearchPanelViewController: NSViewController {
         // ⚠️ 重要：添加新的扩展模式时，必须在此处添加检查，否则会覆盖扩展模式的结果
         // 如果在扩展模式中，不要覆盖当前显示的结果
         if isInIDEProjectMode || isInFolderOpenMode || isInWebLinkQueryMode || isInUtilityMode
-            || isInBookmarkMode || isIn2FAMode
+            || isInBookmarkMode || isIn2FAMode || isInMemeMode
         {
             updateVisibility()
             return
@@ -1549,6 +1948,18 @@ class SearchPanelViewController: NSViewController {
             setPlaceholder("搜索应用或文档...")
         }
 
+        // 如果在表情包模式，先恢复普通模式 UI
+        if isInMemeMode {
+            isInMemeMode = false
+            memeResults = []
+            memeSelectedRow = 0
+            memeSelectedCol = 0
+            memeScrollView.isHidden = true
+            memeSearchDebounceWorkItem?.cancel()
+            restoreNormalModeUI()
+            setPlaceholder("搜索应用或文档...")
+        }
+
         searchField.stringValue = ""
         selectedIndex = 0
 
@@ -1621,6 +2032,9 @@ class SearchPanelViewController: NSViewController {
         // 检查是否匹配 2FA 别名（用于显示 2FA 入口）
         let twoFAEntryResult = check2FAAliasMatch(query: query)
 
+        // 检查是否匹配表情包别名（用于显示表情包入口）
+        let memeEntryResult = checkMemeAliasMatch(query: query)
+
         // 根据 LRU 对搜索结果重新排序（传入查询字符串用于别名匹配优先级）
         let sortedResults = sortSearchResults(searchResults, query: query)
 
@@ -1633,6 +2047,9 @@ class SearchPanelViewController: NSViewController {
         }
         if let twoFAEntry = twoFAEntryResult {
             finalResults.append(twoFAEntry)
+        }
+        if let memeEntry = memeEntryResult {
+            finalResults.append(memeEntry)
         }
 
         if sortedResults.isEmpty {
@@ -1758,7 +2175,7 @@ class SearchPanelViewController: NSViewController {
         let isUUIDMode = isInUtilityMode && currentUtilityIdentifier == "uuid"
         let isURLMode = isInUtilityMode && currentUtilityIdentifier == "url"
         let isBase64Mode = isInUtilityMode && currentUtilityIdentifier == "base64"
-        let isIndependentViewMode = isUUIDMode || isURLMode || isBase64Mode
+        let isIndependentViewMode = isUUIDMode || isURLMode || isBase64Mode || isInMemeMode
 
         // 网页直达 Query 模式下，没有输入时不显示结果列表
         let isWebLinkQueryModeEmpty = isInWebLinkQueryMode && !hasQuery
@@ -1766,6 +2183,14 @@ class SearchPanelViewController: NSViewController {
         divider.isHidden = !hasQuery && !isShowingRecents && !isIndependentViewMode
         scrollView.isHidden = !hasResults || isIndependentViewMode || isWebLinkQueryModeEmpty
         noResultsLabel.isHidden = !hasQuery || hasResults || isIndependentViewMode
+
+        // 表情包模式：隐藏 scrollView，显示 memeScrollView
+        if isInMemeMode {
+            scrollView.isHidden = true
+            memeScrollView.isHidden = false
+            // 有搜索但没结果时显示提示
+            noResultsLabel.isHidden = !hasQuery || !memeResults.isEmpty
+        }
 
         // Update window height
         if defaultWindowMode == "full" || isIndependentViewMode {
@@ -1832,7 +2257,7 @@ class SearchPanelViewController: NSViewController {
                 return event
             }
             if (isInIDEProjectMode || isInFolderOpenMode || isInWebLinkQueryMode || isInUtilityMode
-                || isInBookmarkMode || isIn2FAMode)
+                || isInBookmarkMode || isIn2FAMode || isInMemeMode)
                 && searchField.stringValue.isEmpty
             {
                 if isInIDEProjectMode {
@@ -1847,6 +2272,8 @@ class SearchPanelViewController: NSViewController {
                     exitBookmarkMode()
                 } else if isIn2FAMode {
                     exit2FAMode()
+                } else if isInMemeMode {
+                    exitMemeMode()
                 }
                 return nil
             }
@@ -1854,7 +2281,7 @@ class SearchPanelViewController: NSViewController {
         case 48:  // Tab - 进入 IDE 项目模式、文件夹打开模式、网页直达 Query 模式或书签模式
             if isComposing { return event }
             if !isInIDEProjectMode && !isInFolderOpenMode && !isInWebLinkQueryMode
-                && !isInBookmarkMode && !isIn2FAMode
+                && !isInBookmarkMode && !isIn2FAMode && !isInMemeMode
             {
                 // 检查当前选中项是否有扩展功能
                 guard results.indices.contains(selectedIndex) else {
@@ -1875,6 +2302,11 @@ class SearchPanelViewController: NSViewController {
                     return nil
                 }
 
+                // 检查是否为表情包入口
+                if item.isMemeEntry {
+                    enterMemeMode()
+                    return nil
+                }
                 // 检查是否为 IDE（有项目列表扩展）
                 if let ideType = IDEType.detect(from: item.path) {
                     let projects = IDERecentProjectsService.shared.getRecentProjects(
@@ -1920,12 +2352,34 @@ class SearchPanelViewController: NSViewController {
             return nil
         case 125:  // Down arrow
             if isComposing { return event }  // 让输入法处理
-            moveSelectionDown()
+            if isInMemeMode {
+                moveMemeSelectionDown()
+            } else {
+                moveSelectionDown()
+            }
             return nil
         case 126:  // Up arrow
             if isComposing { return event }  // 让输入法处理
-            moveSelectionUp()
+            if isInMemeMode {
+                moveMemeSelectionUp()
+            } else {
+                moveSelectionUp()
+            }
             return nil
+        case 123:  // Left arrow - 表情包模式专用
+            if isComposing { return event }
+            if isInMemeMode {
+                moveMemeSelectionLeft()
+                return nil
+            }
+            return event
+        case 124:  // Right arrow - 表情包模式专用
+            if isComposing { return event }
+            if isInMemeMode {
+                moveMemeSelectionRight()
+                return nil
+            }
+            return event
         case 53:  // Escape
             if isComposing { return event }  // 让输入法取消
             // 如果在 IDE 项目模式或文件夹打开模式，先退出该模式
@@ -1945,10 +2399,18 @@ class SearchPanelViewController: NSViewController {
                 exitUtilityMode()
                 return nil
             }
+            if isInMemeMode {
+                exitMemeMode()
+                return nil
+            }
             PanelManager.shared.hidePanel()
             return nil
         case 36:  // Return
             if isComposing { return event }  // 让输入法确认输入
+            if isInMemeMode {
+                copySelectedMeme()
+                return nil
+            }
             openSelected()
             return nil
         default:
@@ -2346,6 +2808,16 @@ class SearchPanelViewController: NSViewController {
         if isIn2FAMode {
             isIn2FAMode = false
             twoFAResults = []
+        }
+
+        // 清理表情包模式
+        if isInMemeMode {
+            isInMemeMode = false
+            memeResults = []
+            memeSelectedRow = 0
+            memeSelectedCol = 0
+            memeScrollView.isHidden = true
+            memeSearchDebounceWorkItem?.cancel()
         }
 
         // 恢复 UI
@@ -3490,6 +3962,16 @@ extension SearchPanelViewController: NSTextFieldDelegate {
             return
         }
 
+        // 表情包模式：搜索表情包（防抖处理）
+        if isInMemeMode {
+            memeSearchDebounceWorkItem?.cancel()
+            let workItem = DispatchWorkItem { [weak self] in
+                self?.performMemeSearch(query)
+            }
+            memeSearchDebounceWorkItem = workItem
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: workItem)
+            return
+        }
         // 普通模式：搜索应用和文件
         performSearch(query)
     }
@@ -3862,20 +4344,21 @@ class ResultCellView: NSView {
             statsContainerView.isHidden = true
         }
 
-        // App、网页直达、实用工具、系统命令、书签入口、2FA 入口只显示名称（垂直居中、字体大），文件和文件夹显示路径
+        // App、网页直达、实用工具、系统命令、书签入口、2FA 入口、表情包入口只显示名称（垂直居中、字体大），文件和文件夹显示路径
         let isApp = item.path.hasSuffix(".app")
         let isWebLink = item.isWebLink
         let isUtility = item.isUtility
         let isSystemCommand = item.isSystemCommand
         let isBookmarkEntry = item.isBookmarkEntry
         let is2FAEntry = item.is2FAEntry
+        let isMemeEntry = item.isMemeEntry
         let showPathLabel =
             !isApp && !isWebLink && !isUtility && !isSystemCommand && !isBookmarkEntry
-            && !is2FAEntry && !hasProcessStats
+            && !is2FAEntry && !isMemeEntry && !hasProcessStats
         pathLabel.isHidden = !showPathLabel
         pathLabel.stringValue = showPathLabel ? item.path : ""
 
-        // 检测是否为支持的 IDE、文件夹、网页直达 Query 扩展、实用工具、书签入口或 2FA 入口，显示箭头指示器
+        // 检测是否为支持的 IDE、文件夹、网页直达 Query 扩展、实用工具、书签入口、2FA 入口或表情包入口，显示箭头指示器
         // hideArrow 为 true 时强制隐藏（如文件夹打开模式下）
         // 有进程统计信息时也隐藏箭头
         let isIDE = IDEType.detect(from: item.path) != nil
@@ -3883,7 +4366,8 @@ class ResultCellView: NSView {
         let isQueryWebLink = item.isWebLink && item.supportsQueryExtension
         let showArrow =
             !hideArrow && !hasProcessStats
-            && (isIDE || isFolder || isQueryWebLink || isUtility || isBookmarkEntry || is2FAEntry)
+            && (isIDE || isFolder || isQueryWebLink || isUtility || isBookmarkEntry || is2FAEntry
+                || isMemeEntry)
         arrowIndicator.isHidden = !showArrow
 
         // 切换 nameLabel leading 约束（普通模式）
@@ -3912,9 +4396,9 @@ class ResultCellView: NSView {
             pathLabelTrailingToEdge.isActive = true
         }
 
-        // 切换布局：App、网页直达、实用工具、系统命令、书签入口、2FA 入口、有进程统计的项垂直居中，其他顶部对齐
+        // 切换布局：App、网页直达、实用工具、系统命令、书签入口、2FA 入口、表情包入口、有进程统计的项垂直居中，其他顶部对齐
         if isApp || isWebLink || isUtility || isSystemCommand || isBookmarkEntry || is2FAEntry
-            || hasProcessStats
+            || isMemeEntry || hasProcessStats
         {
             nameLabel.font = .systemFont(ofSize: 14, weight: .medium)
             nameLabelTopConstraint.isActive = false
@@ -3984,5 +4468,149 @@ class ResultCellView: NSView {
         nameLabelTrailingToArrow.isActive = false
         nameLabelTrailingToStats.isActive = false
         nameLabelTrailingToEdge.isActive = true
+    }
+}
+
+// MARK: - Meme Collection View Item
+
+class MemeCollectionViewItem: NSCollectionViewItem {
+    private let memeImageView = NSImageView()
+    private let gifBadge = NSTextField(labelWithString: "GIF")
+    private let loadingIndicator = NSProgressIndicator()
+    private var currentImageURL: String?
+
+    override func loadView() {
+        self.view = NSView()
+        self.view.wantsLayer = true
+        self.view.layer?.cornerRadius = 8
+        self.view.layer?.masksToBounds = true
+        self.view.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.1).cgColor
+
+        setupViews()
+    }
+
+    private func setupViews() {
+        // 图片视图
+        memeImageView.imageScaling = .scaleProportionallyUpOrDown
+        memeImageView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(memeImageView)
+
+        // GIF 标签
+        gifBadge.font = .systemFont(ofSize: 10, weight: .bold)
+        gifBadge.textColor = .white
+        gifBadge.backgroundColor = NSColor.systemPurple
+        gifBadge.wantsLayer = true
+        gifBadge.layer?.cornerRadius = 4
+        gifBadge.layer?.masksToBounds = true
+        gifBadge.alignment = .center
+        gifBadge.translatesAutoresizingMaskIntoConstraints = false
+        gifBadge.isHidden = true
+        view.addSubview(gifBadge)
+
+        // 加载指示器
+        loadingIndicator.style = .spinning
+        loadingIndicator.controlSize = .small
+        loadingIndicator.translatesAutoresizingMaskIntoConstraints = false
+        loadingIndicator.isHidden = true
+        view.addSubview(loadingIndicator)
+
+        NSLayoutConstraint.activate([
+            memeImageView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 4),
+            memeImageView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -4),
+            memeImageView.topAnchor.constraint(equalTo: view.topAnchor, constant: 4),
+            memeImageView.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -4),
+
+            gifBadge.topAnchor.constraint(equalTo: view.topAnchor, constant: 6),
+            gifBadge.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -6),
+            gifBadge.widthAnchor.constraint(equalToConstant: 28),
+            gifBadge.heightAnchor.constraint(equalToConstant: 16),
+
+            loadingIndicator.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            loadingIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+        ])
+    }
+
+    func configure(with meme: MemeItem) {
+        currentImageURL = meme.imageURL
+        gifBadge.isHidden = !meme.isGif
+        memeImageView.image = nil
+
+        // 显示加载指示器
+        loadingIndicator.isHidden = false
+        loadingIndicator.startAnimation(nil)
+
+        // 加载图片
+        MemeSearchService.shared.loadImage(url: meme.imageURL) { [weak self] image, _ in
+            DispatchQueue.main.async {
+                guard let self = self, self.currentImageURL == meme.imageURL else { return }
+                self.loadingIndicator.stopAnimation(nil)
+                self.loadingIndicator.isHidden = true
+                self.memeImageView.image = image
+            }
+        }
+    }
+
+    override var isSelected: Bool {
+        didSet {
+            if isSelected {
+                view.layer?.borderWidth = 3
+                view.layer?.borderColor = NSColor.controlAccentColor.cgColor
+            } else {
+                view.layer?.borderWidth = 0
+                view.layer?.borderColor = nil
+            }
+        }
+    }
+
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        currentImageURL = nil
+        memeImageView.image = nil
+        gifBadge.isHidden = true
+        loadingIndicator.stopAnimation(nil)
+        loadingIndicator.isHidden = true
+        view.layer?.borderWidth = 0
+    }
+}
+
+// MARK: - NSCollectionViewDataSource & Delegate for Meme
+
+extension SearchPanelViewController: NSCollectionViewDataSource, NSCollectionViewDelegate {
+    func collectionView(_ collectionView: NSCollectionView, numberOfItemsInSection section: Int)
+        -> Int
+    {
+        return memeResults.count
+    }
+
+    func collectionView(
+        _ collectionView: NSCollectionView, itemForRepresentedObjectAt indexPath: IndexPath
+    ) -> NSCollectionViewItem {
+        let item =
+            collectionView.makeItem(
+                withIdentifier: NSUserInterfaceItemIdentifier("MemeCell"),
+                for: indexPath
+            ) as! MemeCollectionViewItem
+
+        if indexPath.item < memeResults.count {
+            item.configure(with: memeResults[indexPath.item])
+        }
+
+        return item
+    }
+
+    func collectionView(
+        _ collectionView: NSCollectionView, didSelectItemsAt indexPaths: Set<IndexPath>
+    ) {
+        guard let indexPath = indexPaths.first else { return }
+        memeSelectedRow = indexPath.item / memeColumnCount
+        memeSelectedCol = indexPath.item % memeColumnCount
+    }
+
+    func collectionView(
+        _ collectionView: NSCollectionView, didDoubleClickOnItemAt indexPath: IndexPath
+    ) {
+        memeSelectedRow = indexPath.item / memeColumnCount
+        memeSelectedCol = indexPath.item % memeColumnCount
+        copySelectedMeme()
     }
 }

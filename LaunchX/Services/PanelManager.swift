@@ -203,6 +203,22 @@ class PanelManager: NSObject, NSWindowDelegate {
         }
     }
 
+    /// 显示面板并直接进入表情包模式
+    func showPanelInMemeMode() {
+        guard isSetup else { return }
+
+        // 先发送通知进入表情包模式
+        NotificationCenter.default.post(
+            name: .enterMemeModeDirectly,
+            object: nil
+        )
+
+        // 再显示面板
+        if !panel.isVisible {
+            showPanel()
+        }
+    }
+
     // MARK: - NSWindowDelegate
 
     func windowDidResignKey(_ notification: Notification) {
