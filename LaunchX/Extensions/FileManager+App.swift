@@ -86,3 +86,25 @@ extension String {
         return self.utf8.count == self.count
     }
 }
+
+extension FileManager {
+    /// 解压 zip 文件到指定目录
+    func unzipItem(at sourceURL: URL, to destinationURL: URL) throws {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/unzip")
+        process.arguments = ["-o", sourceURL.path, "-d", destinationURL.path]
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+
+        try process.run()
+        process.waitUntilExit()
+
+        if process.terminationStatus != 0 {
+            throw NSError(
+                domain: "FileManager",
+                code: Int(process.terminationStatus),
+                userInfo: [NSLocalizedDescriptionKey: "解压失败，错误码: \(process.terminationStatus)"]
+            )
+        }
+    }
+}

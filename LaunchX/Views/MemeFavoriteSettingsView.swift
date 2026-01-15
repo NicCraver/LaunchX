@@ -82,6 +82,24 @@ struct MemeFavoriteSettingsView: View {
                     }
                 }
 
+                // 导出导入
+                HStack {
+                    Text("备份与恢复:")
+                        .frame(width: labelWidth, alignment: .trailing)
+                    Button("导出收藏") {
+                        MemeFavoriteService.shared.exportFavorites()
+                    }
+                    .disabled(favoriteCount == 0)
+                    Button("导入收藏") {
+                        MemeFavoriteService.shared.importFavorites()
+                        // 延迟刷新计数
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                            favoriteCount = MemeFavoriteService.shared.count
+                        }
+                    }
+                    Spacer()
+                }
+
                 Divider()
 
                 // 使用说明

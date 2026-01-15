@@ -2792,14 +2792,44 @@ class SearchPanelViewController: NSViewController {
             openSelected()
             return nil
         default:
-            // Ctrl+N / Ctrl+P
+            // Ctrl+N / Ctrl+P / Ctrl+F / Ctrl+B
             if event.modifierFlags.contains(.control) {
-                if event.keyCode == 45 {  // N
+                if event.keyCode == 45 {  // N - 下
+                    if isInMemeMode {
+                        moveMemeSelectionDown()
+                        return nil
+                    } else if isInFavoriteMode {
+                        moveFavoriteSelectionDown()
+                        return nil
+                    }
                     moveSelectionDown()
                     return nil
-                } else if event.keyCode == 35 {  // P
+                } else if event.keyCode == 35 {  // P - 上
+                    if isInMemeMode {
+                        moveMemeSelectionUp()
+                        return nil
+                    } else if isInFavoriteMode {
+                        moveFavoriteSelectionUp()
+                        return nil
+                    }
                     moveSelectionUp()
                     return nil
+                } else if event.keyCode == 3 {  // F - 右
+                    if isInMemeMode {
+                        moveMemeSelectionRight()
+                        return nil
+                    } else if isInFavoriteMode {
+                        moveFavoriteSelectionRight()
+                        return nil
+                    }
+                } else if event.keyCode == 11 {  // B - 左
+                    if isInMemeMode {
+                        moveMemeSelectionLeft()
+                        return nil
+                    } else if isInFavoriteMode {
+                        moveFavoriteSelectionLeft()
+                        return nil
+                    }
                 }
             }
             return event

@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import UniformTypeIdentifiers
 
 /// 表情包收藏服务 - 负责收藏管理和本地存储
 final class MemeFavoriteService {
@@ -323,5 +324,253 @@ final class MemeFavoriteService {
         favorites.removeAll()
         imageCache.removeAllObjects()
         saveFavorites()
+    }
+
+    // MARK: - 导出导入
+
+    /// 导出收藏为 zip 文件
+    func exportFavorites() {
+        guard !favorites.isEmpty else {
+            showAlert(title: "导出失败", message: "没有收藏的表情包可供导出", style: .warning)
+            return
+        }
+
+        let savePanel = NSSavePanel()
+        savePanel.allowedContentTypes = [.zip]
+        savePanel.canCreateDirectories = true
+        savePanel.nameFieldStringValue = "LaunchX_MemeFavorites_\(formatDate(Date())).zip"
+        savePanel.title = "导出表情包收藏"
+        savePanel.message = "请选择备份文件的保存位置"
+
+        savePanel.begin { [weak self] result in
+            guard let self = self, result == .OK, let url = savePanel.url else { return }
+
+            DispatchQueue.global(qos: .userInitiated).async {
+                do {
+                    try self.createExportZip(to: url)
+                    DispatchQueue.main.async {
+                        self.showAlert(
+                            title: "导出成功",
+                            message:
+                                "已导出 \(self.favorites.count) 个表情包收藏至：\n\(url.lastPathComponent)"
+                        )
+                    }
+                } catch {
+                    DispatchQueue.main.async {
+                        self.showAlert(
+                            title: "导出失败",
+                            message: "发生错误：\(error.localizedDescription)",
+                            style: .critical
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    /// 导入收藏的 zip 文件
+    func importFavorites() {
+        let openPanel = NSOpenPanel()
+        openPanel.allowedContentTypes = [.zip]
+        openPanel.allowsMultipleSelection = false
+        openPanel.canChooseDirectories = false
+        openPanel.canChooseFiles = true
+        openPanel.title = "导入表情包收藏"
+        openPanel.message = "请选择要导入的表情包收藏备份文件 (.zip)"
+
+        openPanel.begin { [weak self] result in
+            guard let self = self, result == .OK, let url = openPanel.url else { return }
+
+            // 确认弹窗
+            let alert = NSAlert()
+            alert.messageText = "确认导入收藏？"
+            alert.informativeText = "导入将合并到现有收藏中（不会删除已有收藏，重复的将被跳过）"
+            alert.addButton(withTitle: "确认导入")
+            alert.addButton(withTitle: "取消")
+
+            if alert.runModal() == .alertFirstButtonReturn {
+                DispatchQueue.global(qos: .userInitiated).async {
+                    do {
+                        let importedCount = try self.importFromZip(from: url)
+                        DispatchQueue.main.async {
+                            self.showAlert(
+                                title: "导入成功",
+                                message: "成功导入 \(importedCount) 个表情包收藏"
+                            )
+                        }
+                    } catch {
+                        DispatchQueue.main.async {
+                            self.showAlert(
+                                title: "导入失败",
+                                message: "无效的备份文件或读取错误：\(error.localizedDescription)",
+                                style: .critical
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - 导出导入辅助方法
+
+    private func createExportZip(to url: URL) throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("MemeFavoritesExport_\(UUID().uuidString)")
+
+        // 创建临时目录
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+
+        defer {
+            // 清理临时目录
+            try? FileManager.default.removeItem(at: tempDir)
+        }
+
+        // 复制图片文件
+        let imagesExportDir = tempDir.appendingPathComponent("Images")
+        try FileManager.default.createDirectory(
+            at: imagesExportDir, withIntermediateDirectories: true)
+
+        for favorite in favorites {
+            let sourceFile = imagesDirectory.appendingPathComponent(favorite.imageFileName)
+            let destFile = imagesExportDir.appendingPathComponent(favorite.imageFileName)
+            if FileManager.default.fileExists(atPath: sourceFile.path) {
+                try FileManager.default.copyItem(at: sourceFile, to: destFile)
+            }
+        }
+
+        // 导出元数据
+        let metadata = ExportMetadata(
+            version: "1.0",
+            exportDate: Date(),
+            appVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String,
+            count: favorites.count
+        )
+        let metadataFile = tempDir.appendingPathComponent("metadata.json")
+        let metadataData = try JSONEncoder().encode(metadata)
+        try metadataData.write(to: metadataFile)
+
+        // 导出收藏数据
+        let favoritesFile = tempDir.appendingPathComponent("favorites.json")
+        let favoritesData = try JSONEncoder().encode(favorites)
+        try favoritesData.write(to: favoritesFile)
+
+        // 创建 zip 文件
+        let coordinator = NSFileCoordinator()
+        var error: NSError?
+
+        coordinator.coordinate(
+            readingItemAt: tempDir,
+            options: .forUploading,
+            error: &error
+        ) { zipURL in
+            try? FileManager.default.copyItem(at: zipURL, to: url)
+        }
+
+        if let error = error {
+            throw error
+        }
+    }
+
+    private func importFromZip(from url: URL) throws -> Int {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("MemeFavoritesImport_\(UUID().uuidString)")
+
+        // 创建临时目录
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+
+        defer {
+            // 清理临时目录
+            try? FileManager.default.removeItem(at: tempDir)
+        }
+
+        // 解压 zip 文件
+        try FileManager.default.unzipItem(at: url, to: tempDir)
+
+        // 读取收藏数据
+        let favoritesFile = tempDir.appendingPathComponent("favorites.json")
+        guard FileManager.default.fileExists(atPath: favoritesFile.path) else {
+            throw NSError(
+                domain: "MemeFavoriteService",
+                code: -1,
+                userInfo: [NSLocalizedDescriptionKey: "无效的备份文件：缺少 favorites.json"]
+            )
+        }
+
+        let favoritesData = try Data(contentsOf: favoritesFile)
+        let importedFavorites = try JSONDecoder().decode(
+            [MemeFavoriteItem].self, from: favoritesData)
+
+        let imagesImportDir = tempDir.appendingPathComponent("Images")
+        var importedCount = 0
+
+        for importedFavorite in importedFavorites {
+            // 跳过已存在的收藏（通过原始 URL 去重）
+            if favorites.contains(where: { $0.originalURL == importedFavorite.originalURL }) {
+                continue
+            }
+
+            // 复制图片文件
+            let sourceFile = imagesImportDir.appendingPathComponent(importedFavorite.imageFileName)
+            guard FileManager.default.fileExists(atPath: sourceFile.path) else {
+                continue
+            }
+
+            // 生成新的文件名以避免冲突
+            let fileExtension = importedFavorite.isGif ? "gif" : "png"
+            let newFileName = "\(UUID().uuidString).\(fileExtension)"
+            let destFile = imagesDirectory.appendingPathComponent(newFileName)
+
+            do {
+                try FileManager.default.copyItem(at: sourceFile, to: destFile)
+
+                // 创建新的收藏项（使用新文件名）
+                let newFavorite = MemeFavoriteItem(
+                    imageFileName: newFileName,
+                    description: importedFavorite.description,
+                    searchKeyword: importedFavorite.searchKeyword,
+                    isGif: importedFavorite.isGif,
+                    originalURL: importedFavorite.originalURL
+                )
+
+                favorites.insert(newFavorite, at: 0)
+                importedCount += 1
+            } catch {
+                print(
+                    "MemeFavoriteService: Failed to import image \(importedFavorite.imageFileName) - \(error)"
+                )
+            }
+        }
+
+        if importedCount > 0 {
+            saveFavorites()
+        }
+
+        return importedCount
+    }
+
+    private func formatDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMdd_HHmmss"
+        return formatter.string(from: date)
+    }
+
+    private func showAlert(title: String, message: String, style: NSAlert.Style = .informational) {
+        DispatchQueue.main.async {
+            let alert = NSAlert()
+            alert.messageText = title
+            alert.informativeText = message
+            alert.alertStyle = style
+            alert.addButton(withTitle: "好的")
+            alert.runModal()
+        }
+    }
+
+    /// 导出元数据
+    private struct ExportMetadata: Codable {
+        let version: String
+        let exportDate: Date
+        let appVersion: String?
+        let count: Int
     }
 }
