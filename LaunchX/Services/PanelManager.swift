@@ -219,6 +219,22 @@ class PanelManager: NSObject, NSWindowDelegate {
         }
     }
 
+    /// 在收藏模式下显示面板（通过快捷键直接进入）
+    func showPanelInFavoriteMode() {
+        guard isSetup else { return }
+
+        // 先发送通知进入收藏模式
+        NotificationCenter.default.post(
+            name: .enterFavoriteModeDirectly,
+            object: nil
+        )
+
+        // 再显示面板
+        if !panel.isVisible {
+            showPanel()
+        }
+    }
+
     // MARK: - NSWindowDelegate
 
     func windowDidResignKey(_ notification: Notification) {

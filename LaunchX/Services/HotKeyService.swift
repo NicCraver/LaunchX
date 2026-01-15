@@ -214,6 +214,15 @@ class HotKeyService: ObservableObject {
     /// 表情包快捷键 ID
     private let memeHotKeyId: UInt32 = 8
 
+    // MARK: - 表情包收藏快捷键
+
+    /// 表情包收藏快捷键触发回调
+    var onFavoriteHotKeyPressed: (() -> Void)?
+    /// 表情包收藏快捷键引用
+    private var favoriteHotKeyRef: EventHotKeyRef?
+    /// 表情包收藏快捷键 ID
+    private let favoriteHotKeyId: UInt32 = 9
+
     // MARK: - 私有属性
 
     private let hotKeySignature: OSType
@@ -895,6 +904,53 @@ class HotKeyService: ObservableObject {
         }
     }
 
+    // MARK: - 表情包收藏快捷键
+
+    /// 注册表情包收藏快捷键
+    func registerFavoriteHotKey(keyCode: UInt32, modifiers: UInt32) {
+        unregisterFavoriteHotKey()
+        guard keyCode != 0 else { return }
+
+        let hotKeyID = EventHotKeyID(signature: hotKeySignature, id: favoriteHotKeyId)
+        var hotKeyRef: EventHotKeyRef?
+
+        let status = RegisterEventHotKey(
+            keyCode,
+            modifiers,
+            hotKeyID,
+            GetApplicationEventTarget(),
+            0,
+            &hotKeyRef
+        )
+
+        if status == noErr {
+            favoriteHotKeyRef = hotKeyRef
+            print(
+                "HotKeyService: Registered Favorite HotKey (Code: \(keyCode), Mods: \(modifiers))"
+            )
+        } else {
+            print("HotKeyService: Failed to register favorite hotkey. Status: \(status)")
+        }
+    }
+
+    /// 注销表情包收藏快捷键
+    func unregisterFavoriteHotKey() {
+        if let ref = favoriteHotKeyRef {
+            UnregisterEventHotKey(ref)
+            favoriteHotKeyRef = nil
+            print("HotKeyService: Unregistered Favorite HotKey")
+        }
+    }
+
+    /// 加载表情包收藏快捷键设置
+    func loadFavoriteHotKey() {
+        let settings = MemeFavoriteSettings.load()
+        if settings.hotKeyCode != 0 {
+            registerFavoriteHotKey(
+                keyCode: settings.hotKeyCode, modifiers: settings.hotKeyModifiers)
+        }
+    }
+
     // MARK: - 暂停/恢复快捷键（用于录制时）
 
     /// 暂停所有快捷键（录制时使用）
@@ -1195,6 +1251,16 @@ class HotKeyService: ObservableObject {
             }
         }
 
+        // 检查与表情包收藏快捷键的冲突
+        if excludeType != "favorite" {
+            let favoriteSettings = MemeFavoriteSettings.load()
+            if favoriteSettings.hotKeyCode == keyCode
+                && favoriteSettings.hotKeyModifiers == modifiers
+            {
+                return "表情收藏"
+            }
+        }
+
         // 检查与工具快捷键的冲突
         let toolsConfig = ToolsConfig.load()
         for tool in toolsConfig.tools {
@@ -1291,6 +1357,14 @@ class HotKeyService: ObservableObject {
             if hotKeyID.id == memeHotKeyId {
                 DispatchQueue.main.async { [weak self] in
                     self?.onMemeHotKeyPressed?()
+                }
+                return noErr
+            }
+
+            // 检查是否为表情包收藏快捷键
+            if hotKeyID.id == favoriteHotKeyId {
+                DispatchQueue.main.async { [weak self] in
+                    self?.onFavoriteHotKeyPressed?()
                 }
                 return noErr
             }

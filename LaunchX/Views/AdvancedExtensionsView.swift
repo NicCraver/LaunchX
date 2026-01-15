@@ -11,6 +11,7 @@ enum AdvancedExtensionType: String, CaseIterable, Identifiable {
     // case terminalCommand = "执行终端命令"
     case twoFactorAuth = "2FA 短信"
     case memeSearch = "表情包"
+    case memeFavorite = "表情收藏"
 
     var id: String { rawValue }
 
@@ -37,6 +38,7 @@ enum AdvancedExtensionType: String, CaseIterable, Identifiable {
         case .twoFactorAuth: return "Extension_2FA"
         case .aiTranslate: return "Extension_ai_translate"
         case .memeSearch: return nil  // 使用 SF Symbol
+        case .memeFavorite: return nil  // 使用 SF Symbol
         }
     }
 
@@ -44,6 +46,7 @@ enum AdvancedExtensionType: String, CaseIterable, Identifiable {
     var sfSymbolName: String? {
         switch self {
         case .memeSearch: return "face.smiling"
+        case .memeFavorite: return "star.fill"
         default: return nil
         }
     }
@@ -107,6 +110,8 @@ struct AdvancedExtensionsView: View {
             AITranslateSettingsView()
         case .memeSearch:
             MemeSearchSettingsView()
+        case .memeFavorite:
+            MemeFavoriteSettingsView()
         }
     }
 }
