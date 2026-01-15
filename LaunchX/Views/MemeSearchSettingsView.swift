@@ -52,6 +52,23 @@ struct MemeSearchSettingsView: View {
                     Spacer()
                 }
 
+                // 选中动作设置
+                HStack {
+                    Text("选中后动作:")
+                        .frame(width: labelWidth, alignment: .trailing)
+                    Picker("", selection: $settings.actionType) {
+                        ForEach(MemeActionType.allCases, id: \.self) { action in
+                            Text(action.displayName).tag(action)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 200)
+                    .onChange(of: settings.actionType) { _, _ in
+                        settings.save()
+                    }
+                    Spacer()
+                }
+
                 Divider()
 
                 // 使用说明

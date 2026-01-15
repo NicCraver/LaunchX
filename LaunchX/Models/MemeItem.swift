@@ -59,6 +59,7 @@ struct MemeSearchSettings: Codable {
     var alias: String = "bqb"
     var hotKeyCode: UInt32 = 0
     var hotKeyModifiers: UInt32 = 0
+    var actionType: MemeActionType = .copyOnly  // 选中后的动作
 
     // MARK: - 持久化
 
@@ -87,6 +88,7 @@ struct MemeFavoriteSettings: Codable {
     var hotKeyCode: UInt32 = 0
     var hotKeyModifiers: UInt32 = 0
     var autoFavorite: Bool = true  // 复制时自动加入收藏
+    var actionType: MemeActionType = .copyOnly  // 选中后的动作
 
     // MARK: - 持久化
 
@@ -104,6 +106,21 @@ struct MemeFavoriteSettings: Codable {
     func save() {
         if let data = try? JSONEncoder().encode(self) {
             UserDefaults.standard.set(data, forKey: MemeFavoriteSettings.userDefaultsKey)
+        }
+    }
+}
+
+/// 表情包选中后的动作类型
+enum MemeActionType: String, Codable, CaseIterable {
+    case copyOnly = "copy"  // 仅复制到剪贴板
+    case copyAndPaste = "paste"  // 复制并粘贴
+
+    var displayName: String {
+        switch self {
+        case .copyOnly:
+            return "复制到剪贴板"
+        case .copyAndPaste:
+            return "复制并粘贴"
         }
     }
 }

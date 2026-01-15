@@ -840,7 +840,7 @@ class SearchPanelViewController: NSViewController {
 
         // 如果在其他扩展模式中，先清理
         if isInIDEProjectMode || isInFolderOpenMode || isInWebLinkQueryMode || isInUtilityMode
-            || isInBookmarkMode || isIn2FAMode
+            || isInBookmarkMode || isIn2FAMode || isInFavoriteMode
         {
             cleanupAllExtensionModes()
         }
@@ -856,6 +856,10 @@ class SearchPanelViewController: NSViewController {
 
         // 更新 UI
         updateMemeModeUI()
+
+        // 显示表情包视图
+        memeScrollView.isHidden = false
+        scrollView.isHidden = true
 
         // 清空结果，等待用户搜索
         memeResults = []
@@ -970,6 +974,10 @@ class SearchPanelViewController: NSViewController {
 
         // 更新 UI
         updateFavoriteModeUI()
+
+        // 显示收藏视图
+        memeScrollView.isHidden = false
+        scrollView.isHidden = true
 
         // 加载所有收藏
         favoriteResults = MemeFavoriteService.shared.getAllFavorites()
@@ -1119,6 +1127,7 @@ class SearchPanelViewController: NSViewController {
         guard index < favoriteResults.count else { return }
 
         let favorite = favoriteResults[index]
+        let settings = MemeFavoriteSettings.load()
 
         // 显示加载指示器
         showMemeLoadingIndicator()
@@ -1132,10 +1141,35 @@ class SearchPanelViewController: NSViewController {
 
                 if success {
                     PanelManager.shared.hidePanel()
+
+                    // 根据设置执行粘贴动作
+                    if settings.actionType == .copyAndPaste {
+                        self.performPasteAction()
+                    }
                 } else {
                     print("SearchPanelViewController: Failed to copy favorite")
                 }
             }
+        }
+    }
+
+    /// 模拟粘贴动作 (Cmd+V)
+    private func performPasteAction() {
+        // 延迟执行以确保面板已隐藏且目标应用已激活
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            let source = CGEventSource(stateID: .combinedSessionState)
+
+            // 创建 Cmd+V 按下事件
+            let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: true)  // V key
+            keyDown?.flags = .maskCommand
+
+            // 创建 Cmd+V 释放事件
+            let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: false)
+            keyUp?.flags = .maskCommand
+
+            // 发送事件
+            keyDown?.post(tap: .cghidEventTap)
+            keyUp?.post(tap: .cghidEventTap)
         }
     }
 
@@ -1352,13 +1386,19 @@ class SearchPanelViewController: NSViewController {
         let point = gesture.location(in: memeCollectionView)
         guard let indexPath = memeCollectionView.indexPathForItem(at: point) else { return }
 
-        // 更新选中状态
-        memeSelectedRow = indexPath.item / memeColumnCount
-        memeSelectedCol = indexPath.item % memeColumnCount
-        updateMemeSelection()
-
-        // 复制到剪贴板
-        copySelectedMeme()
+        if isInFavoriteMode {
+            // 收藏模式
+            favoriteSelectedRow = indexPath.item / memeColumnCount
+            favoriteSelectedCol = indexPath.item % memeColumnCount
+            updateFavoriteSelection()
+            copySelectedFavorite()
+        } else if isInMemeMode {
+            // 表情包模式
+            memeSelectedRow = indexPath.item / memeColumnCount
+            memeSelectedCol = indexPath.item % memeColumnCount
+            updateMemeSelection()
+            copySelectedMeme()
+        }
     }
 
     /// 复制选中的表情包到剪贴板
@@ -1367,6 +1407,7 @@ class SearchPanelViewController: NSViewController {
         guard index < memeResults.count else { return }
 
         let meme = memeResults[index]
+        let settings = MemeSearchSettings.load()
 
         // 显示加载指示器
         showMemeLoadingIndicator()
@@ -1401,6 +1442,11 @@ class SearchPanelViewController: NSViewController {
                     }
 
                     PanelManager.shared.hidePanel()
+
+                    // 根据设置执行粘贴动作
+                    if settings.actionType == .copyAndPaste {
+                        self.performPasteAction()
+                    }
                 } else {
                     // 复制失败，显示提示
                     print("SearchPanelViewController: Failed to copy meme image")
