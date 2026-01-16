@@ -471,6 +471,13 @@ final class SearchEngine: ObservableObject {
         }
     }
 
+    /// 从索引中删除指定路径的文件（公开方法，用于文件被删除后更新索引）
+    func removeItem(at path: String) {
+        removeFromIndex(path: path)
+        // 同时清除可能包含该路径的缓存
+        searchCache.clear()
+    }
+
     // MARK: - Search
 
     /// Optimized synchronous search with caching and performance monitoring

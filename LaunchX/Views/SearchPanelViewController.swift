@@ -12,6 +12,10 @@ class SearchPanelViewController: NSViewController {
     private let divider = NSBox()
     private let noResultsLabel = NSTextField(labelWithString: "No results found.")
 
+    // 底部快捷键提示栏
+    private let shortcutHintView = NSView()
+    private let shortcutHintLabel = NSTextField(labelWithString: "")
+
     // IDE 项目模式 UI
     private let ideTagView = NSView()
     private let ideIconView = NSImageView()
@@ -123,6 +127,11 @@ class SearchPanelViewController: NSViewController {
     private let base64TextView = NSTextView()  // Base64 文本视图
     private let base64TextCopyButton = NSButton()
     private var base64CoderDebounceWorkItem: DispatchWorkItem?  // Base64 编码解码防抖
+
+    // 快捷操作模式状态
+    private var isInQuickActionsMode: Bool = false
+    private var quickActionsView: QuickActionsView?
+    private var currentQuickActionTarget: SearchResult?  // 当前操作的目标文件/文件夹
 
     // MARK: - Constants
     private let rowHeight: CGFloat = 44
@@ -1583,6 +1592,17 @@ class SearchPanelViewController: NSViewController {
         noResultsLabel.isHidden = true
         contentView.addSubview(noResultsLabel)
 
+        // 底部快捷键提示栏
+        shortcutHintView.translatesAutoresizingMaskIntoConstraints = false
+        shortcutHintView.isHidden = true
+        contentView.addSubview(shortcutHintView)
+
+        shortcutHintLabel.textColor = .tertiaryLabelColor
+        shortcutHintLabel.font = NSFont.systemFont(ofSize: 11)
+        shortcutHintLabel.alignment = .right
+        shortcutHintLabel.translatesAutoresizingMaskIntoConstraints = false
+        shortcutHintView.addSubview(shortcutHintLabel)
+
         // Constraints
         NSLayoutConstraint.activate([
             // IDE Tag View - 与搜索框垂直居中对齐，微调 +3 补偿视觉偏差
@@ -1622,7 +1642,17 @@ class SearchPanelViewController: NSViewController {
             scrollView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
             scrollView.topAnchor.constraint(equalTo: divider.bottomAnchor),
-            scrollView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: shortcutHintView.topAnchor),
+
+            // 底部快捷键提示栏
+            shortcutHintView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            shortcutHintView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            shortcutHintView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
+            shortcutHintView.heightAnchor.constraint(equalToConstant: 28),
+
+            shortcutHintLabel.trailingAnchor.constraint(
+                equalTo: shortcutHintView.trailingAnchor, constant: -16),
+            shortcutHintLabel.centerYAnchor.constraint(equalTo: shortcutHintView.centerYAnchor),
 
             // No results label
             noResultsLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
@@ -2596,6 +2626,35 @@ class SearchPanelViewController: NSViewController {
             // Simple 模式：有搜索内容且有结果时展开
             updateWindowHeight(expanded: hasQuery && hasResults)
         }
+
+        // 更新底部快捷键提示
+        updateShortcutHint()
+    }
+
+    /// 更新底部快捷键提示
+    private func updateShortcutHint() {
+        // 检查当前选中项是否支持快捷操作
+        guard results.indices.contains(selectedIndex) else {
+            shortcutHintView.isHidden = true
+            return
+        }
+
+        let item = results[selectedIndex]
+
+        // 跳过特殊类型
+        let isApp = item.path.hasSuffix(".app")
+        let supportsQuickActions =
+            !item.isSectionHeader && !isApp && !item.isWebLink
+            && !item.isUtility && !item.isSystemCommand && !item.isBookmark
+            && !item.isBookmarkEntry && !item.is2FACode && !item.is2FAEntry
+            && !item.isMemeEntry && !item.isFavoriteEntry
+
+        if supportsQuickActions && FileManager.default.fileExists(atPath: item.path) {
+            shortcutHintLabel.stringValue = "⌘K  快捷操作"
+            shortcutHintView.isHidden = false
+        } else {
+            shortcutHintView.isHidden = true
+        }
     }
 
     private func updateWindowHeight(expanded: Bool) {
@@ -2637,6 +2696,11 @@ class SearchPanelViewController: NSViewController {
     // MARK: - Keyboard Handling
 
     private func handleKeyEvent(_ event: NSEvent) -> NSEvent? {
+        // 快捷操作模式下优先处理
+        if isInQuickActionsMode {
+            return handleQuickActionsKeyEvent(event)
+        }
+
         // 检查输入法是否正在组合输入（如中文输入法）
         var isComposing = false
         if let fieldEditor = searchField.currentEditor() as? NSTextView {
@@ -2878,6 +2942,15 @@ class SearchPanelViewController: NSViewController {
                     }
                 }
             }
+            // Cmd+K - 快捷操作面板
+            if event.modifierFlags.contains(.command) && event.keyCode == 40 {
+                if isInQuickActionsMode {
+                    hideQuickActions()
+                } else {
+                    tryShowQuickActions()
+                }
+                return nil
+            }
             return event
         }
     }
@@ -2895,6 +2968,7 @@ class SearchPanelViewController: NSViewController {
                 IndexSet(integer: selectedIndex), byExtendingSelection: false)
             scrollToKeepSelectionCentered()
             tableView.reloadData()
+            updateShortcutHint()
         }
     }
 
@@ -2911,6 +2985,247 @@ class SearchPanelViewController: NSViewController {
                 IndexSet(integer: selectedIndex), byExtendingSelection: false)
             scrollToKeepSelectionCentered()
             tableView.reloadData()
+            updateShortcutHint()
+        }
+    }
+
+    // MARK: - Quick Actions Mode
+
+    /// 处理快捷操作模式下的键盘事件
+    private func handleQuickActionsKeyEvent(_ event: NSEvent) -> NSEvent? {
+        switch Int(event.keyCode) {
+        case 126:  // Up arrow
+            quickActionsView?.moveSelectionUp()
+            return nil
+        case 125:  // Down arrow
+            quickActionsView?.moveSelectionDown()
+            return nil
+        case 36:  // Return
+            quickActionsView?.executeSelectedAction()
+            return nil
+        case 53:  // Escape
+            hideQuickActions()
+            return nil
+        case 40:  // K (Cmd+K to toggle off)
+            if event.modifierFlags.contains(.command) {
+                hideQuickActions()
+                return nil
+            }
+            return event
+        default:
+            // Ctrl+P / Ctrl+N
+            if event.modifierFlags.contains(.control) {
+                if event.keyCode == 35 {  // P - 上
+                    quickActionsView?.moveSelectionUp()
+                    return nil
+                } else if event.keyCode == 45 {  // N - 下
+                    quickActionsView?.moveSelectionDown()
+                    return nil
+                }
+            }
+            return event
+        }
+    }
+
+    /// 尝试显示快捷操作面板
+    private func tryShowQuickActions() {
+        guard results.indices.contains(selectedIndex) else { return }
+        let item = results[selectedIndex]
+
+        // 跳过分组标题
+        guard !item.isSectionHeader else { return }
+
+        // 只对文件和文件夹显示（排除 .app、网页、工具等）
+        let isApp = item.path.hasSuffix(".app")
+        guard
+            !isApp && !item.isWebLink && !item.isUtility && !item.isSystemCommand
+                && !item.isBookmark && !item.isBookmarkEntry && !item.is2FACode && !item.is2FAEntry
+                && !item.isMemeEntry && !item.isFavoriteEntry
+        else {
+            return
+        }
+
+        // 验证路径存在
+        let fileExists = FileManager.default.fileExists(atPath: item.path)
+        guard fileExists else { return }
+
+        showQuickActions(for: item)
+    }
+
+    /// 显示快捷操作面板
+    private func showQuickActions(for item: SearchResult) {
+        // 如果已经显示，先隐藏
+        hideQuickActions()
+
+        currentQuickActionTarget = item
+        isInQuickActionsMode = true
+
+        // 创建快捷操作视图
+        let actionsView = QuickActionsView()
+        actionsView.delegate = self
+        actionsView.translatesAutoresizingMaskIntoConstraints = false
+
+        contentView.addSubview(actionsView)
+
+        // 定位到右下角
+        NSLayoutConstraint.activate([
+            actionsView.trailingAnchor.constraint(
+                equalTo: contentView.trailingAnchor, constant: -12),
+            actionsView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -12),
+        ])
+
+        quickActionsView = actionsView
+
+        // 动画显示
+        actionsView.alphaValue = 0
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.15
+            actionsView.animator().alphaValue = 1
+        }
+    }
+
+    /// 隐藏快捷操作面板
+    private func hideQuickActions() {
+        guard let actionsView = quickActionsView else { return }
+
+        NSAnimationContext.runAnimationGroup(
+            { context in
+                context.duration = 0.1
+                actionsView.animator().alphaValue = 0
+            },
+            completionHandler: { [weak self] in
+                actionsView.removeFromSuperview()
+                self?.quickActionsView = nil
+                self?.isInQuickActionsMode = false
+                self?.currentQuickActionTarget = nil
+            })
+    }
+
+    /// 执行快捷操作
+    private func executeQuickAction(_ action: QuickActionType) {
+        guard let target = currentQuickActionTarget else { return }
+
+        switch action {
+        case .openInTerminal:
+            quickActionOpenInTerminal(path: target.path, isDirectory: target.isDirectory)
+        case .showInFinder:
+            quickActionShowInFinder(path: target.path)
+        case .copyPath:
+            quickActionCopyPath(path: target.path)
+        case .airDrop:
+            quickActionAirDrop(path: target.path)
+        case .delete:
+            quickActionDelete(path: target.path, name: target.name)
+        }
+    }
+
+    /// cd 至此 - 在终端打开新窗口并 cd 到目标位置
+    private func quickActionOpenInTerminal(path: String, isDirectory: Bool) {
+        hideQuickActions()
+
+        let targetPath = isDirectory ? path : (path as NSString).deletingLastPathComponent
+
+        // 使用 osascript 命令行工具
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        task.arguments = [
+            "-e", "tell application \"Terminal\" to activate",
+            "-e",
+            "tell application \"Terminal\" to do script \"cd \\\"\(targetPath.replacingOccurrences(of: "\"", with: "\\\\\\\""))\\\"\"",
+        ]
+
+        do {
+            try task.run()
+        } catch {
+            print("Failed to run osascript: \(error)")
+        }
+
+        PanelManager.shared.hidePanel()
+    }
+
+    /// 在 Finder 中显示
+    private func quickActionShowInFinder(path: String) {
+        hideQuickActions()
+
+        let url = URL(fileURLWithPath: path)
+        NSWorkspace.shared.activateFileViewerSelecting([url])
+
+        PanelManager.shared.hidePanel()
+    }
+
+    /// 复制路径
+    private func quickActionCopyPath(path: String) {
+        hideQuickActions()
+
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(path, forType: .string)
+
+        PanelManager.shared.hidePanel()
+    }
+
+    /// 隔空投送
+    private func quickActionAirDrop(path: String) {
+        hideQuickActions()
+
+        let url = URL(fileURLWithPath: path)
+
+        if let service = NSSharingService(named: .sendViaAirDrop) {
+            if service.canPerform(withItems: [url]) {
+                service.perform(withItems: [url])
+            }
+        }
+    }
+
+    /// 删除（移到废纸篓）
+    private func quickActionDelete(path: String, name: String) {
+        // 显示确认对话框
+        let alert = NSAlert()
+        alert.messageText = "确定要删除「\(name)」吗？"
+        alert.informativeText = "此项目将被移到废纸篓。"
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "删除")
+        alert.addButton(withTitle: "取消")
+
+        // 设置删除按钮为红色
+        if let deleteButton = alert.buttons.first {
+            deleteButton.hasDestructiveAction = true
+        }
+
+        NSApp.activate(ignoringOtherApps: true)
+
+        let response = alert.runModal()
+
+        if response == .alertFirstButtonReturn {
+            // 用户确认删除
+            let url = URL(fileURLWithPath: path)
+            do {
+                try FileManager.default.trashItem(at: url, resultingItemURL: nil)
+                hideQuickActions()
+
+                // 从搜索索引中移除
+                searchEngine.removeItem(at: path)
+
+                // 从结果中移除该项
+                if let index = results.firstIndex(where: { $0.path == path }) {
+                    results.remove(at: index)
+                    if selectedIndex >= results.count {
+                        selectedIndex = max(0, results.count - 1)
+                    }
+                    tableView.reloadData()
+                }
+            } catch {
+                // 显示错误提示
+                let errorAlert = NSAlert()
+                errorAlert.messageText = "无法删除「\(name)」"
+                errorAlert.informativeText = error.localizedDescription
+                errorAlert.alertStyle = .critical
+                errorAlert.addButton(withTitle: "确定")
+                errorAlert.runModal()
+            }
+        } else {
+            // 用户取消，关闭快捷操作面板
+            hideQuickActions()
         }
     }
 
@@ -5298,5 +5613,17 @@ extension SearchPanelViewController: NSMenuDelegate {
         }
 
         copySelectedFavorite()
+    }
+}
+
+// MARK: - QuickActionsViewDelegate
+
+extension SearchPanelViewController: QuickActionsViewDelegate {
+    func quickActionsView(_ view: QuickActionsView, didSelectAction action: QuickActionType) {
+        executeQuickAction(action)
+    }
+
+    func quickActionsViewDidRequestDismiss(_ view: QuickActionsView) {
+        hideQuickActions()
     }
 }
