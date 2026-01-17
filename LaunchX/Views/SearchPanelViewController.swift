@@ -3125,14 +3125,46 @@ class SearchPanelViewController: NSViewController {
 
         let targetPath = isDirectory ? path : (path as NSString).deletingLastPathComponent
 
+        // 检查终端是否已在运行
+        let isRunning = NSWorkspace.shared.runningApplications.contains {
+            $0.bundleIdentifier == "com.apple.Terminal"
+        }
+
         // 使用 osascript 命令行工具
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-        task.arguments = [
-            "-e", "tell application \"Terminal\" to activate",
-            "-e",
-            "tell application \"Terminal\" to do script \"cd \\\"\(targetPath.replacingOccurrences(of: "\"", with: "\\\\\\\""))\\\"\"",
-        ]
+
+        let escapedPath = targetPath.replacingOccurrences(of: "\"", with: "\\\"")
+
+        let script: String
+        if isRunning {
+            script = """
+                tell application "Terminal"
+                    activate
+                    do script "cd " & quoted form of "\(escapedPath)"
+                end tell
+                """
+        } else {
+            // 如果终端未运行，它在启动时会自动打开一个窗口。
+            // 我们需要等待窗口出现，并直接在第一个窗口执行，以避免出现第二个窗口。
+            script = """
+                tell application "Terminal"
+                    activate
+                    set counter to 0
+                    repeat until (count of windows) > 0 or counter > 20
+                        delay 0.1
+                        set counter to counter + 1
+                    end repeat
+                    if (count of windows) > 0 then
+                        do script "cd " & quoted form of "\(escapedPath)" in window 1
+                    else
+                        do script "cd " & quoted form of "\(escapedPath)"
+                    end if
+                end tell
+                """
+        }
+
+        task.arguments = ["-e", script]
 
         do {
             try task.run()
