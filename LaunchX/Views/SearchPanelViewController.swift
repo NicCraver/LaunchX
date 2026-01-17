@@ -2282,6 +2282,9 @@ class SearchPanelViewController: NSViewController {
     func resetState() {
         // ⚠️ 重要：添加新的扩展模式时，必须在此处添加清理逻辑，否则面板隐藏后状态不会被重置
 
+        // 隐藏快捷操作面板
+        hideQuickActions()
+
         // 如果在 IDE 项目模式，先恢复普通模式 UI
         if isInIDEProjectMode {
             isInIDEProjectMode = false
