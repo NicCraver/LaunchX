@@ -55,8 +55,22 @@ final class MemoryIndex {
             self.lowerName = name.lowercased()
             self.path = path
             self.lowerFileName = name.lowercased()
-            self.isApp = false
-            self.isDirectory = false
+
+            // For local paths (aliases/tools), detect if it's an app or directory
+            if !isWebLink && !isUtility && !isSystemCommand {
+                // Remove trailing slash for reliable detection
+                let cleanPath =
+                    path.hasSuffix("/") && path.count > 1 ? String(path.dropLast()) : path
+                self.isApp = cleanPath.hasSuffix(".app")
+                var isDir: ObjCBool = false
+                self.isDirectory =
+                    FileManager.default.fileExists(atPath: cleanPath, isDirectory: &isDir)
+                    && isDir.boolValue
+            } else {
+                self.isApp = false
+                self.isDirectory = false
+            }
+
             self.isWebLink = isWebLink
             self.isUtility = isUtility
             self.isSystemCommand = isSystemCommand
