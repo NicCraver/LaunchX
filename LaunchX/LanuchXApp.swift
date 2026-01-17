@@ -41,6 +41,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var isStatusItemSetup = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // 首先检查是否运行在 Translocation 模式，这会影响更新和权限
+        checkTranslocation()
+
         setupSettingsOpenerWindow()
         observeHotKeyChanges()
 
@@ -73,6 +76,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // 3. 启动时静默检查更新 (不了不了，做一个不打扰的小朋友)
         // UpdateService.shared.checkForUpdates(manual: false)
+    }
+
+    /// 检查是否运行在 App Translocation 模式下
+    /// 如果没有苹果开发者账号签名，直接从下载文件夹运行会导致该模式，从而破坏自动更新逻辑
+    private func checkTranslocation() {
+        let bundlePath = Bundle.main.bundlePath
+        if bundlePath.contains("/AppTranslocation/") {
+            print("LaunchX: Detected App Translocation: \(bundlePath)")
+            let alert = NSAlert()
+            alert.messageText = "建议移动到应用程序文件夹"
+            alert.informativeText =
+                "检测到应用当前运行在系统随机路径（App Translocation）。这通常是因为应用未签名且直接在下载目录运行导致的。这会导致：\n\n1. 自动更新后权限（如辅助功能）会丢失\n2. 更新完成后可能无法自动重新打开应用\n\n请将 LaunchX 移动到“应用程序”(/Applications) 文件夹后重新打开。"
+            alert.alertStyle = .warning
+            alert.addButton(withTitle: "我知道了")
+            alert.runModal()
+        }
     }
 
     /// 创建隐藏窗口来承载 SettingsOpenerView
@@ -568,27 +587,30 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     // Intercept termination request (Cmd+Q) to keep the app running in the background
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        let isUpdating = UpdateService.shared.isPreparingForUpdate
         print(
-            "LaunchX: applicationShouldTerminate called, isQuitting: \(isQuitting), isPreparingForUpdate: \(UpdateService.shared.isPreparingForUpdate)"
+            "LaunchX: applicationShouldTerminate called, isQuitting: \(isQuitting), isUpdating: \(isUpdating)"
         )
 
-        // 1. 明确点击“退出”菜单或正在更新，允许退出
-        if isQuitting || UpdateService.shared.isPreparingForUpdate {
-            print("LaunchX: Explicit quit or update, terminating now")
+        // 1. 明确点击“退出”菜单或正在通过 Sparkle 更新，允许退出
+        if isQuitting || isUpdating {
+            print("LaunchX: Explicit quit or Sparkle update, allowing termination")
+            // 确保停止权限检查定时器，防止干扰退出
+            PermissionService.shared.stopPeriodicCheck()
             return .terminateNow
         }
 
-        // 2. 检查退出原因 (NSEvent.modifierFlags 无法在这里直接判断是否是 Cmd+Q)
-        // 但我们可以根据 NSApp.currentEvent 来判断触发来源
+        // 2. 检查退出原因
         let currentEvent = NSApp.currentEvent
         let isCommandQ =
             currentEvent?.type == .keyDown && currentEvent?.modifierFlags.contains(.command) == true
             && currentEvent?.charactersIgnoringModifiers == "q"
 
-        // 如果是 Cmd+Q 触发的，且当前已经授权（在后台运行模式），则拦截并隐藏
-        // 这样可以避免 Xcode 调试中断，同时符合常驻工具的习惯
-        if isCommandQ && PermissionService.shared.isAccessibilityGranted {
-            print("LaunchX: Intercepting Cmd+Q, performing safe hide")
+        // 如果是 Cmd+Q 触发的，且当前处于后台模式且已授权，则拦截并隐藏（符合菜单栏工具习惯）
+        if isCommandQ && NSApp.activationPolicy() == .accessory
+            && PermissionService.shared.isAccessibilityGranted
+        {
+            print("LaunchX: Intercepting Cmd+Q, hiding panel instead")
             DispatchQueue.main.async {
                 PanelManager.shared.hidePanel()
                 for window in NSApp.windows where window.isVisible {
@@ -599,9 +621,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return .terminateCancel
         }
 
-        // 3. 其他情况（如系统关机、重启、权限变更导致强制退出）允许退出
-        // 这解决了之前“授权后重启图标消失”的问题
+        // 3. 其他情况（如系统关机、用户在设置中授予权限后被要求重启）允许退出
         print("LaunchX: System initiated termination, allowing...")
+        PermissionService.shared.stopPeriodicCheck()
         return .terminateNow
     }
 }

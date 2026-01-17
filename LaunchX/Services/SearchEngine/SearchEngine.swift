@@ -485,15 +485,6 @@ final class SearchEngine: ObservableObject {
     func searchSync(text: String) -> [SearchResult] {
         guard !text.isEmpty else { return [] }
 
-        // Check cache first for frequently accessed queries
-        if let cachedResults = searchCache.getCachedResults(for: text) {
-            searchCache.recordAccess(for: text)  // Record access for learning
-            return performanceMonitor.measureSearch(
-                query: text,
-                cacheHit: true
-            ) { cachedResults }
-        }
-
         return performanceMonitor.measureSearch(query: text, cacheHit: false) {
             let config = searchConfig
 
@@ -511,9 +502,6 @@ final class SearchEngine: ObservableObject {
             // 添加书签搜索结果
             let bookmarkResults = searchBookmarks(query: text)
             results.append(contentsOf: bookmarkResults)
-
-            // Cache results if beneficial
-            searchCache.cacheResults(results, for: text, accessCount: 1)
 
             return results
         }
