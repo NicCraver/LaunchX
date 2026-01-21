@@ -44,17 +44,7 @@
 2. 打开 DMG 文件，将 LaunchX 拖入 Applications 文件夹
 3. 首次启动时，按照引导授予必要权限
 
-### 从源码编译
-
-```bash
-git clone https://github.com/twotwoba/LaunchX.git
-cd LaunchX
-open LaunchX.xcodeproj
-```
-
-在 Xcode 中选择你的开发团队，然后运行项目。
-
-## 权限说明
+### 权限说明
 
 LaunchX 需要以下系统权限才能正常工作：
 
