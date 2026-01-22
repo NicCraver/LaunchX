@@ -132,6 +132,14 @@ class SearchPanelViewController: NSViewController {
     private var calculatorResult: String? = nil
     private let calculatorResultLabel = NSTextField(labelWithString: "")
 
+    /// 统一清理计算器预览状态
+    private func clearCalculatorResult() {
+        calculatorResult = nil
+        calculatorResultLabel.isHidden = true
+        calculatorResultLabel.stringValue = ""
+        calculatorResultLabel.attributedStringValue = NSAttributedString(string: "")
+    }
+
     var isInQuickActionsMode: Bool = false
     private var quickActionsView: QuickActionsView?
     private var currentQuickActionTarget: SearchResult?  // 当前操作的目标文件/文件夹
@@ -564,6 +572,8 @@ class SearchPanelViewController: NSViewController {
 
     /// 更新书签模式 UI
     private func updateBookmarkModeUI() {
+        clearCalculatorResult()
+
         // 显示 IDE Tag View 作为书签标签
         ideTagView.isHidden = false
         let bookmarkIcon =
@@ -737,6 +747,8 @@ class SearchPanelViewController: NSViewController {
 
     /// 更新 2FA 模式 UI
     private func update2FAModeUI() {
+        clearCalculatorResult()
+
         // 显示 IDE Tag View 作为 2FA 标签
         ideTagView.isHidden = false
         let twoFAIcon =
@@ -908,6 +920,8 @@ class SearchPanelViewController: NSViewController {
 
     /// 更新表情包模式 UI
     private func updateMemeModeUI() {
+        clearCalculatorResult()
+
         // 显示标签
         ideTagView.isHidden = false
         let memeIcon =
@@ -1036,6 +1050,8 @@ class SearchPanelViewController: NSViewController {
 
     /// 更新收藏模式 UI
     private func updateFavoriteModeUI() {
+        clearCalculatorResult()
+
         // 显示标签
         ideTagView.isHidden = false
         let favoriteIcon =
@@ -1530,6 +1546,7 @@ class SearchPanelViewController: NSViewController {
             NSColor.controlAccentColor.withAlphaComponent(0.15).cgColor
         ideTagView.layer?.cornerRadius = 6
         ideTagView.translatesAutoresizingMaskIntoConstraints = false
+        ideTagView.setContentHuggingPriority(.required, for: .horizontal)
         ideTagView.isHidden = true
         contentView.addSubview(ideTagView)
 
@@ -1539,6 +1556,8 @@ class SearchPanelViewController: NSViewController {
         ideNameLabel.font = .systemFont(ofSize: 13, weight: .medium)
         ideNameLabel.textColor = .labelColor
         ideNameLabel.translatesAutoresizingMaskIntoConstraints = false
+        ideNameLabel.setContentHuggingPriority(.required, for: .horizontal)
+        ideNameLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
         ideTagView.addSubview(ideNameLabel)
 
         // Search icon (隐藏，不再显示)
@@ -1696,17 +1715,23 @@ class SearchPanelViewController: NSViewController {
         calculatorResultLabel.maximumNumberOfLines = 1
         calculatorResultLabel.drawsBackground = false
         calculatorResultLabel.translatesAutoresizingMaskIntoConstraints = false
-        // 确保不干扰鼠标事件
+        calculatorResultLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        calculatorResultLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         calculatorResultLabel.refusesFirstResponder = true
-        contentView.addSubview(calculatorResultLabel)
+        // 将计算器结果标签添加在 searchField 下层，确保不会遮挡 ideTagView
+        contentView.addSubview(calculatorResultLabel, positioned: .below, relativeTo: searchField)
 
         NSLayoutConstraint.activate([
             calculatorResultLabel.leadingAnchor.constraint(equalTo: searchField.leadingAnchor),
             // 使用基线对齐 (firstBaselineAnchor) 确保不同字重的文字在视觉上完美对齐
             calculatorResultLabel.firstBaselineAnchor.constraint(
                 equalTo: searchField.firstBaselineAnchor),
-            calculatorResultLabel.trailingAnchor.constraint(equalTo: searchField.trailingAnchor),
         ])
+
+        let calcTrailing = calculatorResultLabel.trailingAnchor.constraint(
+            equalTo: searchField.trailingAnchor)
+        calcTrailing.priority = .defaultHigh
+        calcTrailing.isActive = true
     }
 
     /// 设置表情包搜索 UI
@@ -2307,6 +2332,9 @@ class SearchPanelViewController: NSViewController {
     func resetState() {
         // ⚠️ 重要：添加新的扩展模式时，必须在此处添加清理逻辑，否则面板隐藏后状态不会被重置
 
+        // 清理计算器
+        clearCalculatorResult()
+
         // 隐藏快捷操作面板
         hideQuickActions()
 
@@ -2400,9 +2428,7 @@ class SearchPanelViewController: NSViewController {
         }
 
         // 重置计算器状态
-        calculatorResult = nil
-        calculatorResultLabel.isHidden = true
-        calculatorResultLabel.stringValue = ""
+        clearCalculatorResult()
 
         searchField.stringValue = ""
         selectedIndex = 0
@@ -2471,9 +2497,7 @@ class SearchPanelViewController: NSViewController {
             calculatorResultLabel.attributedStringValue = attributedString
             calculatorResultLabel.isHidden = false
         } else {
-            calculatorResult = nil
-            calculatorResultLabel.isHidden = true
-            calculatorResultLabel.stringValue = ""
+            clearCalculatorResult()
         }
     }
 
@@ -2982,6 +3006,15 @@ class SearchPanelViewController: NSViewController {
             openSelected()
             return nil
         default:
+            // 检查是否输入了 '=' 号且计算器有结果
+            if event.characters == "=" && calculatorResult != nil {
+                if let result = calculatorResult {
+                    searchField.stringValue = result
+                    clearCalculatorResult()
+                    performSearch(result)
+                    return nil
+                }
+            }
             // Ctrl+N / Ctrl+P / Ctrl+F / Ctrl+B
             if event.modifierFlags.contains(.control) {
                 if event.keyCode == 45 {  // N - 下
@@ -3043,6 +3076,16 @@ class SearchPanelViewController: NSViewController {
                 }
             }
 
+            // 检查是否输入了 '=' 号且计算器有结果
+            if event.characters == "=" && calculatorResult != nil {
+                if let result = calculatorResult {
+                    searchField.stringValue = result
+                    clearCalculatorResult()
+                    // 触发一次搜索
+                    performSearch(result)
+                    return nil
+                }
+            }
             return event
         }
     }
@@ -3410,6 +3453,8 @@ class SearchPanelViewController: NSViewController {
 
     /// 更新 IDE 模式 UI
     private func updateIDEModeUI() {
+        clearCalculatorResult()
+
         guard let app = currentIDEApp else { return }
 
         // 显示 IDE 标签
@@ -3509,6 +3554,8 @@ class SearchPanelViewController: NSViewController {
 
     /// 更新文件夹打开模式 UI
     private func updateFolderModeUI() {
+        clearCalculatorResult()
+
         guard let folder = currentFolder else { return }
 
         // 显示文件夹标签
@@ -3586,6 +3633,8 @@ class SearchPanelViewController: NSViewController {
 
     /// 更新网页直达 Query 模式 UI
     private func updateWebLinkQueryModeUI() {
+        clearCalculatorResult()
+
         guard let webLink = currentWebLinkResult else { return }
 
         // 复用 ideTagView 显示网页直达信息
@@ -3663,6 +3712,8 @@ class SearchPanelViewController: NSViewController {
 
     /// 清理所有扩展模式的 UI（用于切换到不同类型的扩展模式时）
     private func cleanupAllExtensionModes() {
+        clearCalculatorResult()
+
         // 清理 IDE 项目模式
         if isInIDEProjectMode {
             isInIDEProjectMode = false
@@ -3802,12 +3853,14 @@ class SearchPanelViewController: NSViewController {
 
     /// 更新实用工具模式 UI
     private func updateUtilityModeUI() {
-        guard let utility = currentUtilityResult else { return }
+        clearCalculatorResult()
+
+        guard let result = currentUtilityResult else { return }
 
         // 复用 ideTagView 显示实用工具信息
         ideTagView.isHidden = false
-        ideIconView.image = utility.icon
-        ideNameLabel.stringValue = utility.name
+        ideIconView.image = result.icon
+        ideNameLabel.stringValue = result.name
 
         // 切换 searchField 的 leading 约束
         searchFieldLeadingToIcon?.isActive = false
@@ -4820,6 +4873,13 @@ extension SearchPanelViewController: NSTextFieldDelegate {
     func controlTextDidChange(_ obj: Notification) {
         let query = searchField.stringValue
 
+        // 只要是在非普通模式，或者输入为空，就彻底隐藏计算器预览
+        if isInIDEProjectMode || isInFolderOpenMode || isInWebLinkQueryMode || isInUtilityMode
+            || isInBookmarkMode || isIn2FAMode || isInMemeMode || isInFavoriteMode || query.isEmpty
+        {
+            clearCalculatorResult()
+        }
+
         // IDE 项目模式：搜索项目
         if isInIDEProjectMode {
             performIDEProjectSearch(query)
@@ -4888,14 +4948,11 @@ extension SearchPanelViewController: NSTextFieldDelegate {
         // 普通模式：搜索应用和文件
         performSearch(query)
 
-        // 更新计算器预览
+        // 普通模式下更新计算器预览
         if !isInIDEProjectMode && !isInFolderOpenMode && !isInWebLinkQueryMode && !isInUtilityMode
             && !isInBookmarkMode && !isIn2FAMode && !isInMemeMode && !isInFavoriteMode
         {
             updateCalculatorPreview(query)
-        } else {
-            calculatorResult = nil
-            calculatorResultLabel.isHidden = true
         }
     }
 }
