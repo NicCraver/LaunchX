@@ -128,8 +128,11 @@ class SearchPanelViewController: NSViewController {
     private let base64TextCopyButton = NSButton()
     private var base64CoderDebounceWorkItem: DispatchWorkItem?  // Base64 编码解码防抖
 
-    // 快捷操作模式状态
-    private var isInQuickActionsMode: Bool = false
+    // 计算器状态
+    private var calculatorResult: String? = nil
+    private let calculatorResultLabel = NSTextField(labelWithString: "")
+
+    var isInQuickActionsMode: Bool = false
     private var quickActionsView: QuickActionsView?
     private var currentQuickActionTarget: SearchResult?  // 当前操作的目标文件/文件夹
 
@@ -1682,6 +1685,28 @@ class SearchPanelViewController: NSViewController {
 
         // 表情包搜索 UI 设置
         setupMemeSearchUI()
+
+        // 计算器结果预览设置
+        calculatorResultLabel.textColor = .secondaryLabelColor
+        calculatorResultLabel.font = searchField.font
+        calculatorResultLabel.isEditable = false
+        calculatorResultLabel.isSelectable = false
+        calculatorResultLabel.isBordered = false
+        calculatorResultLabel.lineBreakMode = .byTruncatingTail
+        calculatorResultLabel.maximumNumberOfLines = 1
+        calculatorResultLabel.drawsBackground = false
+        calculatorResultLabel.translatesAutoresizingMaskIntoConstraints = false
+        // 确保不干扰鼠标事件
+        calculatorResultLabel.refusesFirstResponder = true
+        contentView.addSubview(calculatorResultLabel)
+
+        NSLayoutConstraint.activate([
+            calculatorResultLabel.leadingAnchor.constraint(equalTo: searchField.leadingAnchor),
+            // 使用基线对齐 (firstBaselineAnchor) 确保不同字重的文字在视觉上完美对齐
+            calculatorResultLabel.firstBaselineAnchor.constraint(
+                equalTo: searchField.firstBaselineAnchor),
+            calculatorResultLabel.trailingAnchor.constraint(equalTo: searchField.trailingAnchor),
+        ])
     }
 
     /// 设置表情包搜索 UI
@@ -2374,6 +2399,11 @@ class SearchPanelViewController: NSViewController {
             setPlaceholder("搜索应用或文档...")
         }
 
+        // 重置计算器状态
+        calculatorResult = nil
+        calculatorResultLabel.isHidden = true
+        calculatorResultLabel.stringValue = ""
+
         searchField.stringValue = ""
         selectedIndex = 0
 
@@ -2412,7 +2442,42 @@ class SearchPanelViewController: NSViewController {
         cachedDefaultSearchWebLinks = nil
     }
 
-    private func performSearch(_ query: String) {
+    private func updateCalculatorPreview(_ query: String) {
+        if let result = CalculatorService.shared.evaluate(query) {
+            calculatorResult = result
+
+            let font = searchField.font ?? NSFont.systemFont(ofSize: 22)
+            let resultFont = NSFont.systemFont(ofSize: font.pointSize, weight: .medium)
+            let resultString = " = \(result)"
+            let fullString = query + resultString
+
+            let attributedString = NSMutableAttributedString(string: fullString)
+            let nsQuery = query as NSString
+            let nsFull = fullString as NSString
+
+            let fullRange = NSRange(location: 0, length: nsFull.length)
+            let queryRange = NSRange(location: 0, length: nsQuery.length)
+            let resultRange = NSRange(
+                location: nsQuery.length, length: (resultString as NSString).length)
+
+            attributedString.addAttribute(.font, value: font, range: fullRange)
+            attributedString.addAttribute(.font, value: resultFont, range: resultRange)
+            // Make the prefix transparent so it perfectly overlays the search field text
+            attributedString.addAttribute(.foregroundColor, value: NSColor.clear, range: queryRange)
+            // Show the result as a secondary/placeholder color
+            attributedString.addAttribute(
+                .foregroundColor, value: NSColor.secondaryLabelColor, range: resultRange)
+
+            calculatorResultLabel.attributedStringValue = attributedString
+            calculatorResultLabel.isHidden = false
+        } else {
+            calculatorResult = nil
+            calculatorResultLabel.isHidden = true
+            calculatorResultLabel.stringValue = ""
+        }
+    }
+
+    func performSearch(_ query: String) {
         guard !query.isEmpty else {
             selectedIndex = 0
 
@@ -2894,6 +2959,18 @@ class SearchPanelViewController: NSViewController {
             return nil
         case 36:  // Return
             if isComposing { return event }  // 让输入法确认输入
+
+            // 如果计算器有结果，回车复制结果
+            if let result = calculatorResult {
+                let pasteboard = NSPasteboard.general
+                pasteboard.clearContents()
+                pasteboard.setString(result, forType: .string)
+
+                // 复制后退出
+                PanelManager.shared.hidePanel()
+                return nil
+            }
+
             if isInMemeMode {
                 copySelectedMeme()
                 return nil
@@ -2954,6 +3031,18 @@ class SearchPanelViewController: NSViewController {
                 }
                 return nil
             }
+            // 检查是否输入了 '=' 号且计算器有结果
+            if event.characters == "=" && calculatorResult != nil {
+                if let result = calculatorResult {
+                    searchField.stringValue = result
+                    calculatorResult = nil
+                    calculatorResultLabel.isHidden = true
+                    // 触发一次搜索（如果是数字可能没有搜索结果，但逻辑保持一致）
+                    performSearch(result)
+                    return nil
+                }
+            }
+
             return event
         }
     }
@@ -3101,6 +3190,8 @@ class SearchPanelViewController: NSViewController {
                 self?.quickActionsView = nil
                 self?.isInQuickActionsMode = false
                 self?.currentQuickActionTarget = nil
+                self?.calculatorResult = nil
+                self?.calculatorResultLabel.stringValue = ""
             })
     }
 
@@ -4796,6 +4887,16 @@ extension SearchPanelViewController: NSTextFieldDelegate {
 
         // 普通模式：搜索应用和文件
         performSearch(query)
+
+        // 更新计算器预览
+        if !isInIDEProjectMode && !isInFolderOpenMode && !isInWebLinkQueryMode && !isInUtilityMode
+            && !isInBookmarkMode && !isIn2FAMode && !isInMemeMode && !isInFavoriteMode
+        {
+            updateCalculatorPreview(query)
+        } else {
+            calculatorResult = nil
+            calculatorResultLabel.isHidden = true
+        }
     }
 }
 
