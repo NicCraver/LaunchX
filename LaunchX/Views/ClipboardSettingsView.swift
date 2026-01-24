@@ -18,11 +18,12 @@ struct ClipboardSettingsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 // 标题行
-                HStack {
-                    Image("Extension_clipboard")
+                HStack(spacing: 12) {
+                    Image(systemName: "doc.on.clipboard")
                         .resizable()
                         .aspectRatio(contentMode: .fit)
-                        .frame(width: 24, height: 24)
+                        .frame(width: 20, height: 20)
+                        .foregroundColor(.blue)
                     Text("剪贴板")
                         .font(.headline)
                     Spacer()

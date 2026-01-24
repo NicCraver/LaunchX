@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Bucket
+   uuid = "0C8ECE9C-EA9F-4ADB-9E3C-8DAD7BE6316C"
+   type = "1"
+   version = "2.0">
+   <Breakpoints>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "F874800B-CFA4-4CA3-944E-FDD9D5DBD51E"
+            shouldBeEnabled = "Yes"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "LaunchX/Services/SearchEngine/MemoryIndex.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "602"
+            endingLineNumber = "602"
+            landmarkName = "searchFiles(lowerQuery:queryIsAscii:excludedPaths:excludedExtensions:excludedFolderNames:results:seenPaths:maxResults:)"
+            landmarkType = "7">
+            <Locations>
+               <Location
+                  uuid = "F874800B-CFA4-4CA3-944E-FDD9D5DBD51E - 5062495d529ad364"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "LaunchX.MemoryIndex.searchFiles(lowerQuery: Swift.String, queryIsAscii: Swift.Bool, excludedPaths: Swift.Array&lt;Swift.String&gt;, excludedExtensions: Swift.Set&lt;Swift.String&gt;, excludedFolderNames: Swift.Set&lt;Swift.String&gt;, results: inout Swift.Array&lt;LaunchX.MemoryIndex.SearchItem&gt;, seenPaths: inout Swift.Set&lt;Swift.String&gt;, maxResults: Swift.Int) -&gt; ()"
+                  moduleName = "LaunchX.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/eric/dev/mac_app/LaunchX/LaunchX/Services/SearchEngine/MemoryIndex.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "603"
+                  endingLineNumber = "603">
+               </Location>
+               <Location
+                  uuid = "F874800B-CFA4-4CA3-944E-FDD9D5DBD51E - 7ea9aa09173b2cc2"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "closure #1 (Swift.String) -&gt; Swift.Bool in LaunchX.MemoryIndex.searchFiles(lowerQuery: Swift.String, queryIsAscii: Swift.Bool, excludedPaths: Swift.Array&lt;Swift.String&gt;, excludedExtensions: Swift.Set&lt;Swift.String&gt;, excludedFolderNames: Swift.Set&lt;Swift.String&gt;, results: inout Swift.Array&lt;LaunchX.MemoryIndex.SearchItem&gt;, seenPaths: inout Swift.Set&lt;Swift.String&gt;, maxResults: Swift.Int) -&gt; ()"
+                  moduleName = "LaunchX.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/eric/dev/mac_app/LaunchX/LaunchX/Services/SearchEngine/MemoryIndex.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "603"
+                  endingLineNumber = "603">
+               </Location>
+            </Locations>
+         </BreakpointContent>
+      </BreakpointProxy>
+   </Breakpoints>
+</Bucket>

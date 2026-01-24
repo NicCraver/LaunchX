@@ -21,11 +21,12 @@ struct SnippetSettingsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // 标题行
-            HStack {
-                Image("Extension_snippet")
+            HStack(spacing: 12) {
+                Image(systemName: "chevron.left.forwardslash.chevron.right")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
-                    .frame(width: 24, height: 24)
+                    .frame(width: 20, height: 20)
+                    .foregroundColor(.orange)
                 Text("Snippet")
                     .font(.headline)
                 Spacer()

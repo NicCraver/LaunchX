@@ -30,24 +30,32 @@ enum AdvancedExtensionType: String, CaseIterable, Identifiable {
 
     /// 资源图标名称（返回 nil 表示使用 SF Symbol）
     var iconImageName: String? {
-        switch self {
-        case .bookmarkSearch: return "Extension_bookmark"
-        // case .terminalCommand: return "Extension_terminal"
-        case .clipboard: return "Extension_clipboard"
-        case .snippet: return "Extension_snippet"
-        case .twoFactorAuth: return "Extension_2FA"
-        case .aiTranslate: return "Extension_ai_translate"
-        case .memeSearch: return nil  // 使用 SF Symbol
-        case .memeFavorite: return nil  // 使用 SF Symbol
-        }
+        return nil  // 全部使用 SF Symbol 以保持风格统一
     }
 
     /// SF Symbol 名称（用于没有自定义图标的扩展）
-    var sfSymbolName: String? {
+    var sfSymbolName: String {
         switch self {
+        case .clipboard: return "doc.on.clipboard"
+        case .snippet: return "chevron.left.forwardslash.chevron.right"
+        case .aiTranslate: return "character.bubble.fill"
+        case .bookmarkSearch: return "bookmark.fill"
+        case .twoFactorAuth: return "lock.shield.fill"
         case .memeSearch: return "face.smiling"
         case .memeFavorite: return "star.fill"
-        default: return nil
+        }
+    }
+
+    /// 图标颜色
+    var iconColor: Color {
+        switch self {
+        case .clipboard: return .blue
+        case .snippet: return .orange
+        case .aiTranslate: return .indigo
+        case .bookmarkSearch: return .pink
+        case .twoFactorAuth: return .green
+        case .memeSearch: return .orange
+        case .memeFavorite: return .yellow
         }
     }
 }
@@ -76,9 +84,7 @@ struct AdvancedExtensionsView: View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(AdvancedExtensionType.availableCases) { type in
                 ExtensionSidebarItem(
-                    iconImageName: type.iconImageName,
-                    sfSymbolName: type.sfSymbolName,
-                    title: type.rawValue,
+                    type: type,
                     isSelected: selectedExtension == type
                 ) {
                     selectedExtension = type
@@ -161,11 +167,12 @@ struct BookmarkSearchSettingsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 // 标题行：图标 + 名称 + 开关（所有高级扩展都使用这种统一样式）
-                HStack {
-                    Image("Extension_bookmark")
+                HStack(spacing: 12) {
+                    Image(systemName: AdvancedExtensionType.bookmarkSearch.sfSymbolName)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
-                        .frame(width: 24, height: 24)
+                        .frame(width: 20, height: 20)
+                        .foregroundColor(AdvancedExtensionType.bookmarkSearch.iconColor)
                     Text("搜索书签")
                         .font(.headline)
                     Spacer()
@@ -556,26 +563,33 @@ struct BrowserToggleRow: View {
 
 struct ExtensionSidebarItem: View {
     let iconImageName: String?
-    let sfSymbolName: String?
+    let sfSymbolName: String
+    let iconColor: Color
     let title: String
     let isSelected: Bool
     let action: () -> Void
 
+    init(
+        type: AdvancedExtensionType,
+        isSelected: Bool,
+        action: @escaping () -> Void
+    ) {
+        self.iconImageName = type.iconImageName
+        self.sfSymbolName = type.sfSymbolName
+        self.iconColor = type.iconColor
+        self.title = type.rawValue
+        self.isSelected = isSelected
+        self.action = action
+    }
+
     var body: some View {
         Button(action: action) {
             HStack(spacing: 8) {
-                if let imageName = iconImageName {
-                    Image(imageName)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 16, height: 16)
-                } else if let symbolName = sfSymbolName {
-                    Image(systemName: symbolName)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 16, height: 16)
-                        .foregroundColor(.orange)
-                }
+                Image(systemName: sfSymbolName)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 14, height: 14)
+                    .foregroundColor(iconColor)
                 Text(title)
                     .foregroundColor(.primary)
                 Spacer()
@@ -606,11 +620,12 @@ struct TwoFactorAuthSettingsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 // 标题行：图标 + 名称 + 开关（所有高级扩展都使用这种统一样式）
-                HStack {
-                    Image("Extension_2FA")
+                HStack(spacing: 12) {
+                    Image(systemName: AdvancedExtensionType.twoFactorAuth.sfSymbolName)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
-                        .frame(width: 24, height: 24)
+                        .frame(width: 20, height: 20)
+                        .foregroundColor(AdvancedExtensionType.twoFactorAuth.iconColor)
                     Text("2FA 短信")
                         .font(.headline)
                     Spacer()

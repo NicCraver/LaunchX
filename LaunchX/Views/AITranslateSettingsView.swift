@@ -18,11 +18,12 @@ struct AITranslateSettingsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 // 标题行
-                HStack {
-                    Image("Extension_ai_translate")
+                HStack(spacing: 12) {
+                    Image(systemName: "character.bubble.fill")
                         .resizable()
                         .aspectRatio(contentMode: .fit)
-                        .frame(width: 24, height: 24)
+                        .frame(width: 20, height: 20)
+                        .foregroundColor(.indigo)
                     Text("AI 翻译")
                         .font(.headline)
                     Spacer()
