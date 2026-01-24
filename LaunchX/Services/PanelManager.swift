@@ -30,7 +30,7 @@ class PanelManager: NSObject, NSWindowDelegate {
     private func calculatePanelTopY() -> CGFloat {
         let screenRect = NSScreen.main?.frame ?? .zero
         // 以展开后的高度计算中心，返回窗口顶部的Y坐标
-        return screenRect.midY + panelExpandedHeight / 2 + 100
+        return screenRect.midY + panelExpandedHeight / 2 + 50
     }
 
     /// Must be called once after app launches
@@ -83,7 +83,7 @@ class PanelManager: NSObject, NSWindowDelegate {
         let screenFrame = currentScreen?.frame ?? .zero
 
         // 保持窗口顶部位置一致（基于展开后高度计算）
-        let topY = screenFrame.midY + panelExpandedHeight / 2 + 100
+        let topY = screenFrame.midY + panelExpandedHeight / 2 + 50
         let currentHeight = panel.frame.height
         let originY = topY - currentHeight
         let originX = screenFrame.midX - panelWidth / 2
