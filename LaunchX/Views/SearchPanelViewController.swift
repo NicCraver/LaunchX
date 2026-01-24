@@ -1708,19 +1708,15 @@ class SearchPanelViewController: NSViewController {
             // Divider
             divider.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
             divider.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-            divider.topAnchor.constraint(
-                equalTo: contentView.topAnchor, constant: headerHeight),
 
             // Scroll view
             scrollView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
             scrollView.topAnchor.constraint(equalTo: divider.bottomAnchor),
-            scrollView.bottomAnchor.constraint(equalTo: shortcutHintView.topAnchor),
 
             // 底部快捷键提示栏
             shortcutHintView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
             shortcutHintView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-            shortcutHintView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
             shortcutHintView.heightAnchor.constraint(equalToConstant: 28),
 
             shortcutHintLabel.trailingAnchor.constraint(
@@ -1729,12 +1725,33 @@ class SearchPanelViewController: NSViewController {
 
             // No results label
             noResultsLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
-            noResultsLabel.topAnchor.constraint(equalTo: divider.bottomAnchor, constant: 20),
         ])
+
+        // 为可能在简约模式下产生冲突的约束设置优先级
+        let dividerTopConstraint = divider.topAnchor.constraint(
+            equalTo: contentView.topAnchor, constant: headerHeight)
+        dividerTopConstraint.priority = .init(999)  // 略低于强制约束，允许在 80px 高度时微调
+        dividerTopConstraint.isActive = true
+
+        let noResultsTopConstraint = noResultsLabel.topAnchor.constraint(
+            equalTo: divider.bottomAnchor, constant: 20)
+        noResultsTopConstraint.priority = .defaultLow
+        noResultsTopConstraint.isActive = true
 
         // Define main height constraint
         contentHeightConstraint = contentView.heightAnchor.constraint(equalToConstant: headerHeight)
         contentHeightConstraint?.isActive = true
+
+        // 为 ScrollView 和底部提示栏设置低优先级的垂直约束，解决简约模式下的高度冲突
+        let scrollBottomConstraint = scrollView.bottomAnchor.constraint(
+            equalTo: shortcutHintView.topAnchor)
+        scrollBottomConstraint.priority = .defaultLow
+        scrollBottomConstraint.isActive = true
+
+        let bottomConstraint = shortcutHintView.bottomAnchor.constraint(
+            equalTo: contentView.bottomAnchor)
+        bottomConstraint.priority = .defaultLow  // 允许在高度受限时被压缩/隐藏
+        bottomConstraint.isActive = true
 
         // 创建并保存 searchField 的 leading 约束
         // 默认直接从左边开始（无搜索图标）
@@ -2762,6 +2779,10 @@ class SearchPanelViewController: NSViewController {
         }
 
         // Update window height
+        let isExpanded =
+            (defaultWindowMode == "full" || isIndependentViewMode)
+            || (hasQuery && hasResults)
+
         if defaultWindowMode == "full" || isIndependentViewMode {
             // Full 模式或独立视图模式：始终展开
             updateWindowHeight(expanded: true)
@@ -2771,7 +2792,12 @@ class SearchPanelViewController: NSViewController {
         }
 
         // 更新底部快捷键提示
-        updateShortcutHint()
+        if isExpanded {
+            updateShortcutHint()
+        } else {
+            // 简约模式收起时，隐藏底部提示栏以避免约束冲突和视觉重叠
+            shortcutHintView.isHidden = true
+        }
     }
 
     /// 更新底部快捷键提示
