@@ -49,6 +49,7 @@ struct SettingsView: View {
 struct GeneralSettingsView: View {
     // Window Mode persistence
     @AppStorage("defaultWindowMode") private var windowModeString: String = "full"
+    @AppStorage("enableLiquidGlass") private var enableLiquidGlass: Bool = true
 
     // Launch at Login state
     @State private var isLaunchAtLoginEnabled: Bool = false
@@ -188,6 +189,23 @@ struct GeneralSettingsView: View {
                     }
                     .padding(.top, 5)
                 }
+
+                if #available(macOS 26.0, *) {
+                    HStack(spacing: 12) {
+                        Text("`:")
+                            .frame(width: 85, alignment: .leading)
+                        Toggle("开启", isOn: $enableLiquidGlass)
+                            .toggleStyle(CheckboxToggleStyle())
+                            .onChange(of: enableLiquidGlass) { _, _ in
+                                NotificationCenter.default.post(
+                                    name: NSNotification.Name("enableLiquidGlassDidChange"),
+                                    object: nil)
+                            }
+                        Spacer()
+                    }
+                    .padding(.top, 4)
+                }
+
                 Divider()
                     .padding(.vertical, 4)
 

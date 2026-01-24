@@ -7,7 +7,7 @@ class AITranslatePanelViewController: NSViewController {
 
     // MARK: - UI 组件
 
-    private var containerView: NSVisualEffectView?
+    var containerView: NSView?
     private var titleBar: NSView?
     private var titleLabel: NSTextField?
 
@@ -62,6 +62,25 @@ class AITranslatePanelViewController: NSViewController {
         setupUI()
         setupBindings()
         loadSettings()
+
+        // 监听液态玻璃设置变化
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleLiquidGlassSettingDidChange),
+            name: NSNotification.Name("enableLiquidGlassDidChange"),
+            object: nil
+        )
+    }
+
+    /// 处理液态玻璃设置变化
+    @objc private func handleLiquidGlassSettingDidChange() {
+        let useLiquidGlass =
+            UserDefaults.standard.object(forKey: "enableLiquidGlass") as? Bool ?? true
+
+        // 动态更新毛玻璃材质以实现即时生效
+        if let visualEffectView = self.containerView as? NSVisualEffectView {
+            visualEffectView.material = useLiquidGlass ? .sidebar : .popover
+        }
     }
 
     deinit {
@@ -78,14 +97,32 @@ class AITranslatePanelViewController: NSViewController {
     // MARK: - UI 设置
 
     private func setupUI() {
-        // 容器视图（毛玻璃效果）
-        let container = NSVisualEffectView(frame: view.bounds)
+        let useLiquidGlass =
+            UserDefaults.standard.object(forKey: "enableLiquidGlass") as? Bool ?? true
+        let container: NSView
+
+        if #available(macOS 26.0, *), useLiquidGlass {
+            let glassEffectView = NSGlassEffectView()
+            glassEffectView.style = .clear
+            glassEffectView.tintColor = NSColor(named: "PanelBackgroundColor")
+            glassEffectView.wantsLayer = true
+            glassEffectView.layer?.cornerRadius = 20
+            glassEffectView.layer?.masksToBounds = true
+            container = glassEffectView
+        } else {
+            // 容器视图（毛玻璃效果）
+            let visualEffectView = NSVisualEffectView(frame: view.bounds)
+            // 如果开启了液态玻璃但在旧版本系统，使用更透明的 material 模拟
+            visualEffectView.material = useLiquidGlass ? .sidebar : .popover
+            visualEffectView.blendingMode = .behindWindow
+            visualEffectView.state = .active
+            visualEffectView.wantsLayer = true
+            visualEffectView.layer?.cornerRadius = 20
+            container = visualEffectView
+        }
+
+        container.frame = view.bounds
         container.autoresizingMask = [.width, .height]
-        container.material = .popover
-        container.blendingMode = .behindWindow
-        container.state = .active
-        container.wantsLayer = true
-        container.layer?.cornerRadius = 20
         view.addSubview(container)
         self.containerView = container
 

@@ -5,6 +5,8 @@ class SearchPanelViewController: NSViewController {
 
     // MARK: - UI Components
     private var contentView: NSView!  // 用于添加子视图的内容视图
+    private var visualEffectView: NSVisualEffectView?
+    private var glassEffectView: NSView?
     private let searchField = NSTextField()
     private let searchIcon = NSImageView()
     private let tableView = NSTableView()
@@ -165,25 +167,11 @@ class SearchPanelViewController: NSViewController {
     // MARK: - Lifecycle
 
     override func loadView() {
-        // macOS 26+ 使用 Liquid Glass 效果
-        if #available(macOS 26.0, *) {
-            let glassEffectView = NSGlassEffectView()
-            glassEffectView.style = .clear
-            glassEffectView.tintColor = NSColor(named: "PanelBackgroundColor")
-            glassEffectView.wantsLayer = true
-            glassEffectView.layer?.cornerRadius = 26
-            glassEffectView.layer?.masksToBounds = true
-            self.view = glassEffectView
-            self.contentView = glassEffectView  // macOS 26+ 直接使用 glassEffectView
-            return
-        }
-
-        // macOS 26 以下使用传统的 NSVisualEffectView
-        // 使用容器视图来分离阴影层和内容层，解决圆角裁剪与阴影显示的冲突
         let containerView = NSView()
         containerView.wantsLayer = true
+        self.view = containerView
 
-        // 阴影层 - 用于显示阴影
+        // 1. 阴影层 - 用于显示外部阴影
         let shadowLayer = CALayer()
         shadowLayer.backgroundColor = NSColor.black.withAlphaComponent(0.01).cgColor
         shadowLayer.cornerRadius = 26
@@ -192,37 +180,70 @@ class SearchPanelViewController: NSViewController {
         shadowLayer.shadowOffset = CGSize(width: 0, height: -4)
         shadowLayer.shadowRadius = 20
         containerView.layer?.addSublayer(shadowLayer)
-
-        // 内容视图 - NSVisualEffectView
-        let visualEffectView = NSVisualEffectView()
-        visualEffectView.material = .popover
-        visualEffectView.blendingMode = .behindWindow
-        visualEffectView.state = .active
-        visualEffectView.wantsLayer = true
-        visualEffectView.layer?.cornerRadius = 26
-        visualEffectView.layer?.cornerCurve = .continuous
-        visualEffectView.layer?.masksToBounds = true  // 正确裁剪圆角
-
-        // 添加边框
-        visualEffectView.layer?.borderWidth = 1
-        visualEffectView.layer?.borderColor = NSColor.white.withAlphaComponent(0.15).cgColor
-
-        visualEffectView.translatesAutoresizingMaskIntoConstraints = false
-        containerView.addSubview(visualEffectView)
-
-        // 保存阴影层引用，用于布局更新
         containerView.layer?.setValue(shadowLayer, forKey: "shadowLayer")
 
-        // 设置约束让 visualEffectView 填充 containerView
+        // 2. 创建内容承载视图 (contentView)
+        // 所有的搜索框、列表等都放在这个层，背景切换时不影响内容
+        let contentWrapper = NSView()
+        contentWrapper.translatesAutoresizingMaskIntoConstraints = false
+        containerView.addSubview(contentWrapper)
+        self.contentView = contentWrapper
+
+        // 3. 预创建两种效果视图，根据设置切换可见性
+        setupEffectViews(in: containerView)
+
         NSLayoutConstraint.activate([
-            visualEffectView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
-            visualEffectView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
-            visualEffectView.topAnchor.constraint(equalTo: containerView.topAnchor),
-            visualEffectView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor),
+            contentWrapper.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
+            contentWrapper.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
+            contentWrapper.topAnchor.constraint(equalTo: containerView.topAnchor),
+            contentWrapper.bottomAnchor.constraint(equalTo: containerView.bottomAnchor),
         ])
 
-        self.view = containerView
-        self.contentView = visualEffectView  // 子视图应添加到 visualEffectView
+        // 初始同步状态
+        handleLiquidGlassSettingDidChange()
+    }
+
+    private func setupEffectViews(in container: NSView) {
+        // 创建传统毛玻璃层
+        let vev = NSVisualEffectView()
+        vev.blendingMode = .behindWindow
+        vev.state = .active
+        vev.wantsLayer = true
+        vev.layer?.cornerRadius = 26
+        vev.layer?.cornerCurve = .continuous
+        vev.layer?.masksToBounds = true
+        vev.layer?.borderWidth = 1
+        vev.layer?.borderColor = NSColor.white.withAlphaComponent(0.15).cgColor
+        vev.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(vev, positioned: .below, relativeTo: contentView)
+        self.visualEffectView = vev
+
+        // 在 macOS 26+ 上预创建液态玻璃层
+        if #available(macOS 26.0, *) {
+            let gev = NSGlassEffectView()
+            gev.style = .clear
+            gev.tintColor = NSColor(named: "PanelBackgroundColor")
+            gev.wantsLayer = true
+            gev.layer?.cornerRadius = 26
+            gev.layer?.masksToBounds = true
+            gev.translatesAutoresizingMaskIntoConstraints = false
+            container.addSubview(gev, positioned: .below, relativeTo: contentView)
+            self.glassEffectView = gev
+
+            NSLayoutConstraint.activate([
+                gev.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+                gev.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+                gev.topAnchor.constraint(equalTo: container.topAnchor),
+                gev.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            ])
+        }
+
+        NSLayoutConstraint.activate([
+            vev.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            vev.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            vev.topAnchor.constraint(equalTo: container.topAnchor),
+            vev.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+        ])
     }
 
     override func viewDidLoad() {
@@ -329,6 +350,36 @@ class SearchPanelViewController: NSViewController {
             name: .toolsConfigDidChange,
             object: nil
         )
+
+        // 监听液态玻璃设置变化
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleLiquidGlassSettingDidChange),
+            name: NSNotification.Name("enableLiquidGlassDidChange"),
+            object: nil
+        )
+    }
+
+    /// 处理液态玻璃设置变化
+    @objc private func handleLiquidGlassSettingDidChange() {
+        let useLiquidGlass =
+            UserDefaults.standard.object(forKey: "enableLiquidGlass") as? Bool ?? true
+
+        if #available(macOS 26.0, *) {
+            // macOS 26+：切换 GlassView 和 VisualEffectView 的显示
+            glassEffectView?.isHidden = !useLiquidGlass
+            visualEffectView?.isHidden = useLiquidGlass
+
+            // 如果切回到传统模式，确保材质正确
+            if !useLiquidGlass {
+                visualEffectView?.material = .popover
+            }
+        } else {
+            // 旧版本系统：仅使用 VisualEffectView，通过切换材质模拟
+            glassEffectView?.isHidden = true
+            visualEffectView?.isHidden = false
+            visualEffectView?.material = useLiquidGlass ? .sidebar : .popover
+        }
     }
 
     /// 处理工具配置变化

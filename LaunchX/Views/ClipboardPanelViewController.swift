@@ -78,20 +78,37 @@ class ClipboardPanelViewController: NSViewController {
         containerView.layer?.cornerRadius = 20
         containerView.layer?.masksToBounds = true
 
-        // 创建毛玻璃效果视图
-        let visualEffectView = NSVisualEffectView()
-        visualEffectView.material = .popover
-        visualEffectView.blendingMode = .behindWindow
-        visualEffectView.state = .active
-        visualEffectView.translatesAutoresizingMaskIntoConstraints = false
-        containerView.addSubview(visualEffectView)
+        let useLiquidGlass =
+            UserDefaults.standard.object(forKey: "enableLiquidGlass") as? Bool ?? true
+        let effectView: NSView
 
-        // 让毛玻璃视图填充容器
+        if #available(macOS 26.0, *), useLiquidGlass {
+            let glassEffectView = NSGlassEffectView()
+            glassEffectView.style = .clear
+            glassEffectView.tintColor = NSColor(named: "PanelBackgroundColor")
+            glassEffectView.wantsLayer = true
+            glassEffectView.layer?.cornerRadius = 20
+            glassEffectView.layer?.masksToBounds = true
+            effectView = glassEffectView
+        } else {
+            // 创建毛玻璃效果视图
+            let visualEffectView = NSVisualEffectView()
+            // 如果开启了液态玻璃但在旧版本系统，使用更透明的 material 模拟
+            visualEffectView.material = useLiquidGlass ? .sidebar : .popover
+            visualEffectView.blendingMode = .behindWindow
+            visualEffectView.state = .active
+            effectView = visualEffectView
+        }
+
+        effectView.translatesAutoresizingMaskIntoConstraints = false
+        containerView.addSubview(effectView)
+
+        // 让视图填充容器
         NSLayoutConstraint.activate([
-            visualEffectView.topAnchor.constraint(equalTo: containerView.topAnchor),
-            visualEffectView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor),
-            visualEffectView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
-            visualEffectView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
+            effectView.topAnchor.constraint(equalTo: containerView.topAnchor),
+            effectView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor),
+            effectView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
+            effectView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
         ])
 
         self.view = containerView
@@ -103,6 +120,28 @@ class ClipboardPanelViewController: NSViewController {
         setupBindings()
         loadSettings()
         loadItems()
+
+        // 监听液态玻璃设置变化
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleLiquidGlassSettingDidChange),
+            name: NSNotification.Name("enableLiquidGlassDidChange"),
+            object: nil
+        )
+    }
+
+    /// 处理液态玻璃设置变化
+    @objc private func handleLiquidGlassSettingDidChange() {
+        let useLiquidGlass =
+            UserDefaults.standard.object(forKey: "enableLiquidGlass") as? Bool ?? true
+
+        // 动态更新毛玻璃材质以实现即时生效
+        // 查找 subviews 中的 NSVisualEffectView
+        if let visualEffectView = view.subviews.first(where: { $0 is NSVisualEffectView })
+            as? NSVisualEffectView
+        {
+            visualEffectView.material = useLiquidGlass ? .sidebar : .popover
+        }
     }
 
     deinit {
