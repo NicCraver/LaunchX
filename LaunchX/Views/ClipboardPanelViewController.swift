@@ -47,6 +47,8 @@ class ClipboardPanelViewController: NSViewController {
     // MARK: - UI 组件
 
     private var searchField: ClipboardSearchField!
+    private var visualEffectView: NSVisualEffectView?
+    private var glassEffectView: NSView?
     private let filterButton = NSButton()
     private let filterMenu = NSMenu()
     private let clearButton = NSButton()
@@ -78,37 +80,42 @@ class ClipboardPanelViewController: NSViewController {
         containerView.layer?.cornerRadius = 20
         containerView.layer?.masksToBounds = true
 
-        let useLiquidGlass =
-            UserDefaults.standard.object(forKey: "enableLiquidGlass") as? Bool ?? true
-        let effectView: NSView
+        // 1. 创建传统毛玻璃层
+        let vev = NSVisualEffectView()
+        vev.blendingMode = .behindWindow
+        vev.state = .active
+        vev.wantsLayer = true
+        vev.layer?.cornerRadius = 20
+        vev.layer?.masksToBounds = true
+        vev.translatesAutoresizingMaskIntoConstraints = false
+        containerView.addSubview(vev)
+        self.visualEffectView = vev
 
-        if #available(macOS 26.0, *), useLiquidGlass {
-            let glassEffectView = NSGlassEffectView()
-            glassEffectView.style = .clear
-            glassEffectView.tintColor = NSColor(named: "PanelBackgroundColor")
-            glassEffectView.wantsLayer = true
-            glassEffectView.layer?.cornerRadius = 20
-            glassEffectView.layer?.masksToBounds = true
-            effectView = glassEffectView
-        } else {
-            // 创建毛玻璃效果视图
-            let visualEffectView = NSVisualEffectView()
-            // 如果开启了液态玻璃但在旧版本系统，使用更透明的 material 模拟
-            visualEffectView.material = useLiquidGlass ? .sidebar : .popover
-            visualEffectView.blendingMode = .behindWindow
-            visualEffectView.state = .active
-            effectView = visualEffectView
+        // 2. 在 macOS 26+ 上预创建液态玻璃层
+        if #available(macOS 26.0, *) {
+            let gev = NSGlassEffectView()
+            gev.style = .clear
+            gev.tintColor = NSColor(named: "PanelBackgroundColor")
+            gev.wantsLayer = true
+            gev.layer?.cornerRadius = 20
+            gev.layer?.masksToBounds = true
+            gev.translatesAutoresizingMaskIntoConstraints = false
+            containerView.addSubview(gev)
+            self.glassEffectView = gev
+
+            NSLayoutConstraint.activate([
+                gev.topAnchor.constraint(equalTo: containerView.topAnchor),
+                gev.bottomAnchor.constraint(equalTo: containerView.bottomAnchor),
+                gev.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
+                gev.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
+            ])
         }
 
-        effectView.translatesAutoresizingMaskIntoConstraints = false
-        containerView.addSubview(effectView)
-
-        // 让视图填充容器
         NSLayoutConstraint.activate([
-            effectView.topAnchor.constraint(equalTo: containerView.topAnchor),
-            effectView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor),
-            effectView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
-            effectView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
+            vev.topAnchor.constraint(equalTo: containerView.topAnchor),
+            vev.bottomAnchor.constraint(equalTo: containerView.bottomAnchor),
+            vev.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
+            vev.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
         ])
 
         self.view = containerView
@@ -120,6 +127,9 @@ class ClipboardPanelViewController: NSViewController {
         setupBindings()
         loadSettings()
         loadItems()
+
+        // 初始同步状态
+        handleLiquidGlassSettingDidChange()
 
         // 监听液态玻璃设置变化
         NotificationCenter.default.addObserver(
@@ -135,12 +145,16 @@ class ClipboardPanelViewController: NSViewController {
         let useLiquidGlass =
             UserDefaults.standard.object(forKey: "enableLiquidGlass") as? Bool ?? true
 
-        // 动态更新毛玻璃材质以实现即时生效
-        // 查找 subviews 中的 NSVisualEffectView
-        if let visualEffectView = view.subviews.first(where: { $0 is NSVisualEffectView })
-            as? NSVisualEffectView
-        {
-            visualEffectView.material = useLiquidGlass ? .sidebar : .popover
+        if #available(macOS 26.0, *) {
+            glassEffectView?.isHidden = !useLiquidGlass
+            visualEffectView?.isHidden = useLiquidGlass
+            if !useLiquidGlass {
+                visualEffectView?.material = .popover
+            }
+        } else {
+            glassEffectView?.isHidden = true
+            visualEffectView?.isHidden = false
+            visualEffectView?.material = useLiquidGlass ? .sidebar : .popover
         }
     }
 
