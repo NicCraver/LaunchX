@@ -75,12 +75,12 @@ class ClipboardPanelViewController: NSViewController {
         // 创建可调整大小的容器视图
         let containerView = ResizableContainerView()
         containerView.wantsLayer = true
-        containerView.layer?.cornerRadius = 12
+        containerView.layer?.cornerRadius = 20
         containerView.layer?.masksToBounds = true
 
         // 创建毛玻璃效果视图
         let visualEffectView = NSVisualEffectView()
-        visualEffectView.material = .sidebar
+        visualEffectView.material = .popover
         visualEffectView.blendingMode = .behindWindow
         visualEffectView.state = .active
         visualEffectView.translatesAutoresizingMaskIntoConstraints = false

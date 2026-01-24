@@ -17,7 +17,7 @@ struct SearchTextField: NSViewRepresentable {
         textField.isBordered = false
         textField.backgroundColor = .clear
         textField.focusRingType = .none
-        textField.font = .systemFont(ofSize: 26, weight: .light)
+        textField.font = .systemFont(ofSize: 26, weight: .regular)
         textField.cell?.sendsActionOnEndEditing = false
 
         // Make it first responder on next run loop

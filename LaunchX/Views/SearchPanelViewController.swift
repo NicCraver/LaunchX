@@ -152,7 +152,7 @@ class SearchPanelViewController: NSViewController {
     private func setPlaceholder(_ text: String) {
         let attributes: [NSAttributedString.Key: Any] = [
             .foregroundColor: NSColor.secondaryLabelColor,
-            .font: NSFont.systemFont(ofSize: 22, weight: .light),
+            .font: NSFont.systemFont(ofSize: 22, weight: .regular),
         ]
         searchField.placeholderAttributedString = NSAttributedString(
             string: text, attributes: attributes)
@@ -195,7 +195,7 @@ class SearchPanelViewController: NSViewController {
 
         // 内容视图 - NSVisualEffectView
         let visualEffectView = NSVisualEffectView()
-        visualEffectView.material = .sidebar
+        visualEffectView.material = .popover
         visualEffectView.blendingMode = .behindWindow
         visualEffectView.state = .active
         visualEffectView.wantsLayer = true
@@ -1573,7 +1573,7 @@ class SearchPanelViewController: NSViewController {
         searchField.isBordered = false
         searchField.backgroundColor = .clear
         searchField.focusRingType = .none
-        searchField.font = .systemFont(ofSize: 22, weight: .light)
+        searchField.font = .systemFont(ofSize: 22, weight: .regular)
         searchField.delegate = self
         searchField.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(searchField)
@@ -5100,7 +5100,7 @@ class ResultCellView: NSView {
     private func setupViews() {
         // Background
         backgroundView.wantsLayer = true
-        backgroundView.layer?.cornerRadius = 4
+        backgroundView.layer?.cornerRadius = 8
         backgroundView.translatesAutoresizingMaskIntoConstraints = false
         addSubview(backgroundView)
 
@@ -5118,7 +5118,7 @@ class ResultCellView: NSView {
 
         // Alias badge background (圆角背景) - 紧跟在名称后面
         aliasBadgeView.wantsLayer = true
-        aliasBadgeView.layer?.cornerRadius = 4
+        aliasBadgeView.layer?.cornerRadius = 6
         aliasBadgeView.layer?.backgroundColor = NSColor.systemGray.withAlphaComponent(0.25).cgColor
         aliasBadgeView.translatesAutoresizingMaskIntoConstraints = false
         aliasBadgeView.isHidden = true
@@ -5391,7 +5391,8 @@ class ResultCellView: NSView {
         }
 
         if isSelected {
-            backgroundView.layer?.backgroundColor = NSColor.controlAccentColor.cgColor
+            backgroundView.layer?.backgroundColor =
+                NSColor.controlAccentColor.withAlphaComponent(0.85).cgColor
             nameLabel.textColor = .white
             pathLabel.textColor = .white.withAlphaComponent(0.8)
             arrowIndicator.contentTintColor = .white.withAlphaComponent(0.8)
