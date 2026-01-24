@@ -1046,7 +1046,7 @@ class DraggableView: NSView {
     private func setupHandle() {
         // 小横杠视觉指示器
         handleView.wantsLayer = true
-        handleView.layer?.backgroundColor = NSColor.separatorColor.cgColor
+        updateHandleColor()
         handleView.layer?.cornerRadius = 2
         handleView.translatesAutoresizingMaskIntoConstraints = false
         addSubview(handleView)
@@ -1057,6 +1057,17 @@ class DraggableView: NSView {
             handleView.widthAnchor.constraint(equalToConstant: 36),
             handleView.heightAnchor.constraint(equalToConstant: 4),
         ])
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        // 确保系统主题切换时，Layer 的颜色也能同步更新
+        updateHandleColor()
+    }
+
+    private func updateHandleColor() {
+        // 使用比 separatorColor 更明显的 tertiaryLabelColor
+        handleView.layer?.backgroundColor = NSColor.tertiaryLabelColor.cgColor
     }
 
     override func mouseDown(with event: NSEvent) {
