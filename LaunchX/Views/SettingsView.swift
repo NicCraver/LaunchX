@@ -192,7 +192,7 @@ struct GeneralSettingsView: View {
 
                 if #available(macOS 26.0, *) {
                     HStack(spacing: 12) {
-                        Text("`:")
+                        Text("液态玻璃:")
                             .frame(width: 85, alignment: .leading)
                         Toggle("开启", isOn: $enableLiquidGlass)
                             .toggleStyle(CheckboxToggleStyle())

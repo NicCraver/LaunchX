@@ -462,7 +462,7 @@ final class MemoryIndex {
             }
 
             // Check actual match
-            if let matchType = item.matchesQuery(lowerQuery) {
+            if item.matchesQuery(lowerQuery) != nil {
                 results.append(item)
             } else if queryIsAscii && item.matchesPinyin(lowerQuery) {
                 results.append(item)
@@ -543,7 +543,7 @@ final class MemoryIndex {
             guard seenPaths.insert(item.path).inserted else { continue }
             guard !excludedApps.contains(item.path) else { continue }
 
-            if let matchType = item.matchesQuery(lowerQuery) {
+            if item.matchesQuery(lowerQuery) != nil {
                 results.append(item)
             } else if queryIsAscii && item.matchesPinyin(lowerQuery) {
                 results.append(item)
@@ -573,7 +573,7 @@ final class MemoryIndex {
                 if !excludedFolderNames.isDisjoint(with: components) { continue }
             }
 
-            if let matchType = item.matchesQuery(lowerQuery) {
+            if item.matchesQuery(lowerQuery) != nil {
                 results.append(item)
             } else if queryIsAscii && item.matchesPinyin(lowerQuery) {
                 results.append(item)
@@ -610,7 +610,7 @@ final class MemoryIndex {
                 if !excludedFolderNames.isDisjoint(with: components) { continue }
             }
 
-            if let matchType = item.matchesQuery(lowerQuery) {
+            if item.matchesQuery(lowerQuery) != nil {
                 results.append(item)
             } else if queryIsAscii && item.matchesPinyin(lowerQuery) {
                 results.append(item)
