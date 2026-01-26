@@ -36,7 +36,8 @@ class AITranslatePanel: NSPanel {
         ]
 
         // 视觉配置
-        self.backgroundColor = NSColor(named: "PanelBackground") ?? NSColor.windowBackgroundColor
+        self.backgroundColor =
+            NSColor(named: "PanelBackgroundColor") ?? NSColor.windowBackgroundColor
         self.isOpaque = false
         self.hasShadow = true
         self.titlebarAppearsTransparent = true

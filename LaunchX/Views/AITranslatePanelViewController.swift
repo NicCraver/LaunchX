@@ -83,12 +83,13 @@ class AITranslatePanelViewController: NSViewController {
             glassEffectView?.isHidden = !useLiquidGlass
             visualEffectView?.isHidden = useLiquidGlass
             if !useLiquidGlass {
-                visualEffectView?.material = .popover
+                visualEffectView?.material = .hudWindow
             }
         } else {
+            // 旧版本系统：仅使用 VisualEffectView，通过切换材质模拟
             glassEffectView?.isHidden = true
             visualEffectView?.isHidden = false
-            visualEffectView?.material = useLiquidGlass ? .sidebar : .popover
+            visualEffectView?.material = .hudWindow
         }
     }
 
@@ -113,12 +114,15 @@ class AITranslatePanelViewController: NSViewController {
 
         // 1. 创建传统毛玻璃层
         let vev = NSVisualEffectView(frame: container.bounds)
+        vev.material = .hudWindow
         vev.autoresizingMask = [.width, .height]
         vev.blendingMode = .behindWindow
         vev.state = .active
         vev.wantsLayer = true
         vev.layer?.cornerRadius = 20
         vev.layer?.masksToBounds = true
+        vev.layer?.borderWidth = 0.5
+        vev.layer?.borderColor = NSColor.separatorColor.cgColor
         container.addSubview(vev)
         self.visualEffectView = vev
 

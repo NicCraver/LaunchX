@@ -209,7 +209,8 @@ class AITranslatePanelManager: NSObject, NSWindowDelegate {
         panel.titleVisibility = .hidden
         panel.isMovableByWindowBackground = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        panel.backgroundColor = NSColor(named: "PanelBackground") ?? NSColor.windowBackgroundColor
+        panel.backgroundColor =
+            NSColor(named: "PanelBackgroundColor") ?? NSColor.windowBackgroundColor
 
         // 设置最小和最大尺寸 - 只限制宽度，高度自适应
         panel.minSize = NSSize(width: 400, height: 180)

@@ -206,14 +206,15 @@ class SearchPanelViewController: NSViewController {
     private func setupEffectViews(in container: NSView) {
         // 创建传统毛玻璃层
         let vev = NSVisualEffectView()
+        vev.material = .hudWindow
         vev.blendingMode = .behindWindow
         vev.state = .active
         vev.wantsLayer = true
         vev.layer?.cornerRadius = 26
         vev.layer?.cornerCurve = .continuous
         vev.layer?.masksToBounds = true
-        vev.layer?.borderWidth = 1
-        vev.layer?.borderColor = NSColor.white.withAlphaComponent(0.15).cgColor
+        vev.layer?.borderWidth = 0.5
+        vev.layer?.borderColor = NSColor.separatorColor.cgColor
         vev.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(vev, positioned: .below, relativeTo: contentView)
         self.visualEffectView = vev
@@ -372,13 +373,13 @@ class SearchPanelViewController: NSViewController {
 
             // 如果切回到传统模式，确保材质正确
             if !useLiquidGlass {
-                visualEffectView?.material = .popover
+                visualEffectView?.material = .hudWindow
             }
         } else {
             // 旧版本系统：仅使用 VisualEffectView，通过切换材质模拟
             glassEffectView?.isHidden = true
             visualEffectView?.isHidden = false
-            visualEffectView?.material = useLiquidGlass ? .sidebar : .popover
+            visualEffectView?.material = .hudWindow
         }
     }
 
