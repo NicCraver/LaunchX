@@ -9,6 +9,7 @@ protocol ClipboardSearchFieldNavigationDelegate: AnyObject {
     func searchFieldDidPressEscape()
     func searchFieldDidPressControlN()
     func searchFieldDidPressControlP()
+    func searchFieldDidSelectFilter(at index: Int)
 }
 
 // MARK: - 自定义搜索框（支持键盘导航）
@@ -35,6 +36,17 @@ class ClipboardSearchField: NSTextField {
         if event.keyCode == 45 && flags.contains(.control) {
             navigationDelegate?.searchFieldDidPressControlN()
             return true
+        }
+
+        // ⌘+0...5: 筛选快捷键
+        if flags.contains(.command) {
+            if let chars = event.charactersIgnoringModifiers, let char = chars.first {
+                if char >= "0" && char <= "5" {
+                    let index = Int(String(char)) ?? 0
+                    navigationDelegate?.searchFieldDidSelectFilter(at: index)
+                    return true
+                }
+            }
         }
 
         return super.performKeyEquivalent(with: event)
@@ -241,21 +253,26 @@ class ClipboardPanelViewController: NSViewController {
         filterButton.target = self
         filterButton.action = #selector(showFilterMenu)
         filterButton.contentTintColor = .secondaryLabelColor
+        filterButton.toolTip = "内容过滤 (⌘0-⌘5)"
         filterButton.translatesAutoresizingMaskIntoConstraints = false
 
         // 设置菜单
         let allItem = NSMenuItem(
-            title: "全部", action: #selector(selectFilter(_:)), keyEquivalent: "")
+            title: "全部", action: #selector(selectFilter(_:)), keyEquivalent: "0")
+        allItem.keyEquivalentModifierMask = .command
         allItem.target = self
         allItem.tag = -1
         allItem.state = .on
+        // 添加图标使整体更协调
+        allItem.image = NSImage(systemSymbolName: "square.grid.2x2", accessibilityDescription: nil)
+        allItem.image?.size = NSSize(width: 14, height: 14)
         filterMenu.addItem(allItem)
-
-        filterMenu.addItem(NSMenuItem.separator())
 
         for (index, type) in ClipboardContentType.allCases.enumerated() {
             let item = NSMenuItem(
-                title: type.displayName, action: #selector(selectFilter(_:)), keyEquivalent: "")
+                title: type.displayName, action: #selector(selectFilter(_:)),
+                keyEquivalent: "\(index + 1)")
+            item.keyEquivalentModifierMask = .command
             item.target = self
             item.tag = index
             item.image = NSImage(systemSymbolName: type.iconName, accessibilityDescription: nil)
@@ -433,9 +450,18 @@ class ClipboardPanelViewController: NSViewController {
         if tag == -1 {
             selectedFilter = nil
             filterButton.contentTintColor = .secondaryLabelColor
+            filterButton.image = NSImage(
+                systemSymbolName: "line.3.horizontal.decrease.circle",
+                accessibilityDescription: "过滤")
         } else if tag >= 0 && tag < ClipboardContentType.allCases.count {
             selectedFilter = ClipboardContentType.allCases[tag]
             filterButton.contentTintColor = .systemBlue
+            // 选中分类时，按钮图标同步切换为该分类图标，更直观且节省空间
+            if let selectedFilter = selectedFilter {
+                filterButton.image = NSImage(
+                    systemSymbolName: selectedFilter.iconName,
+                    accessibilityDescription: selectedFilter.displayName)
+            }
         }
 
         applyFilter()
@@ -537,6 +563,17 @@ class ClipboardPanelViewController: NSViewController {
         if event.keyCode == 125 || (event.keyCode == 45 && flags.contains(.control)) {
             moveSelection(by: 1)
             return
+        }
+
+        // ⌘+0...5: 筛选快捷键
+        if flags.contains(.command) {
+            if let chars = event.charactersIgnoringModifiers, let char = chars.first {
+                if char >= "0" && char <= "5" {
+                    let index = Int(String(char)) ?? 0
+                    searchFieldDidSelectFilter(at: index)
+                    return
+                }
+            }
         }
 
         super.keyDown(with: event)
@@ -717,6 +754,13 @@ extension ClipboardPanelViewController: ClipboardSearchFieldNavigationDelegate {
 
     func searchFieldDidPressEscape() {
         ClipboardPanelManager.shared.forceHidePanel()
+    }
+
+    func searchFieldDidSelectFilter(at index: Int) {
+        let targetTag = index == 0 ? -1 : index - 1
+        if let item = filterMenu.items.first(where: { $0.tag == targetTag }) {
+            selectFilter(item)
+        }
     }
 }
 
