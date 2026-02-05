@@ -1,7 +1,7 @@
 # Changelog
 ## 0.2.8
 - 设置了5个默认核心APP(safari、finder、terminal、Activity Monitor、settings),且都默认添加了别名，对于极简用户这样就可以去掉一些没有必要的默认应用搜索范围的目录了，保留 /Applications 和 /System/Applications 即可。
-- 
+- 修复应用排除界面没有随搜索目录变化而同步的问题
 
 ## v0.2.7
 - 剪贴板优化，增加快捷键切换筛选

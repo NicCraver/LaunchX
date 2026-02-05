@@ -401,7 +401,7 @@ class SearchSettingsViewModel: ObservableObject {
             var apps: [AppInfo] = []
 
             // 使用配置中的应用搜索范围，保持与搜索一致
-            var appDirectories = self?.config.appScopes ?? []
+            var appDirectories = self?.appScopes ?? []
 
             // 添加用户应用目录
             let userApps = NSHomeDirectory() + "/Applications"
@@ -440,6 +440,24 @@ class SearchSettingsViewModel: ObservableObject {
                                 icon: icon
                             ))
                     }
+                }
+            }
+
+            // 确保核心应用即使不在搜索目录中，也会显示在列表中
+            for path in SearchConfig.coreApps.keys {
+                if !apps.contains(where: { $0.path == path })
+                    && FileManager.default.fileExists(atPath: path)
+                {
+                    let name = FileManager.default.getAppDisplayName(at: path)
+                    let icon = NSWorkspace.shared.icon(forFile: path)
+                    icon.size = NSSize(width: 24, height: 24)
+                    apps.append(
+                        AppInfo(
+                            id: path,
+                            name: name,
+                            path: path,
+                            icon: icon
+                        ))
                 }
             }
 
@@ -490,6 +508,7 @@ class SearchSettingsViewModel: ObservableObject {
     /// 保存配置并触发重新索引（仅在搜索范围变化时调用）
     private func saveConfigAndReindex() {
         saveConfig()
+        loadAllApps()
         // Notify SearchEngine to reload
         NotificationCenter.default.post(name: .searchConfigDidChange, object: config)
     }
