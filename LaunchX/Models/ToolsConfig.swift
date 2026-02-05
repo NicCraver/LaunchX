@@ -40,6 +40,7 @@ struct ToolsConfig: Codable {
     private static let defaultWebLinksAddedKey = "DefaultWebLinksAdded"
     private static let defaultUtilitiesAddedKey = "DefaultUtilitiesAdded"
     private static let defaultSystemCommandsAddedKey = "DefaultSystemCommandsAdded"
+    private static let coreAppsAddedKey = "CoreAppsAdded"
 
     /// 从 UserDefaults 加载配置（含自动迁移）
     static func load() -> ToolsConfig {
@@ -70,6 +71,13 @@ struct ToolsConfig: Codable {
                 needsSave = true
             }
 
+            // 检查是否需要添加核心应用别名
+            if !UserDefaults.standard.bool(forKey: ToolsConfig.coreAppsAddedKey) {
+                config.addCoreAppsIfNeeded()
+                UserDefaults.standard.set(true, forKey: ToolsConfig.coreAppsAddedKey)
+                needsSave = true
+            }
+
             if needsSave {
                 config.save()
             }
@@ -85,9 +93,11 @@ struct ToolsConfig: Codable {
             config.addDefaultWebLinksIfNeeded()
             config.addDefaultUtilitiesIfNeeded()
             config.addDefaultSystemCommandsIfNeeded()
+            config.addCoreAppsIfNeeded()
             // 先设置标记，避免循环
-            UserDefaults.standard.set(true, forKey: migrationKey)
-            UserDefaults.standard.set(true, forKey: defaultWebLinksAddedKey)
+            UserDefaults.standard.set(true, forKey: ToolsConfig.migrationKey)
+            UserDefaults.standard.set(true, forKey: ToolsConfig.coreAppsAddedKey)
+            UserDefaults.standard.set(true, forKey: ToolsConfig.defaultWebLinksAddedKey)
             UserDefaults.standard.set(true, forKey: defaultUtilitiesAddedKey)
             UserDefaults.standard.set(true, forKey: defaultSystemCommandsAddedKey)
             config.save()
@@ -97,10 +107,12 @@ struct ToolsConfig: Codable {
         // 3. 返回带有默认内容的配置
         var config = ToolsConfig()
         config.tools = defaultWebLinks() + defaultUtilities() + defaultSystemCommands()
+        config.addCoreAppsIfNeeded()
         // 先设置标记，避免循环
-        UserDefaults.standard.set(true, forKey: defaultWebLinksAddedKey)
-        UserDefaults.standard.set(true, forKey: defaultUtilitiesAddedKey)
-        UserDefaults.standard.set(true, forKey: defaultSystemCommandsAddedKey)
+        UserDefaults.standard.set(true, forKey: ToolsConfig.defaultWebLinksAddedKey)
+        UserDefaults.standard.set(true, forKey: ToolsConfig.defaultUtilitiesAddedKey)
+        UserDefaults.standard.set(true, forKey: ToolsConfig.defaultSystemCommandsAddedKey)
+        UserDefaults.standard.set(true, forKey: ToolsConfig.coreAppsAddedKey)
         config.save()
         return config
     }
@@ -129,6 +141,24 @@ struct ToolsConfig: Codable {
                 !existingIdentifiers.contains(identifier)
             {
                 tools.append(utility)
+            }
+        }
+    }
+
+    /// 添加核心应用别名
+    private mutating func addCoreAppsIfNeeded() {
+        for (path, alias) in SearchConfig.coreApps {
+            if FileManager.default.fileExists(atPath: path) {
+                // 如果已经存在该路径的工具，则不重复添加，但可以确保别名存在
+                if let existingIndex = tools.firstIndex(where: { $0.path == path }) {
+                    if tools[existingIndex].alias == nil || tools[existingIndex].alias!.isEmpty {
+                        tools[existingIndex].alias = alias
+                    }
+                } else {
+                    var tool = ToolItem.app(path: path, alias: alias)
+                    tool.isBuiltIn = true
+                    tools.append(tool)
+                }
             }
         }
     }

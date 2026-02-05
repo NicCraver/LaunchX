@@ -677,6 +677,11 @@ class SearchSettingsViewModel: ObservableObject {
     // MARK: - App Exclusions
 
     func toggleAppExclusion(_ appPath: String) {
+        // 核心应用不可取消搜索，也不可勾选排除
+        if SearchConfig.coreApps.keys.contains(appPath) {
+            return
+        }
+
         if excludedApps.contains(appPath) {
             excludedApps.remove(appPath)
         } else {
@@ -772,6 +777,7 @@ struct AppExclusionsSettingsView: View {
                             )
                             .toggleStyle(.checkbox)
                             .labelsHidden()
+                            .disabled(SearchConfig.coreApps.keys.contains(app.path))
                         }
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)

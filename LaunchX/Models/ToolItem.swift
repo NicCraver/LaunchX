@@ -110,11 +110,7 @@ struct ToolItem: Codable, Identifiable, Equatable, Hashable {
 
     /// 从应用/文件夹路径创建
     static func app(path: String, alias: String? = nil) -> ToolItem {
-        let url = URL(fileURLWithPath: path)
-        var name = url.deletingPathExtension().lastPathComponent
-        if path.hasSuffix(".app") {
-            name = (path as NSString).lastPathComponent.replacingOccurrences(of: ".app", with: "")
-        }
+        let name = FileManager.default.getAppDisplayName(at: path)
         return ToolItem(
             type: .app,
             name: name,

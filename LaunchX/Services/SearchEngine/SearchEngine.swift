@@ -147,7 +147,8 @@ final class SearchEngine: ObservableObject {
                         if hasAlias {
                             aliasTools[tool.alias!] = info
                         }
-                        // 应用类型不需要加入 allToolsList，因为已经在 apps 中
+                        // 加入 allToolsList 以确保即使目录被移除，核心应用依然可以被搜索到
+                        allToolsList.append(info)
                     }
                 case .webLink:
                     if let url = tool.url {

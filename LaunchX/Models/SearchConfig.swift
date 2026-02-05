@@ -17,6 +17,15 @@ struct SearchConfig: Codable, Equatable {
         "/System/Volumes/Preboot/Cryptexes/App/System/Applications",  // Safari
     ]
 
+    /// Core apps that should always be searchable and have default aliases
+    static let coreApps: [String: String] = [
+        "/System/Applications/System Settings.app": "set",
+        "/System/Applications/Utilities/Terminal.app": "ter",
+        "/System/Library/CoreServices/Finder.app": "fin",
+        "/System/Applications/Utilities/Activity Monitor.app": "act",
+        "/System/Volumes/Preboot/Cryptexes/App/System/Applications/Safari.app": "saf",
+    ]
+
     /// Default excluded folder names
     static let defaultExcludedFolderNames: [String] = [
         "node_modules",
@@ -45,7 +54,16 @@ struct SearchConfig: Codable, Equatable {
     var excludedFolderNames: [String]
 
     /// App paths to exclude from search results
-    var excludedApps: Set<String>
+    var excludedApps: Set<String> {
+        didSet {
+            // Ensure core apps are never excluded
+            for path in SearchConfig.coreApps.keys {
+                if excludedApps.contains(path) {
+                    excludedApps.remove(path)
+                }
+            }
+        }
+    }
 
     init(
         documentScopes: [String] = SearchConfig.defaultDocumentScopes,
@@ -60,7 +78,8 @@ struct SearchConfig: Codable, Equatable {
         self.excludedPaths = excludedPaths
         self.excludedExtensions = excludedExtensions
         self.excludedFolderNames = excludedFolderNames
-        self.excludedApps = excludedApps
+        // Ensure core apps are never excluded
+        self.excludedApps = excludedApps.filter { !SearchConfig.coreApps.keys.contains($0) }
     }
 
     /// Combined search scopes for backward compatibility
