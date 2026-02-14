@@ -13,11 +13,16 @@ private final class LRUNode<Key: Hashable, Value> {
         self.value = value
     }
 
-    // 显式 deinit 打断循环引用，同时避免 Swift 6.2 编译器优化器崩溃
-    // (EarlyPerfInliner crash on auto-generated deinit for generic class with circular refs)
-    deinit {
+    // Workaround: Swift 6.2 EarlyPerfInliner 在内联泛型类(含循环引用)的 deinit 时崩溃
+    // 通过 @inline(never) 函数阻止优化器对 deinit 进行内联展开
+    @inline(never)
+    private func cleanupRefs() {
         prev = nil
         next = nil
+    }
+
+    deinit {
+        cleanupRefs()
     }
 }
 
