@@ -12,6 +12,13 @@ private final class LRUNode<Key: Hashable, Value> {
         self.key = key
         self.value = value
     }
+
+    // 显式 deinit 打断循环引用，同时避免 Swift 6.2 编译器优化器崩溃
+    // (EarlyPerfInliner crash on auto-generated deinit for generic class with circular refs)
+    deinit {
+        prev = nil
+        next = nil
+    }
 }
 
 // MARK: - 通用 LRU 缓存（哈希表 + 双向链表，O(1) 操作）
