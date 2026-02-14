@@ -16,9 +16,10 @@ class PermissionService: ObservableObject {
         startPeriodicCheck()
     }
 
-    private func startPeriodicCheck() {
-        // 每 2 秒检查一次权限状态
-        refreshTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+    func startPeriodicCheck() {
+        guard refreshTimer == nil else { return }
+        // 每 5 秒检查一次权限状态（权限变化不频繁，无需高频轮询）
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
             self?.checkAllPermissions()
         }
     }
@@ -49,6 +50,12 @@ class PermissionService: ObservableObject {
                     self.isFullDiskAccessGranted = fullDiskAccess
                 }
                 self.isChecking = false
+
+                // 所有权限都已授予后，停止轮询以节省 CPU
+                if self.allPermissionsGranted {
+                    self.stopPeriodicCheck()
+                    print("[PermissionService] All permissions granted, stopped periodic check")
+                }
             }
         }
     }

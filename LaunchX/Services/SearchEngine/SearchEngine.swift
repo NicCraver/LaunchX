@@ -47,17 +47,37 @@ final class SearchEngine: ObservableObject {
         }
     }
 
+    // 缓存 BookmarkSettings，避免每次搜索都反序列化
+    private var cachedBookmarkSettings: BookmarkSettings = BookmarkSettings.load()
+
+    // 缓存默认搜索网页直达结果
+    private var cachedDefaultSearchWebLinks: [SearchResult]?
+
     private var configObserver: NSObjectProtocol?
     private var configChangeObserver: NSObjectProtocol?
     private var customItemsConfigObserver: NSObjectProtocol?
     private var toolsConfigObserver: NSObjectProtocol?
+    private var settingsObserver: NSObjectProtocol?
 
     // MARK: - Initialization
 
     private init() {
         setupConfigObserver()
         setupCustomItemsConfigObserver()
+        setupSettingsObserver()
         loadIndexOnStartup()
+    }
+
+    /// 监听 UserDefaults 变化，刷新缓存的 Settings
+    private func setupSettingsObserver() {
+        settingsObserver = NotificationCenter.default.addObserver(
+            forName: UserDefaults.didChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.cachedBookmarkSettings = BookmarkSettings.load()
+            self?.cachedDefaultSearchWebLinks = nil  // 清除缓存，下次搜索时重新生成
+        }
     }
 
     private func setupConfigObserver() {
@@ -119,6 +139,7 @@ final class SearchEngine: ObservableObject {
     private func loadAliasMap() {
         // 配置发生变化时，清除搜索缓存，确保别名和启用状态立即生效
         searchCache.clear()
+        cachedDefaultSearchWebLinks = nil  // 清除默认搜索链接缓存
 
         // 优先使用新的 ToolsConfig
         let toolsConfig = ToolsConfig.load()
@@ -512,8 +533,7 @@ final class SearchEngine: ObservableObject {
 
     /// 搜索书签
     private func searchBookmarks(query: String) -> [SearchResult] {
-        let settings = BookmarkSettings.load()
-        guard settings.isEnabled else { return [] }
+        guard cachedBookmarkSettings.isEnabled else { return [] }
 
         let bookmarks = BookmarkService.shared.search(query: query)
         return bookmarks.prefix(10).map { bookmark in
@@ -533,6 +553,11 @@ final class SearchEngine: ObservableObject {
     /// 获取设置为默认显示在搜索面板的网页直达列表
     /// 仅返回已启用、支持 query 扩展且设置了 showInSearchPanel 的网页直达
     func getDefaultSearchWebLinks() -> [SearchResult] {
+        // 使用缓存避免每次搜索都重新构建
+        if let cached = cachedDefaultSearchWebLinks {
+            return cached
+        }
+
         let toolsConfig = ToolsConfig.load()
         var results: [SearchResult] = []
 
@@ -569,6 +594,7 @@ final class SearchEngine: ObservableObject {
             results.append(result)
         }
 
+        cachedDefaultSearchWebLinks = results
         return results
     }
 }

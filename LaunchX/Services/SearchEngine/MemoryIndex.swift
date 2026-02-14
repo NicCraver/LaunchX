@@ -417,6 +417,29 @@ final class MemoryIndex {
     ) -> [SearchItem] {
         guard !query.isEmpty else { return [] }
 
+        // 通过串行队列保证线程安全，与 add()/remove() 的写操作同步
+        return queue.sync {
+            searchInternal(
+                query: query,
+                excludedApps: excludedApps,
+                excludedPaths: excludedPaths,
+                excludedExtensions: excludedExtensions,
+                excludedFolderNames: excludedFolderNames,
+                maxResults: maxResults
+            )
+        }
+    }
+
+    /// 内部搜索实现（必须在 queue 中调用）
+    private func searchInternal(
+        query: String,
+        excludedApps: Set<String>,
+        excludedPaths: [String],
+        excludedExtensions: Set<String>,
+        excludedFolderNames: Set<String>,
+        maxResults: Int
+    ) -> [SearchItem] {
+
         let lowerQuery = query.lowercased()
         let queryIsAscii = query.allSatisfy { $0.isASCII }
 
@@ -920,6 +943,8 @@ final class MemoryIndex {
     /// - Returns: 匹配的项目列表
     func searchByAlias(_ query: String) -> [SearchItem] {
         let lowerQuery = query.lowercased()
-        return searchByAliasInternal(lowerQuery)
+        return queue.sync {
+            searchByAliasInternal(lowerQuery)
+        }
     }
 }

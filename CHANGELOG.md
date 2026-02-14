@@ -1,5 +1,18 @@
 # Changelog
-## 0.2.8
+
+## v0.2.9
+Opus4.6 性能优化：
+1. `PermissionService`: 权限全部授予后 **停止定时器**
+2. `ClipboardService`: 将轮询间隔增加到 1.0 秒，并缓存 `ClipboardSettings`
+3. `ClipboardService.shouldIgnoreCurrentApp()`: 移到 `changeCount` 变化判断之后
+4. `FSEventsMonitor`: 将 latency 从 0.3 增加到 1.0 秒，移除 `kFSEventStreamCreateFlagNoDefer`
+5. 各 `XXXSettings.load()`: 实现内存缓存机制
+6. `MemoryIndex.search()`: 修复线程安全问题
+7. `SearchPanelViewController`: 减少不必要的 `reloadData()`
+8. `SnippetService`: 缓存 `CGEventSource`、没有 snippet 时不启动 tap
+9. `SearchEngine.getDefaultSearchWebLinks()`: 缓存结果
+
+## v0.2.8
 - 设置了5个默认核心APP(safari、finder、terminal、Activity Monitor、settings),且都默认添加了别名，对于极简用户这样就可以去掉一些没有必要的默认应用搜索范围的目录了，保留 /Applications 和 /System/Applications 即可。
 - 修复应用排除界面没有随搜索目录变化而同步的问题
 

@@ -18,6 +18,10 @@ final class ClipboardService: ObservableObject {
     private var lastChangeCount: Int = 0
     private let pasteboard = NSPasteboard.general
 
+    // 缓存 ClipboardSettings，避免每次轮询都从 UserDefaults 反序列化
+    private var cachedSettings: ClipboardSettings = ClipboardSettings.load()
+    private var settingsObserver: NSObjectProtocol?
+
     // 数据存储路径
     private let storageURL: URL = {
         let appSupport = FileManager.default.urls(
@@ -39,6 +43,16 @@ final class ClipboardService: ObservableObject {
         try? FileManager.default.createDirectory(at: imagesDir, withIntermediateDirectories: true)
 
         loadItems()
+
+        // 监听设置变化，更新缓存
+        settingsObserver = NotificationCenter.default.addObserver(
+            forName: UserDefaults.didChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.cachedSettings = ClipboardSettings.load()
+        }
+
         print("[ClipboardService] Initialized with \(items.count) items")
     }
 
@@ -48,16 +62,15 @@ final class ClipboardService: ObservableObject {
     func startMonitoring() {
         guard !isMonitoring else { return }
 
-        let settings = ClipboardSettings.load()
-        guard settings.isEnabled else {
+        guard cachedSettings.isEnabled else {
             print("[ClipboardService] Monitoring disabled in settings")
             return
         }
 
         lastChangeCount = pasteboard.changeCount
 
-        // 使用 Timer 轮询检测剪贴板变化
-        monitorTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) {
+        // 使用 Timer 轮询检测剪贴板变化（1秒间隔，平衡响应速度和CPU开销）
+        monitorTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) {
             [weak self] _ in
             self?.checkClipboardChange()
         }
@@ -112,11 +125,7 @@ final class ClipboardService: ObservableObject {
             return false
         }
 
-        // 不再自动忽略 LaunchX 自身
-        // 这样可以正确记录截图工具等后台应用的剪贴板内容
-
-        let settings = ClipboardSettings.load()
-        return settings.ignoredAppBundleIds.contains(bundleId)
+        return cachedSettings.ignoredAppBundleIds.contains(bundleId)
     }
 
     /// 获取当前前台应用信息
@@ -142,18 +151,20 @@ final class ClipboardService: ObservableObject {
             !fileURLs.isEmpty
         {
             // 检查是否是单个图片文件（微信等应用复制图片时会以文件形式放入剪贴板）
-            let imageExtensions = ["png", "jpg", "jpeg", "gif", "bmp", "tiff", "tif", "heic", "webp"]
+            let imageExtensions = [
+                "png", "jpg", "jpeg", "gif", "bmp", "tiff", "tif", "heic", "webp",
+            ]
             if fileURLs.count == 1,
-               let fileURL = fileURLs.first,
-               imageExtensions.contains(fileURL.pathExtension.lowercased()),
-               let imageData = try? Data(contentsOf: fileURL),
-               let image = NSImage(data: imageData)
+                let fileURL = fileURLs.first,
+                imageExtensions.contains(fileURL.pathExtension.lowercased()),
+                let imageData = try? Data(contentsOf: fileURL),
+                let image = NSImage(data: imageData)
             {
                 print("[ClipboardService] Found image file from clipboard: \(fileURL.path)")
                 // 转换为 PNG 格式存储
                 if let tiffData = image.tiffRepresentation,
-                   let bitmap = NSBitmapImageRep(data: tiffData),
-                   let pngData = bitmap.representation(using: .png, properties: [:])
+                    let bitmap = NSBitmapImageRep(data: tiffData),
+                    let pngData = bitmap.representation(using: .png, properties: [:])
                 {
                     return ClipboardItem(
                         contentType: .image,
@@ -580,7 +591,7 @@ final class ClipboardService: ObservableObject {
     // MARK: - 清理策略
 
     private func applyRetentionPolicy() {
-        let settings = ClipboardSettings.load()
+        let settings = cachedSettings
 
         // 1. 时间限制
         if settings.retentionDays != .forever {

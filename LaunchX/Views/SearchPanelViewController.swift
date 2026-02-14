@@ -3176,11 +3176,15 @@ class SearchPanelViewController: NSViewController {
             newIndex += 1
         }
         if newIndex < results.count {
+            let oldIndex = selectedIndex
             selectedIndex = newIndex
             tableView.selectRowIndexes(
                 IndexSet(integer: selectedIndex), byExtendingSelection: false)
             scrollToKeepSelectionCentered()
-            tableView.reloadData()
+            // 只刷新变化的行而不是全量 reloadData
+            let columnIndexes = IndexSet(integer: 0)
+            tableView.reloadData(
+                forRowIndexes: IndexSet([oldIndex, newIndex]), columnIndexes: columnIndexes)
             updateShortcutHint()
         }
     }
@@ -3193,11 +3197,15 @@ class SearchPanelViewController: NSViewController {
             newIndex -= 1
         }
         if newIndex >= 0 {
+            let oldIndex = selectedIndex
             selectedIndex = newIndex
             tableView.selectRowIndexes(
                 IndexSet(integer: selectedIndex), byExtendingSelection: false)
             scrollToKeepSelectionCentered()
-            tableView.reloadData()
+            // 只刷新变化的行而不是全量 reloadData
+            let columnIndexes = IndexSet(integer: 0)
+            tableView.reloadData(
+                forRowIndexes: IndexSet([oldIndex, newIndex]), columnIndexes: columnIndexes)
             updateShortcutHint()
         }
     }
@@ -5112,8 +5120,12 @@ extension SearchPanelViewController: NSTableViewDelegate {
     func tableViewSelectionDidChange(_ notification: Notification) {
         let row = tableView.selectedRow
         if row >= 0 && row < results.count {
+            let oldIndex = selectedIndex
             selectedIndex = row
-            tableView.reloadData()
+            // 只刷新变化的行
+            let columnIndexes = IndexSet(integer: 0)
+            tableView.reloadData(
+                forRowIndexes: IndexSet([oldIndex, row]), columnIndexes: columnIndexes)
         }
     }
 

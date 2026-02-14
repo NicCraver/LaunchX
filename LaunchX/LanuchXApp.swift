@@ -562,6 +562,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @objc func openSettings() {
         PanelManager.shared.hidePanel()
 
+        // 打开设置时恢复权限检查（用户可能需要调整权限）
+        PermissionService.shared.startPeriodicCheck()
+
         // 激活应用，确保设置窗口在当前活跃的空间/屏幕打开
         NSApp.activate(ignoringOtherApps: true)
 

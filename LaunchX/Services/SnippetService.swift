@@ -19,6 +19,9 @@ final class SnippetService: ObservableObject {
     private var inputBuffer: String = ""
     private let maxBufferSize = 50  // 最大缓冲区大小
 
+    // 缓存 CGEventSource，避免每次按键都创建新对象
+    private let cachedEventSource = CGEventSource(stateID: .hidSystemState)
+
     // 数据存储路径
     private let storageURL: URL = {
         let appSupport = FileManager.default.urls(
@@ -46,6 +49,13 @@ final class SnippetService: ObservableObject {
         let settings = SnippetSettings.load()
         guard settings.isEnabled else {
             print("[SnippetService] Monitoring disabled in settings")
+            return
+        }
+
+        // 如果没有任何已启用的 snippet，不启动 event tap 以节省 CPU
+        let hasEnabledSnippets = snippets.contains { $0.isEnabled }
+        guard hasEnabledSnippets else {
+            print("[SnippetService] No enabled snippets, skipping event tap")
             return
         }
 
@@ -199,10 +209,10 @@ final class SnippetService: ObservableObject {
 
     /// 从 keyCode 获取字符
     private func getCharacterFromKeyCode(keyCode: Int64, flags: CGEventFlags) -> Character? {
-        let source = CGEventSource(stateID: .hidSystemState)
         guard
             let event = CGEvent(
-                keyboardEventSource: source, virtualKey: CGKeyCode(keyCode), keyDown: true)
+                keyboardEventSource: cachedEventSource, virtualKey: CGKeyCode(keyCode),
+                keyDown: true)
         else {
             return nil
         }
