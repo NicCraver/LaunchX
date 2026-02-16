@@ -40,6 +40,27 @@ private final class LRUCache<Key: Hashable, Value> {
         self.capacity = capacity
     }
 
+    // Workaround: Swift 6.2 EarlyPerfInliner 在内联含循环引用泛型类的 deinit 时崩溃
+    // 通过显式 deinit + @inline(never) 断开链表引用，阻止优化器对 deinit 进行内联展开
+    @inline(never)
+    private func cleanupForDeinit() {
+        // 手动断开链表，避免编译器在 deinit 内联时递归分析循环引用链
+        var current = head
+        while let node = current {
+            let next = node.next
+            node.prev = nil
+            node.next = nil
+            current = next
+        }
+        head = nil
+        tail = nil
+        cache.removeAll()
+    }
+
+    deinit {
+        cleanupForDeinit()
+    }
+
     /// 获取值并移动到头部（O(1)）- 用于记录访问
     func get(_ key: Key) -> Value? {
         guard let node = cache[key] else { return nil }
