@@ -13,10 +13,15 @@ final class MemeSearchService {
     private let taskQueue = DispatchQueue(label: "com.launchx.meme.tasks")
     private var currentSearchTask: URLSessionDataTask?
 
+    // 并发控制
+    private let maxConcurrentLoads = 6
+    private var pendingLoads: [(url: String, completion: (NSImage?, Data?) -> Void)] = []
+    private var activeLoadCount = 0
+
     private init() {
         // 设置缓存限制
-        imageCache.countLimit = 100
-        dataCache.countLimit = 50
+        imageCache.countLimit = 200
+        dataCache.countLimit = 100
     }
 
     // MARK: - 搜索表情包
@@ -153,7 +158,7 @@ final class MemeSearchService {
 
     // MARK: - 图片加载
 
-    /// 加载图片（带缓存）
+    /// 加载图片（带缓存和并发控制）
     /// - Parameters:
     ///   - url: 图片 URL
     ///   - completion: 完成回调，返回图片和原始数据（GIF 需要原始数据）
@@ -167,6 +172,30 @@ final class MemeSearchService {
             return
         }
 
+        // 检查并发限制
+        taskQueue.sync {
+            if activeLoadCount >= maxConcurrentLoads {
+                // 加入等待队列
+                pendingLoads.append((url: url, completion: completion))
+                return
+            }
+            activeLoadCount += 1
+        }
+
+        // 如果已加入等待队列，直接返回
+        var shouldReturn = false
+        taskQueue.sync {
+            shouldReturn = pendingLoads.contains { $0.url == url }
+        }
+        if shouldReturn { return }
+
+        performLoadImage(url: url, completion: completion)
+    }
+
+    /// 实际执行图片加载
+    private func performLoadImage(url: String, completion: @escaping (NSImage?, Data?) -> Void) {
+        let cacheKey = url as NSString
+
         // 处理协议 - 确保使用 HTTPS（ATS 要求）
         var imageURLString = url
         if imageURLString.hasPrefix("//") {
@@ -177,7 +206,7 @@ final class MemeSearchService {
         }
 
         guard let imageURL = URL(string: imageURLString) else {
-            completion(nil, nil)
+            finishLoad(completion: completion, image: nil, data: nil)
             return
         }
 
@@ -203,7 +232,7 @@ final class MemeSearchService {
                     let data = data,
                     let image = NSImage(data: data)
                 else {
-                    completion(nil, nil)
+                    self.finishLoad(completion: completion, image: nil, data: nil)
                     return
                 }
 
@@ -211,7 +240,7 @@ final class MemeSearchService {
                 self.imageCache.setObject(image, forKey: cacheKey)
                 self.dataCache.setObject(data as NSData, forKey: cacheKey)
 
-                completion(image, data)
+                self.finishLoad(completion: completion, image: image, data: data)
             }
         }
 
@@ -221,11 +250,34 @@ final class MemeSearchService {
         task.resume()
     }
 
+    /// 完成加载并处理等待队列
+    private func finishLoad(
+        completion: @escaping (NSImage?, Data?) -> Void, image: NSImage?, data: Data?
+    ) {
+        completion(image, data)
+
+        // 处理等待队列中的下一个请求
+        var nextLoad: (url: String, completion: (NSImage?, Data?) -> Void)?
+        taskQueue.sync {
+            activeLoadCount -= 1
+            if !pendingLoads.isEmpty {
+                nextLoad = pendingLoads.removeFirst()
+                activeLoadCount += 1
+            }
+        }
+
+        if let next = nextLoad {
+            performLoadImage(url: next.url, completion: next.completion)
+        }
+    }
+
     /// 取消图片加载
     func cancelLoad(url: String) {
         taskQueue.sync {
             activeTasks[url]?.cancel()
             activeTasks.removeValue(forKey: url)
+            // 同时从等待队列中移除
+            pendingLoads.removeAll { $0.url == url }
         }
     }
 
@@ -236,6 +288,8 @@ final class MemeSearchService {
                 task.cancel()
             }
             activeTasks.removeAll()
+            pendingLoads.removeAll()
+            activeLoadCount = 0
         }
     }
 

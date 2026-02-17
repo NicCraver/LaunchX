@@ -80,6 +80,7 @@ class SearchPanelViewController: NSViewController {
     private let memeCollectionView = NSCollectionView()
     private let memeScrollView = NSScrollView()
     private var memeLoadingIndicator: NSProgressIndicator?
+    private var memeLoadingCount = 0  // 追踪正在加载的图片数量
 
     // IP 查询结果
     private var ipQueryResults: [(label: String, ip: String)] = []
@@ -1016,8 +1017,9 @@ class SearchPanelViewController: NSViewController {
         // 隐藏表情包视图
         memeScrollView.isHidden = true
 
-        // 取消正在进行的搜索
+        // 取消正在进行的搜索和图片加载
         memeSearchDebounceWorkItem?.cancel()
+        MemeSearchService.shared.cancelAllLoads()
 
         // 恢复 UI
         restoreNormalModeUI()
@@ -1305,7 +1307,7 @@ class SearchPanelViewController: NSViewController {
         }
     }
 
-    /// 显示加载指示器
+    /// 显示加载指示器（基于计数）
     private func showMemeLoadingIndicator() {
         if memeLoadingIndicator == nil {
             let indicator = NSProgressIndicator()
@@ -1327,6 +1329,28 @@ class SearchPanelViewController: NSViewController {
     private func hideMemeLoadingIndicator() {
         memeLoadingIndicator?.stopAnimation(nil)
         memeLoadingIndicator?.isHidden = true
+    }
+
+    /// 增加加载计数
+    func incrementMemeLoadingCount() {
+        memeLoadingCount += 1
+        if memeLoadingCount == 1 {
+            showMemeLoadingIndicator()
+        }
+    }
+
+    /// 减少加载计数
+    func decrementMemeLoadingCount() {
+        memeLoadingCount = max(0, memeLoadingCount - 1)
+        if memeLoadingCount == 0 {
+            hideMemeLoadingIndicator()
+        }
+    }
+
+    /// 重置加载计数
+    func resetMemeLoadingCount() {
+        memeLoadingCount = 0
+        hideMemeLoadingIndicator()
     }
 
     /// 更新表情包选中状态
@@ -2481,6 +2505,8 @@ class SearchPanelViewController: NSViewController {
             memeSelectedCol = 0
             memeScrollView.isHidden = true
             memeSearchDebounceWorkItem?.cancel()
+            // 取消所有正在进行的图片加载请求
+            MemeSearchService.shared.cancelAllLoads()
             restoreNormalModeUI()
             setPlaceholder("搜索应用或文档...")
         }
@@ -3851,6 +3877,7 @@ class SearchPanelViewController: NSViewController {
             currentMemeSearchKeyword = ""
             memeScrollView.isHidden = true
             memeSearchDebounceWorkItem?.cancel()
+            MemeSearchService.shared.cancelAllLoads()
         }
 
         // 清理收藏模式
@@ -5548,8 +5575,8 @@ class ResultCellView: NSView {
 class MemeCollectionViewItem: NSCollectionViewItem {
     private let memeImageView = NSImageView()
     private let gifBadge = NSTextField(labelWithString: "GIF")
-    private let loadingIndicator = NSProgressIndicator()
     private var currentImageURL: String?
+    private var isLoading = false
 
     override func loadView() {
         self.view = NSView()
@@ -5564,6 +5591,7 @@ class MemeCollectionViewItem: NSCollectionViewItem {
     private func setupViews() {
         // 图片视图
         memeImageView.imageScaling = .scaleProportionallyUpOrDown
+        memeImageView.animates = false  // 禁用 GIF 动画以节省 CPU
         memeImageView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(memeImageView)
 
@@ -5579,13 +5607,6 @@ class MemeCollectionViewItem: NSCollectionViewItem {
         gifBadge.isHidden = true
         view.addSubview(gifBadge)
 
-        // 加载指示器
-        loadingIndicator.style = .spinning
-        loadingIndicator.controlSize = .small
-        loadingIndicator.translatesAutoresizingMaskIntoConstraints = false
-        loadingIndicator.isHidden = true
-        view.addSubview(loadingIndicator)
-
         NSLayoutConstraint.activate([
             memeImageView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 4),
             memeImageView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -4),
@@ -5596,9 +5617,6 @@ class MemeCollectionViewItem: NSCollectionViewItem {
             gifBadge.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -6),
             gifBadge.widthAnchor.constraint(equalToConstant: 28),
             gifBadge.heightAnchor.constraint(equalToConstant: 16),
-
-            loadingIndicator.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            loadingIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor),
         ])
     }
 
@@ -5606,17 +5624,13 @@ class MemeCollectionViewItem: NSCollectionViewItem {
         currentImageURL = meme.imageURL
         gifBadge.isHidden = !meme.isGif
         memeImageView.image = nil
-
-        // 显示加载指示器
-        loadingIndicator.isHidden = false
-        loadingIndicator.startAnimation(nil)
+        isLoading = true
 
         // 加载图片
         MemeSearchService.shared.loadImage(url: meme.imageURL) { [weak self] image, _ in
             DispatchQueue.main.async {
                 guard let self = self, self.currentImageURL == meme.imageURL else { return }
-                self.loadingIndicator.stopAnimation(nil)
-                self.loadingIndicator.isHidden = true
+                self.isLoading = false
                 self.memeImageView.image = image
             }
         }
@@ -5626,10 +5640,7 @@ class MemeCollectionViewItem: NSCollectionViewItem {
         currentImageURL = favorite.imageFileName
         gifBadge.isHidden = !favorite.isGif
         memeImageView.image = nil
-
-        // 显示加载指示器
-        loadingIndicator.isHidden = false
-        loadingIndicator.startAnimation(nil)
+        isLoading = true
 
         // 从本地加载图片
         MemeFavoriteService.shared.loadFavoriteImage(favorite: favorite) { [weak self] image, _ in
@@ -5637,8 +5648,7 @@ class MemeCollectionViewItem: NSCollectionViewItem {
                 guard let self = self, self.currentImageURL == favorite.imageFileName else {
                     return
                 }
-                self.loadingIndicator.stopAnimation(nil)
-                self.loadingIndicator.isHidden = true
+                self.isLoading = false
                 self.memeImageView.image = image
             }
         }
@@ -5658,11 +5668,14 @@ class MemeCollectionViewItem: NSCollectionViewItem {
 
     override func prepareForReuse() {
         super.prepareForReuse()
+        // 取消当前 URL 的加载请求
+        if let url = currentImageURL {
+            MemeSearchService.shared.cancelLoad(url: url)
+        }
         currentImageURL = nil
         memeImageView.image = nil
         gifBadge.isHidden = true
-        loadingIndicator.stopAnimation(nil)
-        loadingIndicator.isHidden = true
+        isLoading = false
         view.layer?.borderWidth = 0
     }
 }
@@ -5832,9 +5845,7 @@ extension SearchPanelViewController: NSMenuDelegate {
                     isGif: meme.isGif,
                     originalURL: meme.imageURL
                 )
-
-                // 刷新当前视图以更新菜单状态
-                self.memeCollectionView.reloadData()
+                // 菜单是动态构建的，不需要刷新整个视图
             }
         }
     }
@@ -5845,7 +5856,7 @@ extension SearchPanelViewController: NSMenuDelegate {
         // 通过原始 URL 查找并删除收藏
         if let favorite = MemeFavoriteService.shared.getFavorite(byURL: meme.imageURL) {
             MemeFavoriteService.shared.removeFavorite(id: favorite.id)
-            memeCollectionView.reloadData()
+            // 菜单是动态构建的，不需要刷新整个视图
         }
     }
 
