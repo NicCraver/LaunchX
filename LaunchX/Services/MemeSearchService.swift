@@ -11,6 +11,7 @@ final class MemeSearchService {
     private let dataCache = NSCache<NSString, NSData>()  // 用于缓存 GIF 原始数据
     private var activeTasks: [String: URLSessionDataTask] = [:]
     private let taskQueue = DispatchQueue(label: "com.launchx.meme.tasks")
+    private var currentSearchTask: URLSessionDataTask?
 
     private init() {
         // 设置缓存限制
@@ -46,14 +47,19 @@ final class MemeSearchService {
         }
 
         var request = URLRequest(url: url)
-        request.timeoutInterval = 15
+        request.timeoutInterval = 10
         request.setValue(
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
             forHTTPHeaderField: "User-Agent")
 
-        let task = URLSession.shared.dataTask(with: request) { data, response, error in
+        // 取消前一次搜索请求，避免旧结果覆盖新结果
+        currentSearchTask?.cancel()
+
+        let task = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
             DispatchQueue.main.async {
                 if let error = error {
+                    // 请求被取消时不触发错误回调（通常是因为用户输入了新的关键词）
+                    if (error as NSError).code == NSURLErrorCancelled { return }
                     completion(.failure(error))
                     return
                 }
@@ -66,10 +72,11 @@ final class MemeSearchService {
                 }
 
                 // 解析 HTML
-                let memes = self.parseHTML(html)
+                let memes = self?.parseHTML(html) ?? []
                 completion(.success(memes))
             }
         }
+        currentSearchTask = task
         task.resume()
     }
 

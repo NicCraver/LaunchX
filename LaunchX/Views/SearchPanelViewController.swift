@@ -5021,7 +5021,7 @@ extension SearchPanelViewController: NSTextFieldDelegate {
                 self?.performMemeSearch(query)
             }
             memeSearchDebounceWorkItem = workItem
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: workItem)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: workItem)
             return
         }
 
