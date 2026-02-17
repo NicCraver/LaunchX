@@ -624,9 +624,34 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return .terminateCancel
         }
 
-        // 3. 其他情况（如系统关机、用户在设置中授予权限后被要求重启）允许退出
-        print("LaunchX: System initiated termination, allowing...")
+        // 3. 其他情况（如系统关机、用户在设置中授予权限后被要求重启）
+        // 安排自动重新启动，因为 macOS 对 accessory 模式的菜单栏应用 relaunch 支持不可靠
+        print("LaunchX: System initiated termination, scheduling relaunch...")
+        scheduleRelaunch()
         PermissionService.shared.stopPeriodicCheck()
         return .terminateNow
+    }
+
+    /// 安排应用在退出后自动重新启动
+    /// 使用外部 shell 进程等待当前进程退出后再重新打开应用
+    private func scheduleRelaunch() {
+        let bundlePath = Bundle.main.bundlePath
+        let pid = ProcessInfo.processInfo.processIdentifier
+
+        // 使用 shell 脚本：等待当前进程退出后，延迟一小段时间再重新打开应用
+        let script = """
+            while kill -0 \(pid) 2>/dev/null; do sleep 0.1; done; sleep 0.5; open "\(bundlePath)"
+            """
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/sh")
+        process.arguments = ["-c", script]
+
+        do {
+            try process.run()
+            print("LaunchX: Relaunch process scheduled (pid: \(process.processIdentifier))")
+        } catch {
+            print("LaunchX: Failed to schedule relaunch: \(error)")
+        }
     }
 }
