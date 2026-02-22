@@ -96,6 +96,10 @@ final class RemindersService {
                 return
             }
 
+            let calendar = Calendar.current
+            let endOfToday = calendar.startOfDay(
+                for: calendar.date(byAdding: .day, value: 1, to: Date())!)
+
             let items = ekReminders.compactMap { reminder -> ReminderItem? in
                 // macOS EventKit bug: items from fetchReminders often have nil URL/Notes.
                 // Re-fetching by identifier ensures full data is loaded.
@@ -136,6 +140,10 @@ final class RemindersService {
                     return r1.priority < r2.priority
                 }
                 return (r1.dueDate ?? .distantFuture) < (r2.dueDate ?? .distantFuture)
+            }.filter { item in
+                // 仅显示今天或逾期的任务 (不包含无日期的任务)
+                guard let dueDate = item.dueDate else { return false }
+                return dueDate < endOfToday
             }
 
             DispatchQueue.main.async {
