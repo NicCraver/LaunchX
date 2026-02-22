@@ -7,5 +7,9 @@
 	<string>u09i3ukzZB+84ns9RdiryTO0PNV9yRLK/iKT0ijnDjE=</string>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>LaunchX 需要控制终端应用以执行"cd 至此"功能。</string>
+	<key>NSRemindersUsageDescription</key>
+	<string>LaunchX 需要访问您的提醒事项以显示和管理待办任务。</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>LaunchX 需要访问您的日历以同步日程信息。</string>
 </dict>
 </plist>

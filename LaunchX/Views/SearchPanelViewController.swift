@@ -83,7 +83,8 @@ class SearchPanelViewController: NSViewController {
     private var memeLoadingCount = 0  // 追踪正在加载的图片数量
 
     // IP 查询结果
-    private var ipQueryResults: [(label: String, ip: String)] = []
+    var ipQueryResults: [(label: String, ip: String)] = []
+    var reminderResults: [SearchResult] = []
 
     // Kill 进程模式数据
     private var killModeApps: [RunningProcessInfo] = []  // 已打开应用
@@ -262,9 +263,20 @@ class SearchPanelViewController: NSViewController {
         // 加载最近使用的应用
         loadRecentApps()
 
+        // 请求提醒事项权限并加载
+        RemindersService.shared.requestAccess { [weak self] granted in
+            if granted {
+                self?.loadReminders()
+            }
+        }
+
         // Register for panel show callback to refresh recent apps
         PanelManager.shared.onWillShow = { [weak self] in
+            // 异步加载数据，加载完成后会自动触发刷新
             self?.loadRecentApps()
+            self?.loadReminders()
+            // 初始同步显示已有缓存数据
+            self?.performSearch("")
         }
 
         // Register for panel hide callback
@@ -288,7 +300,17 @@ class SearchPanelViewController: NSViewController {
     }
 
     /// 设置通知观察者
-    private func setupNotificationObservers() {
+    func loadReminders() {
+        RemindersService.shared.fetchIncompleteReminders { [weak self] items in
+            self?.reminderResults = items.map { SearchResult.fromReminder($0) }
+            // 如果当前没有搜索内容，刷新显示
+            if self?.searchField.stringValue.isEmpty == true {
+                self?.performSearch("")
+            }
+        }
+    }
+
+    func setupNotificationObservers() {
         // 监听直接进入 IDE 模式的通知（由快捷键触发）
         NotificationCenter.default.addObserver(
             self,
@@ -345,7 +367,15 @@ class SearchPanelViewController: NSViewController {
             object: nil
         )
 
-        // 监听工具配置变化，刷新默认搜索缓存
+        // 监听提醒事项变更
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleRemindersDidChange),
+            name: Notification.Name("RemindersDataDidChange"),
+            object: nil
+        )
+
+        // 监听工具配置变更
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(handleToolsConfigDidChange),
@@ -353,13 +383,17 @@ class SearchPanelViewController: NSViewController {
             object: nil
         )
 
-        // 监听液态玻璃设置变化
+        // 监听毛玻璃设置变更
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(handleLiquidGlassSettingDidChange),
             name: NSNotification.Name("enableLiquidGlassDidChange"),
             object: nil
         )
+    }
+
+    @objc private func handleRemindersDidChange() {
+        loadReminders()
     }
 
     /// 处理液态玻璃设置变化
@@ -2401,22 +2435,8 @@ class SearchPanelViewController: NSViewController {
             return
         }
 
-        let defaultWindowMode =
-            UserDefaults.standard.string(forKey: "defaultWindowMode") ?? "full"
-
         if searchField.stringValue.isEmpty {
-            if defaultWindowMode == "full" && !recentApps.isEmpty {
-                results = recentApps
-                isShowingRecents = true
-                print(
-                    "SearchPanelViewController: refreshDisplayMode set results to recentApps (\(recentApps.count) items)"
-                )
-            } else {
-                results = []
-                isShowingRecents = false
-            }
-            selectedIndex = 0
-            tableView.reloadData()
+            performSearch("")
         }
 
         updateVisibility()
@@ -2599,16 +2619,37 @@ class SearchPanelViewController: NSViewController {
     func performSearch(_ query: String) {
         guard !query.isEmpty else {
             selectedIndex = 0
+            isShowingRecents = false
+            results = []
 
-            // Full 模式下显示最近使用的应用
+            // 1. 优先显示待办提醒 (TODO)
+            if !reminderResults.isEmpty {
+                results.append(
+                    SearchResult(
+                        name: "提醒事项",
+                        path: "",
+                        icon: NSImage(),
+                        isDirectory: false,
+                        isSectionHeader: true
+                    ))
+                results.append(contentsOf: reminderResults.prefix(5))
+            }
+
+            // 2. Full 模式下显示最近使用的应用
             let defaultWindowMode =
                 UserDefaults.standard.string(forKey: "defaultWindowMode") ?? "full"
             if defaultWindowMode == "full" && !recentApps.isEmpty {
-                results = recentApps
+                // 始终为最近使用添加标题，保持样式统一
+                results.append(
+                    SearchResult(
+                        name: "最近使用",
+                        path: "",
+                        icon: NSImage(),
+                        isDirectory: false,
+                        isSectionHeader: true
+                    ))
+                results.append(contentsOf: recentApps)
                 isShowingRecents = true
-            } else {
-                results = []
-                isShowingRecents = false
             }
 
             tableView.reloadData()
@@ -4703,10 +4744,7 @@ class SearchPanelViewController: NSViewController {
                 let defaultWindowMode =
                     UserDefaults.standard.string(forKey: "defaultWindowMode") ?? "full"
                 if defaultWindowMode == "full" && self?.searchField.stringValue.isEmpty == true {
-                    self?.results = items
-                    self?.isShowingRecents = true
-                    self?.tableView.reloadData()
-                    self?.updateVisibility()
+                    self?.performSearch("")
                 }
             }
         }
@@ -4818,6 +4856,19 @@ class SearchPanelViewController: NSViewController {
 
         guard results.indices.contains(selectedIndex) else { return }
         let item = results[selectedIndex]
+
+        // 提醒事项：点击切换完成状态，完成后自动收起面板
+        if item.isReminder, let identifier = item.reminderIdentifier {
+            RemindersService.shared.toggleCompletion(identifier: identifier) {
+                [weak self] success in
+                if success {
+                    // 刷新提醒事项列表并隐藏面板
+                    self?.loadReminders()
+                    PanelManager.shared.hidePanel()
+                }
+            }
+            return
+        }
 
         // IDE 项目模式：使用对应 IDE 打开项目
         if isInIDEProjectMode, let ideApp = currentIDEApp {
@@ -5141,6 +5192,17 @@ extension SearchPanelViewController: NSTableViewDelegate {
         cellView?.configure(
             with: item, isSelected: isSelected, hideArrow: isInFolderOpenMode || isInIDEProjectMode)
 
+        // 绑定图标点击事件（用于提醒事项快速勾选）
+        cellView?.onIconClick = { [weak self] in
+            if item.isReminder, let identifier = item.reminderIdentifier {
+                RemindersService.shared.toggleCompletion(identifier: identifier) { success in
+                    if success {
+                        self?.loadReminders()
+                    }
+                }
+            }
+        }
+
         return cellView
     }
 
@@ -5189,7 +5251,7 @@ class ResultCellView: NSView {
     private let cpuLabel = NSTextField(labelWithString: "")
     private let memoryIcon = NSImageView()
     private let memoryLabel = NSTextField(labelWithString: "")
-    private let statsContainerView = NSView()  // 统计信息容器
+    private let statsContainerView = NSStackView()  // 统计信息容器
 
     // 用于切换 nameLabel 位置的约束
     private var nameLabelTopConstraint: NSLayoutConstraint!
@@ -5202,7 +5264,9 @@ class ResultCellView: NSView {
 
     // 分组标题模式的约束
     private var nameLabelLeadingNormal: NSLayoutConstraint!
-    private var nameLabelLeadingHeader: NSLayoutConstraint!
+    var nameLabelLeadingHeader: NSLayoutConstraint!
+    private var portLabelWidthConstraint: NSLayoutConstraint!
+    var onIconClick: (() -> Void)?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -5214,6 +5278,10 @@ class ResultCellView: NSView {
         setupViews()
     }
 
+    @objc private func iconClicked() {
+        onIconClick?()
+    }
+
     private func setupViews() {
         // Background
         backgroundView.wantsLayer = true
@@ -5223,6 +5291,9 @@ class ResultCellView: NSView {
 
         // Icon
         iconView.translatesAutoresizingMaskIntoConstraints = false
+        let iconClickGesture = NSClickGestureRecognizer(
+            target: self, action: #selector(iconClicked))
+        iconView.addGestureRecognizer(iconClickGesture)
         addSubview(iconView)
 
         // Name
@@ -5265,43 +5336,54 @@ class ResultCellView: NSView {
         addSubview(arrowIndicator)
 
         // 进程统计信息容器
+        // 进程统计信息容器 (StackView)
         statsContainerView.translatesAutoresizingMaskIntoConstraints = false
         statsContainerView.isHidden = true
+        statsContainerView.orientation = .horizontal
+        statsContainerView.spacing = 8
+        statsContainerView.alignment = .centerY
+        statsContainerView.distribution = .fill
         addSubview(statsContainerView)
 
         // 端口号标签
         portLabel.font = .monospacedSystemFont(ofSize: 11, weight: .medium)
         portLabel.textColor = .secondaryLabelColor
-        portLabel.alignment = .left  // 改为左对齐
+        portLabel.alignment = .left
         portLabel.translatesAutoresizingMaskIntoConstraints = false
-        statsContainerView.addSubview(portLabel)
+        statsContainerView.addArrangedSubview(portLabel)
 
         // CPU 图标
         cpuIcon.image = NSImage(systemSymbolName: "cpu", accessibilityDescription: "CPU")
         cpuIcon.contentTintColor = .secondaryLabelColor
         cpuIcon.translatesAutoresizingMaskIntoConstraints = false
-        statsContainerView.addSubview(cpuIcon)
+        cpuIcon.widthAnchor.constraint(equalToConstant: 12).isActive = true
+        cpuIcon.heightAnchor.constraint(equalToConstant: 12).isActive = true
+        statsContainerView.addArrangedSubview(cpuIcon)
 
         // CPU 标签
         cpuLabel.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
         cpuLabel.textColor = .secondaryLabelColor
-        cpuLabel.alignment = .left  // 改为左对齐
+        cpuLabel.alignment = .left
         cpuLabel.translatesAutoresizingMaskIntoConstraints = false
-        statsContainerView.addSubview(cpuLabel)
+        cpuLabel.widthAnchor.constraint(equalToConstant: 45).isActive = true
+        statsContainerView.addArrangedSubview(cpuLabel)
 
         // 内存图标
         memoryIcon.image = NSImage(
             systemSymbolName: "memorychip", accessibilityDescription: "Memory")
         memoryIcon.contentTintColor = .secondaryLabelColor
         memoryIcon.translatesAutoresizingMaskIntoConstraints = false
-        statsContainerView.addSubview(memoryIcon)
+        memoryIcon.widthAnchor.constraint(equalToConstant: 12).isActive = true
+        memoryIcon.heightAnchor.constraint(equalToConstant: 12).isActive = true
+        statsContainerView.addArrangedSubview(memoryIcon)
 
         // 内存标签
         memoryLabel.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
         memoryLabel.textColor = .secondaryLabelColor
-        memoryLabel.alignment = .left  // 改为左对齐
+        memoryLabel.alignment = .left
         memoryLabel.translatesAutoresizingMaskIntoConstraints = false
-        statsContainerView.addSubview(memoryLabel)
+        memoryLabel.widthAnchor.constraint(equalToConstant: 60).isActive = true
+        statsContainerView.addArrangedSubview(memoryLabel)
 
         // 创建布局约束
         nameLabelTopConstraint = nameLabel.topAnchor.constraint(equalTo: topAnchor, constant: 6)
@@ -5359,39 +5441,10 @@ class ResultCellView: NSView {
             // 统计信息容器（靠右）
             statsContainerView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -20),
             statsContainerView.centerYAnchor.constraint(equalTo: centerYAnchor),
-
-            // 从左到右布局：端口 -> CPU图标+标签 -> 内存图标+标签
-            // 端口标签（最左边，固定宽度）
-            portLabel.leadingAnchor.constraint(equalTo: statsContainerView.leadingAnchor),
-            portLabel.centerYAnchor.constraint(equalTo: statsContainerView.centerYAnchor),
-            portLabel.widthAnchor.constraint(equalToConstant: 50),
-
-            // CPU 图标（紧跟端口）
-            cpuIcon.leadingAnchor.constraint(equalTo: portLabel.trailingAnchor, constant: 8),
-            cpuIcon.centerYAnchor.constraint(equalTo: statsContainerView.centerYAnchor),
-            cpuIcon.widthAnchor.constraint(equalToConstant: 12),
-            cpuIcon.heightAnchor.constraint(equalToConstant: 12),
-
-            // CPU 标签（紧跟 CPU 图标）
-            cpuLabel.leadingAnchor.constraint(equalTo: cpuIcon.trailingAnchor, constant: 2),
-            cpuLabel.centerYAnchor.constraint(equalTo: statsContainerView.centerYAnchor),
-            cpuLabel.widthAnchor.constraint(equalToConstant: 45),
-
-            // 内存图标（紧跟 CPU 标签）
-            memoryIcon.leadingAnchor.constraint(equalTo: cpuLabel.trailingAnchor, constant: 8),
-            memoryIcon.centerYAnchor.constraint(equalTo: statsContainerView.centerYAnchor),
-            memoryIcon.widthAnchor.constraint(equalToConstant: 12),
-            memoryIcon.heightAnchor.constraint(equalToConstant: 12),
-
-            // 内存标签（紧跟内存图标，最右边）
-            memoryLabel.leadingAnchor.constraint(equalTo: memoryIcon.trailingAnchor, constant: 2),
-            memoryLabel.centerYAnchor.constraint(equalTo: statsContainerView.centerYAnchor),
-            memoryLabel.widthAnchor.constraint(equalToConstant: 60),
-            memoryLabel.trailingAnchor.constraint(equalTo: statsContainerView.trailingAnchor),
-
-            // 容器高度
-            statsContainerView.topAnchor.constraint(equalTo: portLabel.topAnchor),
-            statsContainerView.bottomAnchor.constraint(equalTo: portLabel.bottomAnchor),
+            {
+                portLabelWidthConstraint = portLabel.widthAnchor.constraint(equalToConstant: 50)
+                return portLabelWidthConstraint
+            }(),
 
             pathLabel.leadingAnchor.constraint(equalTo: nameLabel.leadingAnchor),
             pathLabel.topAnchor.constraint(equalTo: nameLabel.bottomAnchor, constant: 2),
@@ -5405,7 +5458,61 @@ class ResultCellView: NSView {
             return
         }
 
-        iconView.image = item.icon
+        // 提醒事项特殊处理图标颜色和布局
+        if item.isReminder {
+            let config = NSImage.SymbolConfiguration(pointSize: 14, weight: .medium)
+            iconView.image = item.icon.withSymbolConfiguration(config)
+
+            let reminderColor: NSColor = item.reminderColor ?? NSColor.systemOrange
+            if isSelected {
+                iconView.contentTintColor = NSColor.white
+            } else {
+                iconView.contentTintColor = reminderColor
+            }
+
+            // 确保标题拥有最高优先级，不被右侧日期挤压
+            nameLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+            nameLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
+
+            // 提醒事项在右侧显示列表名称和截止日期（复用 statsContainer 区域）
+            if let stats = item.processStats {
+                portLabel.stringValue = stats
+                portLabel.alignment = .right
+                portLabel.lineBreakMode = .byTruncatingTail
+                portLabel.textColor =
+                    isSelected ? .white.withAlphaComponent(0.9) : .secondaryLabelColor
+                portLabel.font = .monospacedSystemFont(ofSize: 11, weight: .medium)
+
+                // 日期和列表名设置为强制收缩，消除多余空白
+                portLabel.setContentHuggingPriority(.required, for: .horizontal)
+                portLabel.setContentCompressionResistancePriority(.defaultHigh, for: .horizontal)
+
+                // 禁用固定的宽度约束，允许内容根据文字长度自动收缩，消除右侧留白
+                portLabelWidthConstraint.isActive = false
+
+                statsContainerView.isHidden = false
+                cpuIcon.isHidden = true
+                cpuLabel.isHidden = true
+                memoryIcon.isHidden = true
+                memoryLabel.isHidden = true
+            }
+        } else {
+            // 恢复普通模式布局
+            portLabel.font = .systemFont(ofSize: 11)
+            cpuIcon.isHidden = false
+            cpuLabel.isHidden = false
+            memoryIcon.isHidden = false
+            memoryLabel.isHidden = false
+            portLabel.alignment = .left
+            portLabel.lineBreakMode = .byClipping
+            nameLabel.setContentCompressionResistancePriority(.defaultHigh, for: .horizontal)
+
+            // 重新启用宽度约束并恢复默认宽度
+            portLabelWidthConstraint.isActive = true
+            portLabelWidthConstraint.constant = 50
+            iconView.image = item.icon
+            iconView.contentTintColor = nil
+        }
         iconView.isHidden = false
         nameLabel.stringValue = item.name
 
@@ -5420,7 +5527,14 @@ class ResultCellView: NSView {
 
         // 显示进程统计信息（三列独立显示）
         let hasProcessStats = item.processStats != nil && !item.processStats!.isEmpty
-        if hasProcessStats {
+        if hasProcessStats && !item.isReminder {
+            // 恢复普通模式布局
+            portLabel.alignment = .left
+            portLabel.lineBreakMode = .byClipping
+            portLabel.setContentHuggingPriority(.required, for: .horizontal)
+            portLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+            portLabelWidthConstraint.constant = 50
+
             // 解析 processStats: 格式为 "port|cpu|memory" 或 "|cpu|memory"（无端口）
             let stats = item.processStats!
             let parts = stats.components(separatedBy: "|")
@@ -5434,7 +5548,7 @@ class ResultCellView: NSView {
                 memoryLabel.stringValue = parts[1]
             }
             statsContainerView.isHidden = false
-        } else {
+        } else if !item.isReminder {
             portLabel.stringValue = ""
             cpuLabel.stringValue = ""
             memoryLabel.stringValue = ""
@@ -5450,9 +5564,10 @@ class ResultCellView: NSView {
         let is2FAEntry = item.is2FAEntry
         let isMemeEntry = item.isMemeEntry
         let isFavoriteEntry = item.isFavoriteEntry
+        let isReminder = item.isReminder
         let showPathLabel =
             !isApp && !isWebLink && !isUtility && !isSystemCommand && !isBookmarkEntry
-            && !is2FAEntry && !isMemeEntry && !isFavoriteEntry && !hasProcessStats
+            && !is2FAEntry && !isMemeEntry && !isFavoriteEntry && !hasProcessStats && !isReminder
         pathLabel.isHidden = !showPathLabel
         pathLabel.stringValue = showPathLabel ? item.path : ""
 
@@ -5494,9 +5609,9 @@ class ResultCellView: NSView {
             pathLabelTrailingToEdge.isActive = true
         }
 
-        // 切换布局：App、网页直达、实用工具、系统命令、书签入口、2FA 入口、表情包入口、收藏入口、有进程统计的项垂直居中，其他顶部对齐
+        // 切换布局：App、网页直达、实用工具、系统命令、书签入口、2FA 入口、表情包入口、收藏入口、有进程统计的项、提醒事项垂直居中，其他顶部对齐
         if isApp || isWebLink || isUtility || isSystemCommand || isBookmarkEntry || is2FAEntry
-            || isMemeEntry || isFavoriteEntry || hasProcessStats
+            || isMemeEntry || isFavoriteEntry || hasProcessStats || isReminder
         {
             nameLabel.font = .systemFont(ofSize: 14, weight: .medium)
             nameLabelTopConstraint.isActive = false
@@ -5514,7 +5629,11 @@ class ResultCellView: NSView {
             pathLabel.textColor = .white.withAlphaComponent(0.8)
             arrowIndicator.contentTintColor = .white.withAlphaComponent(0.8)
             // 统计信息选中时的样式
-            portLabel.textColor = .white.withAlphaComponent(0.9)
+            if item.isReminder {
+                portLabel.textColor = .white.withAlphaComponent(0.8)
+            } else {
+                portLabel.textColor = .white.withAlphaComponent(0.9)
+            }
             cpuIcon.contentTintColor = .white.withAlphaComponent(0.7)
             cpuLabel.textColor = .white.withAlphaComponent(0.8)
             memoryIcon.contentTintColor = .white.withAlphaComponent(0.7)

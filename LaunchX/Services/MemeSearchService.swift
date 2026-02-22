@@ -173,7 +173,7 @@ final class MemeSearchService {
         }
 
         // 检查并发限制
-        taskQueue.sync {
+        _ = taskQueue.sync {
             if activeLoadCount >= maxConcurrentLoads {
                 // 加入等待队列
                 pendingLoads.append((url: url, completion: completion))
@@ -184,7 +184,7 @@ final class MemeSearchService {
 
         // 如果已加入等待队列，直接返回
         var shouldReturn = false
-        taskQueue.sync {
+        _ = taskQueue.sync {
             shouldReturn = pendingLoads.contains { $0.url == url }
         }
         if shouldReturn { return }
@@ -211,7 +211,7 @@ final class MemeSearchService {
         }
 
         // 取消之前的同 URL 请求
-        taskQueue.sync {
+        _ = taskQueue.sync {
             activeTasks[url]?.cancel()
         }
 
@@ -244,7 +244,7 @@ final class MemeSearchService {
             }
         }
 
-        taskQueue.sync {
+        _ = taskQueue.sync {
             activeTasks[url] = task
         }
         task.resume()
@@ -258,7 +258,7 @@ final class MemeSearchService {
 
         // 处理等待队列中的下一个请求
         var nextLoad: (url: String, completion: (NSImage?, Data?) -> Void)?
-        taskQueue.sync {
+        _ = taskQueue.sync {
             activeLoadCount -= 1
             if !pendingLoads.isEmpty {
                 nextLoad = pendingLoads.removeFirst()
@@ -273,7 +273,7 @@ final class MemeSearchService {
 
     /// 取消图片加载
     func cancelLoad(url: String) {
-        taskQueue.sync {
+        _ = taskQueue.sync {
             activeTasks[url]?.cancel()
             activeTasks.removeValue(forKey: url)
             // 同时从等待队列中移除
@@ -283,7 +283,7 @@ final class MemeSearchService {
 
     /// 取消所有图片加载
     func cancelAllLoads() {
-        taskQueue.sync {
+        _ = taskQueue.sync {
             for (_, task) in activeTasks {
                 task.cancel()
             }

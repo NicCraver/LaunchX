@@ -1,6 +1,28 @@
 import AppKit
 import Foundation
 
+// MARK: - Reminder Item Model
+
+struct ReminderItem: Identifiable, Hashable {
+    let id: String
+    let title: String
+    let dueDate: Date?
+    let isCompleted: Bool
+    let priority: Int  // 0: None, 1: High (!!!), 5: Medium (!!), 9: Low (!)
+    let listTitle: String
+    let listColor: NSColor?
+    let notes: String?
+    let url: URL?
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
+
+    static func == (lhs: ReminderItem, rhs: ReminderItem) -> Bool {
+        lhs.id == rhs.id
+    }
+}
+
 struct SearchResult: Identifiable, Hashable {
     let id: UUID
     let name: String
@@ -21,6 +43,9 @@ struct SearchResult: Identifiable, Hashable {
     let supportsQueryExtension: Bool  // 是否支持 query 扩展
     let defaultUrl: String?  // 默认 URL（用于 query 扩展）
     let isSectionHeader: Bool  // 是否为分组标题
+    let isReminder: Bool  // 是否为提醒事项
+    let reminderIdentifier: String?  // 提醒事项唯一标识符
+    let reminderColor: NSColor?  // 提醒事项列表颜色
     let processStats: String?  // 进程统计信息（CPU、内存等，靠右显示）
 
     init(
@@ -30,7 +55,9 @@ struct SearchResult: Identifiable, Hashable {
         isBookmarkEntry: Bool = false, is2FACode: Bool = false, is2FAEntry: Bool = false,
         isMemeEntry: Bool = false, isFavoriteEntry: Bool = false,
         supportsQueryExtension: Bool = false, defaultUrl: String? = nil,
-        isSectionHeader: Bool = false, processStats: String? = nil
+        isSectionHeader: Bool = false, isReminder: Bool = false,
+        reminderIdentifier: String? = nil, reminderColor: NSColor? = nil,
+        processStats: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -51,6 +78,9 @@ struct SearchResult: Identifiable, Hashable {
         self.supportsQueryExtension = supportsQueryExtension
         self.defaultUrl = defaultUrl
         self.isSectionHeader = isSectionHeader
+        self.isReminder = isReminder
+        self.reminderIdentifier = reminderIdentifier
+        self.reminderColor = reminderColor
         self.processStats = processStats
     }
 
@@ -60,5 +90,41 @@ struct SearchResult: Identifiable, Hashable {
 
     func hash(into hasher: inout Hasher) {
         hasher.combine(id)
+    }
+}
+
+extension SearchResult {
+    static func fromReminder(_ item: ReminderItem) -> SearchResult {
+        // Priority icons: !!! for high, !! for medium, ! for low
+        var prefix = ""
+        if item.priority == 1 {
+            prefix = "!!! "
+        } else if item.priority == 5 {
+            prefix = "!! "
+        } else if item.priority == 9 {
+            prefix = "! "
+        }
+
+        var subtitle = item.listTitle
+        if let date = item.dueDate {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyy/M/d, HH:mm"
+            subtitle += " • \(formatter.string(from: date))"
+        }
+
+        let iconName = item.isCompleted ? "checkmark.circle.fill" : "circle"
+        let icon = NSImage(systemSymbolName: iconName, accessibilityDescription: nil) ?? NSImage()
+
+        // Store the reminder identifier in reminderIdentifier so we can toggle it later
+        return SearchResult(
+            name: prefix + item.title,
+            path: item.notes ?? "",
+            icon: icon,
+            isDirectory: false,
+            isReminder: true,
+            reminderIdentifier: item.id,
+            reminderColor: item.listColor,
+            processStats: subtitle
+        )
     }
 }
