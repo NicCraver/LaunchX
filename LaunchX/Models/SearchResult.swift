@@ -46,6 +46,7 @@ struct SearchResult: Identifiable, Hashable {
     let isReminder: Bool  // 是否为提醒事项
     let reminderIdentifier: String?  // 提醒事项唯一标识符
     let reminderColor: NSColor?  // 提醒事项列表颜色
+    let reminderURL: URL?  // 提醒事项关联的 URL
     let processStats: String?  // 进程统计信息（CPU、内存等，靠右显示）
 
     init(
@@ -57,7 +58,7 @@ struct SearchResult: Identifiable, Hashable {
         supportsQueryExtension: Bool = false, defaultUrl: String? = nil,
         isSectionHeader: Bool = false, isReminder: Bool = false,
         reminderIdentifier: String? = nil, reminderColor: NSColor? = nil,
-        processStats: String? = nil
+        reminderURL: URL? = nil, processStats: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -81,6 +82,7 @@ struct SearchResult: Identifiable, Hashable {
         self.isReminder = isReminder
         self.reminderIdentifier = reminderIdentifier
         self.reminderColor = reminderColor
+        self.reminderURL = reminderURL
         self.processStats = processStats
     }
 
@@ -115,7 +117,7 @@ extension SearchResult {
         let iconName = item.isCompleted ? "checkmark.circle.fill" : "circle"
         let icon = NSImage(systemSymbolName: iconName, accessibilityDescription: nil) ?? NSImage()
 
-        // Store the reminder identifier in reminderIdentifier so we can toggle it later
+        // Store the reminder identifier and URL
         return SearchResult(
             name: prefix + item.title,
             path: item.notes ?? "",
@@ -124,6 +126,7 @@ extension SearchResult {
             isReminder: true,
             reminderIdentifier: item.id,
             reminderColor: item.listColor,
+            reminderURL: item.url,
             processStats: subtitle
         )
     }

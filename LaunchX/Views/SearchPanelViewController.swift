@@ -146,6 +146,7 @@ class SearchPanelViewController: NSViewController {
 
     var isInQuickActionsMode: Bool = false
     private var quickActionsView: QuickActionsView?
+    private var reminderActionView: ReminderActionView?
     private var currentQuickActionTarget: SearchResult?  // 当前操作的目标文件/文件夹
 
     // MARK: - Constants
@@ -253,6 +254,7 @@ class SearchPanelViewController: NSViewController {
         super.viewDidLoad()
         print("SearchPanelViewController: viewDidLoad called")
         setupUI()
+        setupGlobalShortcutHint()
         setupKeyboardMonitor()
         setupNotificationObservers()
 
@@ -1724,17 +1726,6 @@ class SearchPanelViewController: NSViewController {
         noResultsLabel.isHidden = true
         contentView.addSubview(noResultsLabel)
 
-        // 底部快捷键提示栏
-        shortcutHintView.translatesAutoresizingMaskIntoConstraints = false
-        shortcutHintView.isHidden = true
-        contentView.addSubview(shortcutHintView)
-
-        shortcutHintLabel.textColor = .tertiaryLabelColor
-        shortcutHintLabel.font = NSFont.systemFont(ofSize: 11)
-        shortcutHintLabel.alignment = .right
-        shortcutHintLabel.translatesAutoresizingMaskIntoConstraints = false
-        shortcutHintView.addSubview(shortcutHintLabel)
-
         // Constraints
         NSLayoutConstraint.activate([
             // IDE Tag View - 与搜索框垂直居中对齐，微调 +3 补偿视觉偏差
@@ -1773,15 +1764,6 @@ class SearchPanelViewController: NSViewController {
             scrollView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
             scrollView.topAnchor.constraint(equalTo: divider.bottomAnchor),
 
-            // 底部快捷键提示栏
-            shortcutHintView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
-            shortcutHintView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-            shortcutHintView.heightAnchor.constraint(equalToConstant: 28),
-
-            shortcutHintLabel.trailingAnchor.constraint(
-                equalTo: shortcutHintView.trailingAnchor, constant: -16),
-            shortcutHintLabel.centerYAnchor.constraint(equalTo: shortcutHintView.centerYAnchor),
-
             // No results label
             noResultsLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
         ])
@@ -1801,16 +1783,11 @@ class SearchPanelViewController: NSViewController {
         contentHeightConstraint = contentView.heightAnchor.constraint(equalToConstant: headerHeight)
         contentHeightConstraint?.isActive = true
 
-        // 为 ScrollView 和底部提示栏设置低优先级的垂直约束，解决简约模式下的高度冲突
+        // 为 ScrollView 设置低优先级的垂直约束，解决简约模式下的高度冲突
         let scrollBottomConstraint = scrollView.bottomAnchor.constraint(
-            equalTo: shortcutHintView.topAnchor)
+            equalTo: contentView.bottomAnchor, constant: -10)
         scrollBottomConstraint.priority = .defaultLow
         scrollBottomConstraint.isActive = true
-
-        let bottomConstraint = shortcutHintView.bottomAnchor.constraint(
-            equalTo: contentView.bottomAnchor)
-        bottomConstraint.priority = .defaultLow  // 允许在高度受限时被压缩/隐藏
-        bottomConstraint.isActive = true
 
         // 创建并保存 searchField 的 leading 约束
         // 默认直接从左边开始（无搜索图标）
@@ -2869,6 +2846,35 @@ class SearchPanelViewController: NSViewController {
     }
 
     /// 更新底部快捷键提示
+    private func setupGlobalShortcutHint() {
+        shortcutHintView.wantsLayer = true
+        shortcutHintView.layer?.cornerRadius = 6
+        shortcutHintView.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.2).cgColor
+        shortcutHintView.translatesAutoresizingMaskIntoConstraints = false
+        shortcutHintView.isHidden = true
+        contentView.addSubview(shortcutHintView)
+
+        shortcutHintLabel.font = .systemFont(ofSize: 11, weight: .medium)
+        shortcutHintLabel.textColor = .secondaryLabelColor
+        shortcutHintLabel.stringValue = "⌘K 快捷操作"
+        shortcutHintLabel.translatesAutoresizingMaskIntoConstraints = false
+        shortcutHintView.addSubview(shortcutHintLabel)
+
+        NSLayoutConstraint.activate([
+            shortcutHintView.trailingAnchor.constraint(
+                equalTo: contentView.trailingAnchor, constant: -16),
+            shortcutHintView.bottomAnchor.constraint(
+                equalTo: contentView.bottomAnchor, constant: -12),
+            shortcutHintView.heightAnchor.constraint(equalToConstant: 22),
+
+            shortcutHintLabel.leadingAnchor.constraint(
+                equalTo: shortcutHintView.leadingAnchor, constant: 8),
+            shortcutHintLabel.trailingAnchor.constraint(
+                equalTo: shortcutHintView.trailingAnchor, constant: -8),
+            shortcutHintLabel.centerYAnchor.constraint(equalTo: shortcutHintView.centerYAnchor),
+        ])
+    }
+
     private func updateShortcutHint() {
         // 检查当前选中项是否支持快捷操作
         guard results.indices.contains(selectedIndex) else {
@@ -2878,15 +2884,26 @@ class SearchPanelViewController: NSViewController {
 
         let item = results[selectedIndex]
 
-        // 跳过特殊类型
-        let isApp = item.path.hasSuffix(".app")
-        let supportsQuickActions =
-            !item.isSectionHeader && !isApp && !item.isWebLink
-            && !item.isUtility && !item.isSystemCommand && !item.isBookmark
-            && !item.isBookmarkEntry && !item.is2FACode && !item.is2FAEntry
-            && !item.isMemeEntry && !item.isFavoriteEntry
+        // 确定哪些类型支持 Cmd+K 快捷操作
+        var supportsQuickActions = false
 
-        if supportsQuickActions && FileManager.default.fileExists(atPath: item.path) {
+        if item.isReminder {
+            // 只有带链接的提醒事项才显示 ⌘K 提示
+            supportsQuickActions = item.reminderURL != nil
+        } else {
+            // 还原原始逻辑：仅支持文件和文件夹（排除 .app、网页、工具等）
+            let isApp = item.path.hasSuffix(".app")
+            let isSpecial =
+                item.isWebLink || item.isUtility || item.isSystemCommand
+                || item.isBookmark || item.isBookmarkEntry || item.is2FACode
+                || item.is2FAEntry || item.isMemeEntry || item.isFavoriteEntry
+
+            if !item.isSectionHeader && !isApp && !isSpecial {
+                supportsQuickActions = FileManager.default.fileExists(atPath: item.path)
+            }
+        }
+
+        if supportsQuickActions {
             shortcutHintLabel.stringValue = "⌘K  快捷操作"
             shortcutHintView.isHidden = false
         } else {
@@ -2935,6 +2952,10 @@ class SearchPanelViewController: NSViewController {
     private func handleKeyEvent(_ event: NSEvent) -> NSEvent? {
         // 快捷操作模式下优先处理
         if isInQuickActionsMode {
+            if let reminderView = reminderActionView {
+                reminderView.keyDown(with: event)
+                return nil
+            }
             return handleQuickActionsKeyEvent(event)
         }
 
@@ -3323,19 +3344,24 @@ class SearchPanelViewController: NSViewController {
         // 跳过分组标题
         guard !item.isSectionHeader else { return }
 
-        // 只对文件和文件夹显示（排除 .app、网页、工具等）
-        let isApp = item.path.hasSuffix(".app")
-        guard
-            !isApp && !item.isWebLink && !item.isUtility && !item.isSystemCommand
-                && !item.isBookmark && !item.isBookmarkEntry && !item.is2FACode && !item.is2FAEntry
-                && !item.isMemeEntry && !item.isFavoriteEntry
-        else {
-            return
-        }
+        if item.isReminder {
+            // 提醒事项：必须有链接才显示
+            guard item.reminderURL != nil else { return }
+        } else {
+            // 还原原始逻辑：只对文件和文件夹显示
+            let isApp = item.path.hasSuffix(".app")
+            guard
+                !isApp && !item.isWebLink && !item.isUtility && !item.isSystemCommand
+                    && !item.isBookmark && !item.isBookmarkEntry && !item.is2FACode
+                    && !item.is2FAEntry
+                    && !item.isMemeEntry && !item.isFavoriteEntry
+            else {
+                return
+            }
 
-        // 验证路径存在
-        let fileExists = FileManager.default.fileExists(atPath: item.path)
-        guard fileExists else { return }
+            // 验证路径存在
+            guard FileManager.default.fileExists(atPath: item.path) else { return }
+        }
 
         showQuickActions(for: item)
     }
@@ -3346,49 +3372,84 @@ class SearchPanelViewController: NSViewController {
         hideQuickActions()
 
         currentQuickActionTarget = item
-        isInQuickActionsMode = true
 
-        // 创建快捷操作视图
-        let actionsView = QuickActionsView()
-        actionsView.delegate = self
-        actionsView.translatesAutoresizingMaskIntoConstraints = false
+        if item.isReminder {
+            // 提醒事项显示专门的跳转面板
+            let actionView = ReminderActionView()
+            actionView.delegate = self
+            actionView.translatesAutoresizingMaskIntoConstraints = false
+            // 确保显示在最顶层，避免被 TableView 或其他视图遮挡
+            contentView.addSubview(actionView, positioned: .above, relativeTo: nil)
 
-        contentView.addSubview(actionsView)
+            // 定位到右下角
+            NSLayoutConstraint.activate([
+                actionView.trailingAnchor.constraint(
+                    equalTo: contentView.trailingAnchor, constant: -12),
+                actionView.bottomAnchor.constraint(
+                    equalTo: contentView.bottomAnchor, constant: -12),
+            ])
 
-        // 定位到右下角
-        NSLayoutConstraint.activate([
-            actionsView.trailingAnchor.constraint(
-                equalTo: contentView.trailingAnchor, constant: -12),
-            actionsView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -12),
-        ])
+            reminderActionView = actionView
+            isInQuickActionsMode = true
 
-        quickActionsView = actionsView
+            // 动画显示
+            actionView.alphaValue = 0
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.15
+                actionView.animator().alphaValue = 1
+            }
+        } else {
+            // 普通项目显示标准快捷操作
+            isInQuickActionsMode = true
+            let actions: [QuickActionType] = [
+                .openInTerminal, .showInFinder, .copyPath, .airDrop, .delete,
+            ]
+            let actionsView = QuickActionsView(actions: actions)
+            actionsView.delegate = self
+            actionsView.translatesAutoresizingMaskIntoConstraints = false
+            // 确保显示在最顶层
+            contentView.addSubview(actionsView, positioned: .above, relativeTo: nil)
 
-        // 动画显示
-        actionsView.alphaValue = 0
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.15
-            actionsView.animator().alphaValue = 1
+            NSLayoutConstraint.activate([
+                actionsView.trailingAnchor.constraint(
+                    equalTo: contentView.trailingAnchor, constant: -12),
+                actionsView.bottomAnchor.constraint(
+                    equalTo: contentView.bottomAnchor, constant: -12),
+            ])
+
+            quickActionsView = actionsView
+
+            actionsView.alphaValue = 0
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.15
+                actionsView.animator().alphaValue = 1
+            }
         }
     }
 
-    /// 隐藏快捷操作面板
     private func hideQuickActions() {
-        guard let actionsView = quickActionsView else { return }
+        isInQuickActionsMode = false
+        currentQuickActionTarget = nil
 
-        NSAnimationContext.runAnimationGroup(
-            { context in
+        if let view = quickActionsView {
+            NSAnimationContext.runAnimationGroup({ context in
                 context.duration = 0.1
-                actionsView.animator().alphaValue = 0
-            },
-            completionHandler: { [weak self] in
-                actionsView.removeFromSuperview()
-                self?.quickActionsView = nil
-                self?.isInQuickActionsMode = false
-                self?.currentQuickActionTarget = nil
-                self?.calculatorResult = nil
-                self?.calculatorResultLabel.stringValue = ""
-            })
+                view.animator().alphaValue = 0
+            }) {
+                view.removeFromSuperview()
+            }
+            quickActionsView = nil
+        }
+
+        if let view = reminderActionView {
+            NSAnimationContext.runAnimationGroup({ context in
+                context.duration = 0.1
+                view.animator().alphaValue = 0
+            }) {
+                view.removeFromSuperview()
+            }
+            reminderActionView = nil
+        }
     }
 
     /// 执行快捷操作
@@ -3404,6 +3465,16 @@ class SearchPanelViewController: NSViewController {
             quickActionCopyPath(path: target.path)
         case .airDrop:
             quickActionAirDrop(path: target.path)
+        case .openURL:
+            if let url = target.reminderURL {
+                NSWorkspace.shared.open(url)
+                PanelManager.shared.hidePanel()
+            }
+        case .openInReminders:
+            if let identifier = target.reminderIdentifier {
+                RemindersService.shared.openInReminders(identifier: identifier)
+                PanelManager.shared.hidePanel()
+            }
         case .delete:
             quickActionDelete(path: target.path, name: target.name)
         }
@@ -5244,6 +5315,7 @@ class ResultCellView: NSView {
     private let pathLabel = NSTextField(labelWithString: "")
     private let backgroundView = NSView()
     private let arrowIndicator = NSImageView()  // IDE 箭头指示器
+    private let linkIndicator = NSImageView()  // 链接指示器
 
     // 进程统计信息（三列独立显示）
     private let portLabel = NSTextField(labelWithString: "")
@@ -5335,15 +5407,29 @@ class ResultCellView: NSView {
         arrowIndicator.isHidden = true
         addSubview(arrowIndicator)
 
+        // Link indicator
+        // 链接指示器 (将作为 arranged subview 添加到 statsContainerView)
+        linkIndicator.image = NSImage(
+            systemSymbolName: "globe",
+            accessibilityDescription: "Has URL")
+        linkIndicator.contentTintColor = .systemBlue
+        linkIndicator.translatesAutoresizingMaskIntoConstraints = false
+        linkIndicator.isHidden = true
+        linkIndicator.widthAnchor.constraint(equalToConstant: 13).isActive = true
+        linkIndicator.heightAnchor.constraint(equalToConstant: 13).isActive = true
+
         // 进程统计信息容器
         // 进程统计信息容器 (StackView)
         statsContainerView.translatesAutoresizingMaskIntoConstraints = false
         statsContainerView.isHidden = true
         statsContainerView.orientation = .horizontal
-        statsContainerView.spacing = 8
+        statsContainerView.spacing = 6
         statsContainerView.alignment = .centerY
         statsContainerView.distribution = .fill
         addSubview(statsContainerView)
+
+        // 添加链接指示器作为第一个子视图
+        statsContainerView.addArrangedSubview(linkIndicator)
 
         // 端口号标签
         portLabel.font = .monospacedSystemFont(ofSize: 11, weight: .medium)
@@ -5496,7 +5582,21 @@ class ResultCellView: NSView {
                 memoryIcon.isHidden = true
                 memoryLabel.isHidden = true
             }
+
+            // 显示链接图标 (有 URL 时显示蓝色的 globe 图标)
+            linkIndicator.isHidden = item.reminderURL == nil
+            if isSelected {
+                linkIndicator.contentTintColor = .white.withAlphaComponent(0.9)
+            } else {
+                linkIndicator.contentTintColor = .systemBlue
+            }
+
+            // 即使没有截止日期等统计信息，只要有链接也要显示右侧容器
+            if !linkIndicator.isHidden {
+                statsContainerView.isHidden = false
+            }
         } else {
+            linkIndicator.isHidden = true
             // 恢复普通模式布局
             portLabel.font = .systemFont(ofSize: 11)
             cpuIcon.isHidden = false
@@ -6035,9 +6135,24 @@ extension SearchPanelViewController: NSMenuDelegate {
 extension SearchPanelViewController: QuickActionsViewDelegate {
     func quickActionsView(_ view: QuickActionsView, didSelectAction action: QuickActionType) {
         executeQuickAction(action)
+        hideQuickActions()
     }
 
     func quickActionsViewDidRequestDismiss(_ view: QuickActionsView) {
+        hideQuickActions()
+    }
+}
+
+extension SearchPanelViewController: ReminderActionViewDelegate {
+    func reminderActionViewDidRequestOpenURL(_ view: ReminderActionView) {
+        if let url = currentQuickActionTarget?.reminderURL {
+            NSWorkspace.shared.open(url)
+            PanelManager.shared.hidePanel()
+        }
+        hideQuickActions()
+    }
+
+    func reminderActionViewDidRequestDismiss(_ view: ReminderActionView) {
         hideQuickActions()
     }
 }

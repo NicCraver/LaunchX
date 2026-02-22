@@ -1,11 +1,13 @@
 import Cocoa
 
 /// 快捷操作类型
-enum QuickActionType: CaseIterable {
+enum QuickActionType: Equatable {
     case openInTerminal  // cd 至此
     case showInFinder  // 在 Finder 中显示
     case copyPath  // 复制路径
     case airDrop  // 隔空投送
+    case openURL  // 打开链接
+    case openInReminders  // 在提醒事项中打开
     case delete  // 删除
 
     var title: String {
@@ -14,6 +16,8 @@ enum QuickActionType: CaseIterable {
         case .showInFinder: return "在 Finder 中显示"
         case .copyPath: return "复制路径"
         case .airDrop: return "隔空投送"
+        case .openURL: return "打开链接"
+        case .openInReminders: return "在提醒事项中打开"
         case .delete: return "删除"
         }
     }
@@ -25,6 +29,8 @@ enum QuickActionType: CaseIterable {
         case .showInFinder: symbolName = "folder"
         case .copyPath: symbolName = "doc.on.doc"
         case .airDrop: symbolName = "airplayaudio"
+        case .openURL: symbolName = "safari"
+        case .openInReminders: symbolName = "list.bullet"
         case .delete: symbolName = "trash"
         }
         return NSImage(systemSymbolName: symbolName, accessibilityDescription: nil)
@@ -133,7 +139,7 @@ class QuickActionsView: NSView {
         }
     }
 
-    private let actions: [QuickActionType] = QuickActionType.allCases
+    private var actions: [QuickActionType] = []
     private var rowViews: [QuickActionRowView] = []
 
     private let rowHeight: CGFloat = 28
@@ -143,19 +149,33 @@ class QuickActionsView: NSView {
 
     // MARK: - Initialization
 
+    init(actions: [QuickActionType]) {
+        self.actions = actions
+        super.init(frame: .zero)
+        setupView()
+    }
+
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
-        setupView()
     }
 
     required init?(coder: NSCoder) {
         super.init(coder: coder)
-        setupView()
     }
 
     // MARK: - Setup
 
+    func setupWithActions(_ actions: [QuickActionType]) {
+        self.actions = actions
+        setupView()
+    }
+
     private func setupView() {
+        // 清除旧视图
+        subviews.forEach { $0.removeFromSuperview() }
+        rowViews.removeAll()
+        selectedIndex = 0
+
         wantsLayer = true
 
         // 设置毛玻璃背景

@@ -96,17 +96,37 @@ final class RemindersService {
                 return
             }
 
-            let items = ekReminders.map { reminder in
-                ReminderItem(
-                    id: reminder.calendarItemIdentifier,
-                    title: reminder.title,
-                    dueDate: reminder.dueDateComponents?.date,
-                    isCompleted: reminder.isCompleted,
-                    priority: reminder.priority,
-                    listTitle: reminder.calendar.title,
-                    listColor: reminder.calendar.color,  // EKCalendar.color is NSColor on macOS
-                    notes: reminder.notes,
-                    url: reminder.url
+            let items = ekReminders.compactMap { reminder -> ReminderItem? in
+                // macOS EventKit bug: items from fetchReminders often have nil URL/Notes.
+                // Re-fetching by identifier ensures full data is loaded.
+                let fullReminder =
+                    self.eventStore.calendarItem(withIdentifier: reminder.calendarItemIdentifier)
+                    as? EKReminder
+                let item = fullReminder ?? reminder
+
+                // Aggressive URL extraction from the official URL field or Notes fallback
+                var reminderURL = item.url
+                if reminderURL == nil, let notes = item.notes, !notes.isEmpty {
+                    if let detector = try? NSDataDetector(
+                        types: NSTextCheckingResult.CheckingType.link.rawValue),
+                        let match = detector.firstMatch(
+                            in: notes, options: [],
+                            range: NSRange(location: 0, length: notes.utf16.count))
+                    {
+                        reminderURL = match.url
+                    }
+                }
+
+                return ReminderItem(
+                    id: item.calendarItemIdentifier,
+                    title: item.title,
+                    dueDate: item.dueDateComponents?.date,
+                    isCompleted: item.isCompleted,
+                    priority: item.priority,
+                    listTitle: item.calendar.title,
+                    listColor: item.calendar.color,
+                    notes: item.notes,
+                    url: reminderURL
                 )
             }.sorted { (r1, r2) -> Bool in
                 // Sort by priority (1 is highest), then by due date
