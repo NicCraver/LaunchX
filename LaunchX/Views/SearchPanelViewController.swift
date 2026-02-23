@@ -31,6 +31,12 @@ class SearchPanelViewController: NSViewController {
     private let searchEngine = SearchEngine.shared
     private var isShowingRecents: Bool = false  // 是否正在显示最近使用
 
+    /// 是否处于任何扩展模式（IDE、文件夹、网页直达、实用工具、书签、2FA、表情包等）
+    private var isInAnyExtensionMode: Bool {
+        return isInIDEProjectMode || isInFolderOpenMode || isInWebLinkQueryMode || isInUtilityMode
+            || isInBookmarkMode || isIn2FAMode || isInMemeMode || isInFavoriteMode
+    }
+
     // IDE 项目模式状态
     private var isInIDEProjectMode: Bool = false
     private var currentIDEApp: SearchResult? = nil
@@ -274,11 +280,19 @@ class SearchPanelViewController: NSViewController {
 
         // Register for panel show callback to refresh recent apps
         PanelManager.shared.onWillShow = { [weak self] in
+            guard let self = self else { return }
+
+            // 如果已经在扩展模式（例如通过快捷键直接进入），不加载最近项目和提醒，避免覆盖扩展界面
+            if self.isInAnyExtensionMode {
+                self.updateVisibility()
+                return
+            }
+
             // 异步加载数据，加载完成后会自动触发刷新
-            self?.loadRecentApps()
-            self?.loadReminders()
+            self.loadRecentApps()
+            self.loadReminders()
             // 初始同步显示已有缓存数据
-            self?.performSearch("")
+            self.performSearch("")
         }
 
         // Register for panel hide callback
@@ -305,8 +319,8 @@ class SearchPanelViewController: NSViewController {
     func loadReminders() {
         RemindersService.shared.fetchIncompleteReminders { [weak self] items in
             self?.reminderResults = items.map { SearchResult.fromReminder($0) }
-            // 如果当前没有搜索内容，刷新显示
-            if self?.searchField.stringValue.isEmpty == true {
+            // 如果当前没有搜索内容且不在扩展模式，刷新显示
+            if self?.searchField.stringValue.isEmpty == true && self?.isInAnyExtensionMode != true {
                 self?.performSearch("")
             }
         }
@@ -461,8 +475,14 @@ class SearchPanelViewController: NSViewController {
             isDirectory: true
         )
 
+        // 如果已经在同一个 IDE 的扩展模式中，忽略重复触发
+        if isInIDEProjectMode && currentIDEApp?.path == idePath {
+            print("SearchPanelViewController: Already in IDE mode for \(idePath), ignoring")
+            return
+        }
+
         // 如果在其他扩展模式中，先清理
-        if isInWebLinkQueryMode || isInFolderOpenMode || isInUtilityMode {
+        if isInAnyExtensionMode {
             cleanupAllExtensionModes()
         }
 
@@ -526,8 +546,14 @@ class SearchPanelViewController: NSViewController {
             defaultUrl: tool.defaultUrl
         )
 
+        // 如果已经在同一个网页直达的扩展模式中，忽略重复触发
+        if isInWebLinkQueryMode && currentWebLinkResult?.path == tool.url {
+            print("SearchPanelViewController: Already in WebLink mode for \(tool.name), ignoring")
+            return
+        }
+
         // 如果在其他扩展模式中，先清理
-        if isInIDEProjectMode || isInFolderOpenMode || isInUtilityMode {
+        if isInAnyExtensionMode {
             cleanupAllExtensionModes()
         }
 
@@ -573,7 +599,7 @@ class SearchPanelViewController: NSViewController {
         }
 
         // 如果在其他扩展模式中（包括其他实用工具），先清理
-        if isInIDEProjectMode || isInFolderOpenMode || isInWebLinkQueryMode || isInUtilityMode {
+        if isInAnyExtensionMode {
             cleanupAllExtensionModes()
         }
 
@@ -609,6 +635,7 @@ class SearchPanelViewController: NSViewController {
 
         // 更新 UI
         updateUtilityModeUI()
+        updateVisibility()
 
         // 根据不同的实用工具类型执行相应操作
         switch tool.extensionIdentifier {
@@ -633,18 +660,16 @@ class SearchPanelViewController: NSViewController {
     @objc private func handleEnterBookmarkModeDirectly() {
         print("SearchPanelViewController: handleEnterBookmarkModeDirectly called")
 
-        // 如果在其他扩展模式中，先清理（包括 2FA 模式等）
-        if isInIDEProjectMode || isInFolderOpenMode || isInWebLinkQueryMode || isInUtilityMode
-            || isIn2FAMode
-        {
-            cleanupAllExtensionModes()
-        }
-
         // 如果已经在书签模式中，刷新数据即可
         if isInBookmarkMode {
             print("SearchPanelViewController: Already in bookmark mode, refreshing")
             loadAllBookmarks()
             return
+        }
+
+        // 如果在其他扩展模式中，先清理
+        if isInAnyExtensionMode {
+            cleanupAllExtensionModes()
         }
 
         // 进入书签模式
@@ -808,18 +833,16 @@ class SearchPanelViewController: NSViewController {
     @objc private func handleEnter2FAModeDirectly() {
         print("SearchPanelViewController: handleEnter2FAModeDirectly called")
 
-        // 如果在其他扩展模式中，先清理（包括书签模式等）
-        if isInIDEProjectMode || isInFolderOpenMode || isInWebLinkQueryMode || isInUtilityMode
-            || isInBookmarkMode
-        {
-            cleanupAllExtensionModes()
-        }
-
         // 如果已经在 2FA 模式中，刷新数据即可
         if isIn2FAMode {
             print("SearchPanelViewController: Already in 2FA mode, refreshing")
             loadAll2FACodes()
             return
+        }
+
+        // 如果在其他扩展模式中，先清理
+        if isInAnyExtensionMode {
+            cleanupAllExtensionModes()
         }
 
         // 进入 2FA 模式
@@ -951,17 +974,15 @@ class SearchPanelViewController: NSViewController {
     @objc private func handleEnterMemeModeDirectly() {
         print("SearchPanelViewController: handleEnterMemeModeDirectly called")
 
-        // 如果在其他扩展模式中，先清理
-        if isInIDEProjectMode || isInFolderOpenMode || isInWebLinkQueryMode || isInUtilityMode
-            || isInBookmarkMode || isIn2FAMode || isInFavoriteMode
-        {
-            cleanupAllExtensionModes()
-        }
-
         // 如果已经在表情包模式中，忽略
         if isInMemeMode {
             print("SearchPanelViewController: Already in meme mode, ignoring")
             return
+        }
+
+        // 如果在其他扩展模式中，先清理
+        if isInAnyExtensionMode {
+            cleanupAllExtensionModes()
         }
 
         // 进入表情包模式
@@ -969,10 +990,7 @@ class SearchPanelViewController: NSViewController {
 
         // 更新 UI
         updateMemeModeUI()
-
-        // 显示表情包视图
-        memeScrollView.isHidden = false
-        scrollView.isHidden = true
+        updateVisibility()
 
         // 清空结果，等待用户搜索
         memeResults = []
@@ -1072,17 +1090,15 @@ class SearchPanelViewController: NSViewController {
     @objc private func handleEnterFavoriteModeDirectly() {
         print("SearchPanelViewController: handleEnterFavoriteModeDirectly called")
 
-        // 如果在其他扩展模式中，先清理
-        if isInIDEProjectMode || isInFolderOpenMode || isInWebLinkQueryMode || isInUtilityMode
-            || isInBookmarkMode || isIn2FAMode || isInMemeMode
-        {
-            cleanupAllExtensionModes()
-        }
-
         // 如果已经在收藏模式中，忽略
         if isInFavoriteMode {
             print("SearchPanelViewController: Already in favorite mode, ignoring")
             return
+        }
+
+        // 如果在其他扩展模式中，先清理
+        if isInAnyExtensionMode {
+            cleanupAllExtensionModes()
         }
 
         // 进入收藏模式
@@ -1090,10 +1106,7 @@ class SearchPanelViewController: NSViewController {
 
         // 更新 UI
         updateFavoriteModeUI()
-
-        // 显示收藏视图
-        memeScrollView.isHidden = false
-        scrollView.isHidden = true
+        updateVisibility()
 
         // 加载所有收藏
         favoriteResults = MemeFavoriteService.shared.getAllFavorites()
@@ -2405,9 +2418,7 @@ class SearchPanelViewController: NSViewController {
     private func refreshDisplayMode() {
         // ⚠️ 重要：添加新的扩展模式时，必须在此处添加检查，否则会覆盖扩展模式的结果
         // 如果在扩展模式中，不要覆盖当前显示的结果
-        if isInIDEProjectMode || isInFolderOpenMode || isInWebLinkQueryMode || isInUtilityMode
-            || isInBookmarkMode || isIn2FAMode || isInMemeMode
-        {
+        if isInAnyExtensionMode {
             updateVisibility()
             return
         }
@@ -2595,6 +2606,11 @@ class SearchPanelViewController: NSViewController {
 
     func performSearch(_ query: String) {
         guard !query.isEmpty else {
+            // 如果在扩展模式下进入了空搜索逻辑，直接返回，避免覆盖扩展模式的结果
+            if isInAnyExtensionMode {
+                return
+            }
+
             selectedIndex = 0
             isShowingRecents = false
             results = []
@@ -2807,20 +2823,21 @@ class SearchPanelViewController: NSViewController {
         scrollView.isHidden = !hasResults || isIndependentViewMode || isWebLinkQueryModeEmpty
         noResultsLabel.isHidden = !hasQuery || hasResults || isIndependentViewMode
 
-        // 表情包模式：隐藏 scrollView，显示 memeScrollView
-        if isInMemeMode {
+        // 表情包或收藏模式：隐藏 scrollView，显示 memeScrollView
+        if isInMemeMode || isInFavoriteMode {
             scrollView.isHidden = true
             memeScrollView.isHidden = false
-            // 有搜索但没结果时显示提示
-            noResultsLabel.isHidden = !hasQuery || !memeResults.isEmpty
-        }
 
-        // 收藏模式：隐藏 scrollView，显示 memeScrollView
-        if isInFavoriteMode {
-            scrollView.isHidden = true
-            memeScrollView.isHidden = false
-            // 没有收藏时显示提示
-            noResultsLabel.isHidden = !favoriteResults.isEmpty
+            if isInMemeMode {
+                // 有搜索但没结果时显示提示
+                noResultsLabel.isHidden = !hasQuery || !memeResults.isEmpty
+            } else {
+                // 没有收藏时显示提示
+                noResultsLabel.isHidden = !favoriteResults.isEmpty
+            }
+        } else {
+            // 非表情包相关模式，确保 memeScrollView 隐藏
+            memeScrollView.isHidden = true
         }
 
         // Update window height
@@ -3937,6 +3954,7 @@ class SearchPanelViewController: NSViewController {
     /// 清理所有扩展模式的 UI（用于切换到不同类型的扩展模式时）
     private func cleanupAllExtensionModes() {
         clearCalculatorResult()
+        hideQuickActions()
 
         // 清理 IDE 项目模式
         if isInIDEProjectMode {
@@ -4747,9 +4765,7 @@ class SearchPanelViewController: NSViewController {
     private func loadRecentApps() {
         // ⚠️ 重要：添加新的扩展模式时，必须在此处添加检查，否则会在扩展模式下加载最近项目
         // 如果已经在扩展模式中，不加载最近项目
-        if isInIDEProjectMode || isInFolderOpenMode || isInWebLinkQueryMode || isInUtilityMode
-            || isInBookmarkMode || isIn2FAMode
-        {
+        if isInAnyExtensionMode {
             return
         }
 
@@ -4801,11 +4817,7 @@ class SearchPanelViewController: NSViewController {
             DispatchQueue.main.async {
                 // ⚠️ 重要：添加新的扩展模式时，必须在此处添加检查，否则异步回调会覆盖扩展模式的结果
                 // 再次检查是否在扩展模式，避免覆盖扩展模式的结果列表
-                guard
-                    self?.isInIDEProjectMode != true && self?.isInFolderOpenMode != true
-                        && self?.isInWebLinkQueryMode != true && self?.isInUtilityMode != true
-                        && self?.isInBookmarkMode != true && self?.isIn2FAMode != true
-                else {
+                guard self?.isInAnyExtensionMode != true else {
                     return
                 }
 
@@ -5109,9 +5121,7 @@ extension SearchPanelViewController: NSTextFieldDelegate {
         let query = searchField.stringValue
 
         // 只要是在非普通模式，或者输入为空，就彻底隐藏计算器预览
-        if isInIDEProjectMode || isInFolderOpenMode || isInWebLinkQueryMode || isInUtilityMode
-            || isInBookmarkMode || isIn2FAMode || isInMemeMode || isInFavoriteMode || query.isEmpty
-        {
+        if isInAnyExtensionMode || query.isEmpty {
             clearCalculatorResult()
         }
 
@@ -5184,9 +5194,7 @@ extension SearchPanelViewController: NSTextFieldDelegate {
         performSearch(query)
 
         // 普通模式下更新计算器预览
-        if !isInIDEProjectMode && !isInFolderOpenMode && !isInWebLinkQueryMode && !isInUtilityMode
-            && !isInBookmarkMode && !isIn2FAMode && !isInMemeMode && !isInFavoriteMode
-        {
+        if !isInAnyExtensionMode {
             updateCalculatorPreview(query)
         }
     }
