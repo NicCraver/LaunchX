@@ -185,10 +185,18 @@ final class RemindersService {
     }
 
     /// Open the Reminders app for a specific reminder
-    func openInReminders(identifier: String) {
-        let urlString = "x-apple-reminder://\(identifier)"
-        if let url = URL(string: urlString) {
-            NSWorkspace.shared.open(url)
+    func openInReminders(identifier: String?) {
+        // Try to open specific reminder using the correct scheme (x-apple-reminders://)
+        if let id = identifier {
+            let urlString = "x-apple-reminders://\(id)"
+            if let url = URL(string: urlString), NSWorkspace.shared.open(url) {
+                return
+            }
+        }
+
+        // Fallback: Open the Reminders app directly
+        if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.reminders") {
+            NSWorkspace.shared.open(appURL)
         }
     }
 

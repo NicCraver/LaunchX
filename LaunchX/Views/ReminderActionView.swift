@@ -3,6 +3,7 @@ import Cocoa
 /// 提醒事项快捷跳转面板代理
 protocol ReminderActionViewDelegate: AnyObject {
     func reminderActionViewDidRequestOpenURL(_ view: ReminderActionView)
+    func reminderActionViewDidRequestOpenApp(_ view: ReminderActionView)
     func reminderActionViewDidRequestDismiss(_ view: ReminderActionView)
 }
 
@@ -14,9 +15,19 @@ class ReminderActionView: NSView {
     weak var delegate: ReminderActionViewDelegate?
 
     private let containerView = NSVisualEffectView()
+    private let stackView = NSStackView()
+
+    // 跳转链接按钮
     private let jumpButton = NSView()
     private let jumpLabel = NSTextField(labelWithString: "前往跳转")
+
+    // 打开应用按钮
+    private let appButton = NSView()
+    private let appLabel = NSTextField(labelWithString: "在应用中打开")
+
     private let iconView = NSImageView()
+
+    private var containerHeightConstraint: NSLayoutConstraint?
 
     // MARK: - Initialization
 
@@ -47,53 +58,69 @@ class ReminderActionView: NSView {
         containerView.translatesAutoresizingMaskIntoConstraints = false
         addSubview(containerView)
 
-        // 2. 跳转按钮 (黄色高亮块)
-        jumpButton.wantsLayer = true
-        jumpButton.layer?.cornerRadius = 8
-        jumpButton.layer?.backgroundColor = NSColor.systemYellow.cgColor
-        jumpButton.translatesAutoresizingMaskIntoConstraints = false
-        containerView.addSubview(jumpButton)
+        // 2. StackView 布局容器
+        stackView.orientation = .vertical
+        stackView.spacing = 8
+        stackView.alignment = .centerX
+        stackView.distribution = .fill
+        stackView.translatesAutoresizingMaskIntoConstraints = false
+        containerView.addSubview(stackView)
 
-        // 3. 按钮文字
-        jumpLabel.font = .systemFont(ofSize: 14, weight: .bold)
-        jumpLabel.textColor = .black
-        jumpLabel.alignment = .center
-        jumpLabel.translatesAutoresizingMaskIntoConstraints = false
-        jumpButton.addSubview(jumpLabel)
-
-        // 4. 装饰图标 (Safari 图标)
+        // 3. 装饰图标
         iconView.image = NSImage(systemSymbolName: "safari.fill", accessibilityDescription: nil)
         iconView.contentTintColor = .secondaryLabelColor
         iconView.imageScaling = .scaleProportionallyUpOrDown
         iconView.translatesAutoresizingMaskIntoConstraints = false
-        containerView.addSubview(iconView)
+        iconView.widthAnchor.constraint(equalToConstant: 32).isActive = true
+        iconView.heightAnchor.constraint(equalToConstant: 32).isActive = true
+
+        // 4. 跳转按钮
+        jumpButton.wantsLayer = true
+        jumpButton.layer?.cornerRadius = 8
+        jumpButton.translatesAutoresizingMaskIntoConstraints = false
+        jumpButton.widthAnchor.constraint(equalToConstant: 140).isActive = true
+        jumpButton.heightAnchor.constraint(equalToConstant: 40).isActive = true
+
+        jumpLabel.font = .systemFont(ofSize: 14, weight: .bold)
+        jumpLabel.alignment = .center
+        jumpLabel.translatesAutoresizingMaskIntoConstraints = false
+        jumpButton.addSubview(jumpLabel)
+
+        NSLayoutConstraint.activate([
+            jumpLabel.centerXAnchor.constraint(equalTo: jumpButton.centerXAnchor),
+            jumpLabel.centerYAnchor.constraint(equalTo: jumpButton.centerYAnchor)
+        ])
+
+        // 5. 打开应用按钮
+        appButton.wantsLayer = true
+        appButton.layer?.cornerRadius = 8
+        appButton.translatesAutoresizingMaskIntoConstraints = false
+        appButton.widthAnchor.constraint(equalToConstant: 140).isActive = true
+        appButton.heightAnchor.constraint(equalToConstant: 40).isActive = true
+
+        appLabel.alignment = .center
+        appLabel.translatesAutoresizingMaskIntoConstraints = false
+        appButton.addSubview(appLabel)
+
+        NSLayoutConstraint.activate([
+            appLabel.centerXAnchor.constraint(equalTo: appButton.centerXAnchor),
+            appLabel.centerYAnchor.constraint(equalTo: appButton.centerYAnchor)
+        ])
 
         // 约束设置
+        containerHeightConstraint = heightAnchor.constraint(equalToConstant: 165)
+
         NSLayoutConstraint.activate([
             containerView.leadingAnchor.constraint(equalTo: leadingAnchor),
             containerView.trailingAnchor.constraint(equalTo: trailingAnchor),
             containerView.topAnchor.constraint(equalTo: topAnchor),
             containerView.bottomAnchor.constraint(equalTo: bottomAnchor),
 
-            // 容器固定大小
             widthAnchor.constraint(equalToConstant: 180),
-            heightAnchor.constraint(equalToConstant: 120),
+            containerHeightConstraint!,
 
-            // 图标居中靠上
-            iconView.centerXAnchor.constraint(equalTo: containerView.centerXAnchor),
-            iconView.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 15),
-            iconView.widthAnchor.constraint(equalToConstant: 32),
-            iconView.heightAnchor.constraint(equalToConstant: 32),
-
-            // 跳转按钮位于下方
-            jumpButton.centerXAnchor.constraint(equalTo: containerView.centerXAnchor),
-            jumpButton.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -15),
-            jumpButton.widthAnchor.constraint(equalToConstant: 140),
-            jumpButton.heightAnchor.constraint(equalToConstant: 40),
-
-            // 文字居中
-            jumpLabel.centerXAnchor.constraint(equalTo: jumpButton.centerXAnchor),
-            jumpLabel.centerYAnchor.constraint(equalTo: jumpButton.centerYAnchor),
+            stackView.centerXAnchor.constraint(equalTo: containerView.centerXAnchor),
+            stackView.centerYAnchor.constraint(equalTo: containerView.centerYAnchor)
         ])
 
         // 添加阴影
@@ -103,12 +130,65 @@ class ReminderActionView: NSView {
         layer?.shadowRadius = 12
 
         // 添加点击手势
-        let clickGesture = NSClickGestureRecognizer(target: self, action: #selector(handleJump))
-        jumpButton.addGestureRecognizer(clickGesture)
+        let jumpGesture = NSClickGestureRecognizer(target: self, action: #selector(handleJump))
+        jumpButton.addGestureRecognizer(jumpGesture)
+
+        let appGesture = NSClickGestureRecognizer(target: self, action: #selector(handleOpenApp))
+        appButton.addGestureRecognizer(appGesture)
     }
 
     @objc private func handleJump() {
         delegate?.reminderActionViewDidRequestOpenURL(self)
+    }
+
+    @objc private func handleOpenApp() {
+        delegate?.reminderActionViewDidRequestOpenApp(self)
+    }
+
+    // MARK: - Logic
+
+    func updateUI(hasURL: Bool) {
+        // 清理并重新填充 StackView
+        stackView.arrangedSubviews.forEach { $0.removeFromSuperview() }
+
+        if hasURL {
+            // 有链接模式
+            stackView.addArrangedSubview(iconView)
+            stackView.setCustomSpacing(12, after: iconView)
+            stackView.addArrangedSubview(jumpButton)
+            stackView.addArrangedSubview(appButton)
+
+            jumpButton.isHidden = false
+            iconView.isHidden = false
+
+            // 跳转按钮为主按钮（黄色）
+            jumpButton.layer?.backgroundColor = NSColor.systemYellow.cgColor
+            jumpLabel.stringValue = "前往跳转"
+            jumpLabel.textColor = .black
+            jumpLabel.font = .systemFont(ofSize: 14, weight: .bold)
+
+            // 应用按钮为次按钮（灰色）
+            appButton.layer?.backgroundColor = NSColor.labelColor.withAlphaComponent(0.1).cgColor
+            appLabel.stringValue = "在应用中打开"
+            appLabel.textColor = .labelColor
+            appLabel.font = .systemFont(ofSize: 14, weight: .medium)
+
+            containerHeightConstraint?.constant = 165
+        } else {
+            // 无链接模式
+            stackView.addArrangedSubview(appButton)
+
+            jumpButton.isHidden = true
+            iconView.isHidden = true
+
+            // 应用按钮变为主按钮（黄色）
+            appButton.layer?.backgroundColor = NSColor.systemYellow.cgColor
+            appLabel.stringValue = "在应用中打开"
+            appLabel.textColor = .black
+            appLabel.font = .systemFont(ofSize: 14, weight: .bold)
+
+            containerHeightConstraint?.constant = 70
+        }
     }
 
     // MARK: - Event Handling
@@ -118,7 +198,11 @@ class ReminderActionView: NSView {
     override func keyDown(with event: NSEvent) {
         switch Int(event.keyCode) {
         case 36:  // Return
-            handleJump()
+            if !jumpButton.isHidden {
+                handleJump()
+            } else {
+                handleOpenApp()
+            }
         case 53:  // Escape
             delegate?.reminderActionViewDidRequestDismiss(self)
         default:

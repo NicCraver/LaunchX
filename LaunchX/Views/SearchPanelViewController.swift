@@ -2905,8 +2905,8 @@ class SearchPanelViewController: NSViewController {
         var supportsQuickActions = false
 
         if item.isReminder {
-            // 只有带链接的提醒事项才显示 ⌘K 提示
-            supportsQuickActions = item.reminderURL != nil
+            // 提醒事项始终显示 ⌘K 提示（用于跳转 App 或链接）
+            supportsQuickActions = true
         } else {
             // 还原原始逻辑：仅支持文件和文件夹（排除 .app、网页、工具等）
             let isApp = item.path.hasSuffix(".app")
@@ -3362,8 +3362,7 @@ class SearchPanelViewController: NSViewController {
         guard !item.isSectionHeader else { return }
 
         if item.isReminder {
-            // 提醒事项：必须有链接才显示
-            guard item.reminderURL != nil else { return }
+            // 提醒事项：始终显示（用于跳转 App 或链接）
         } else {
             // 还原原始逻辑：只对文件和文件夹显示
             let isApp = item.path.hasSuffix(".app")
@@ -3394,6 +3393,7 @@ class SearchPanelViewController: NSViewController {
             // 提醒事项显示专门的跳转面板
             let actionView = ReminderActionView()
             actionView.delegate = self
+            actionView.updateUI(hasURL: item.reminderURL != nil)
             actionView.translatesAutoresizingMaskIntoConstraints = false
             // 确保显示在最顶层，避免被 TableView 或其他视图遮挡
             contentView.addSubview(actionView, positioned: .above, relativeTo: nil)
@@ -3487,11 +3487,10 @@ class SearchPanelViewController: NSViewController {
                 NSWorkspace.shared.open(url)
                 PanelManager.shared.hidePanel()
             }
-        case .openInReminders:
-            if let identifier = target.reminderIdentifier {
-                RemindersService.shared.openInReminders(identifier: identifier)
-                PanelManager.shared.hidePanel()
-            }
+        case .openInReminders, .openInApp:
+            // 直接打开提醒事项 App，避免 deep link 尝试导致系统弹出“未设定应用程序”弹窗
+            RemindersService.shared.openInReminders(identifier: nil)
+            PanelManager.shared.hidePanel()
         case .delete:
             quickActionDelete(path: target.path, name: target.name)
         }
@@ -6157,7 +6156,12 @@ extension SearchPanelViewController: ReminderActionViewDelegate {
             NSWorkspace.shared.open(url)
             PanelManager.shared.hidePanel()
         }
-        hideQuickActions()
+    }
+
+    func reminderActionViewDidRequestOpenApp(_ view: ReminderActionView) {
+        // 直接打开提醒事项 App，避免 deep link 尝试导致系统弹出“未设定应用程序”弹窗
+        RemindersService.shared.openInReminders(identifier: nil)
+        PanelManager.shared.hidePanel()
     }
 
     func reminderActionViewDidRequestDismiss(_ view: ReminderActionView) {

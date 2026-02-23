@@ -7,6 +7,7 @@ enum QuickActionType: Equatable {
     case copyPath  // 复制路径
     case airDrop  // 隔空投送
     case openURL  // 打开链接
+    case openInApp  // 在应用中打开
     case openInReminders  // 在提醒事项中打开
     case delete  // 删除
 
@@ -17,6 +18,7 @@ enum QuickActionType: Equatable {
         case .copyPath: return "复制路径"
         case .airDrop: return "隔空投送"
         case .openURL: return "打开链接"
+        case .openInApp: return "打开应用"
         case .openInReminders: return "在提醒事项中打开"
         case .delete: return "删除"
         }
@@ -30,6 +32,7 @@ enum QuickActionType: Equatable {
         case .copyPath: symbolName = "doc.on.doc"
         case .airDrop: symbolName = "airplayaudio"
         case .openURL: symbolName = "safari"
+        case .openInApp: symbolName = "app.badge"
         case .openInReminders: symbolName = "list.bullet"
         case .delete: symbolName = "trash"
         }
