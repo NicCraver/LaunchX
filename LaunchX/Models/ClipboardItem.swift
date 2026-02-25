@@ -7,9 +7,9 @@ import Foundation
 enum ClipboardContentType: String, Codable, CaseIterable {
     case text = "text"
     case image = "image"
-    case file = "file"
     case link = "link"
     case color = "color"
+    case file = "file"
 
     var displayName: String {
         switch self {

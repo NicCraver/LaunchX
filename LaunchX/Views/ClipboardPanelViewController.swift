@@ -442,6 +442,17 @@ class ClipboardPanelViewController: NSViewController {
     // MARK: - 事件处理
 
     @objc private func selectFilter(_ sender: NSMenuItem) {
+        let tag = sender.tag
+        let newFilter: ClipboardContentType? = (tag == -1) ? nil : ClipboardContentType.allCases[tag]
+
+        // 如果点击的是当前已选中的过滤器（非“全部”），则切换回“全部”
+        if tag != -1 && selectedFilter == newFilter {
+            if let allItem = filterMenu.items.first(where: { $0.tag == -1 }) {
+                selectFilter(allItem)
+                return
+            }
+        }
+
         // 更新菜单项状态
         for item in filterMenu.items {
             item.state = .off
@@ -449,7 +460,6 @@ class ClipboardPanelViewController: NSViewController {
         sender.state = .on
 
         // 设置过滤器
-        let tag = sender.tag
         if tag == -1 {
             selectedFilter = nil
             filterButton.contentTintColor = .secondaryLabelColor
@@ -457,7 +467,7 @@ class ClipboardPanelViewController: NSViewController {
                 systemSymbolName: "line.3.horizontal.decrease.circle",
                 accessibilityDescription: "过滤")
         } else if tag >= 0 && tag < ClipboardContentType.allCases.count {
-            selectedFilter = ClipboardContentType.allCases[tag]
+            selectedFilter = newFilter
             filterButton.contentTintColor = .systemBlue
             // 选中分类时，按钮图标同步切换为该分类图标，更直观且节省空间
             if let selectedFilter = selectedFilter {
