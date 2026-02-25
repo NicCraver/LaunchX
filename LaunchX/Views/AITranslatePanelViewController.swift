@@ -108,6 +108,10 @@ class AITranslatePanelViewController: NSViewController {
 
     private func setupUI() {
         let container = NSView(frame: view.bounds)
+        container.wantsLayer = true
+        container.layer?.cornerRadius = 28
+        container.layer?.cornerCurve = .continuous
+        container.layer?.masksToBounds = true
         container.autoresizingMask = [.width, .height]
         view.addSubview(container)
         self.containerView = container
@@ -119,10 +123,10 @@ class AITranslatePanelViewController: NSViewController {
         vev.blendingMode = .behindWindow
         vev.state = .active
         vev.wantsLayer = true
-        vev.layer?.cornerRadius = 20
+        vev.layer?.cornerRadius = 28
+        vev.layer?.cornerCurve = .continuous
         vev.layer?.masksToBounds = true
-        vev.layer?.borderWidth = 0.5
-        vev.layer?.borderColor = NSColor.separatorColor.cgColor
+        vev.layer?.borderWidth = 0
         container.addSubview(vev)
         self.visualEffectView = vev
 
@@ -133,8 +137,10 @@ class AITranslatePanelViewController: NSViewController {
             gev.style = .clear
             gev.tintColor = NSColor(named: "PanelBackgroundColor")
             gev.wantsLayer = true
-            gev.layer?.cornerRadius = 20
+            gev.layer?.cornerRadius = 28
+            gev.layer?.cornerCurve = .continuous
             gev.layer?.masksToBounds = true
+            gev.layer?.borderWidth = 0
             container.addSubview(gev)
             self.glassEffectView = gev
         }

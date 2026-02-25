@@ -89,7 +89,7 @@ class ClipboardPanelViewController: NSViewController {
         // 创建可调整大小的容器视图
         let containerView = ResizableContainerView()
         containerView.wantsLayer = true
-        containerView.layer?.cornerRadius = 20
+        containerView.layer?.cornerRadius = 28
         containerView.layer?.cornerCurve = .continuous
         containerView.layer?.masksToBounds = true
 
@@ -99,11 +99,10 @@ class ClipboardPanelViewController: NSViewController {
         vev.blendingMode = .behindWindow
         vev.state = .active
         vev.wantsLayer = true
-        vev.layer?.cornerRadius = 20
+        vev.layer?.cornerRadius = 28
         vev.layer?.cornerCurve = .continuous
         vev.layer?.masksToBounds = true
-        vev.layer?.borderWidth = 0.5
-        vev.layer?.borderColor = NSColor.white.withAlphaComponent(0.12).cgColor
+        vev.layer?.borderWidth = 0
         vev.translatesAutoresizingMaskIntoConstraints = false
         containerView.addSubview(vev)
         self.visualEffectView = vev
@@ -114,11 +113,10 @@ class ClipboardPanelViewController: NSViewController {
             gev.style = .clear
             gev.tintColor = NSColor(named: "PanelBackgroundColor")
             gev.wantsLayer = true
-            gev.layer?.cornerRadius = 20
+            gev.layer?.cornerRadius = 28
             gev.layer?.cornerCurve = .continuous
             gev.layer?.masksToBounds = true
-            gev.layer?.borderWidth = 0.5
-            gev.layer?.borderColor = NSColor.white.withAlphaComponent(0.12).cgColor
+            gev.layer?.borderWidth = 0
             gev.translatesAutoresizingMaskIntoConstraints = false
             containerView.addSubview(gev)
             self.glassEffectView = gev

@@ -182,7 +182,7 @@ class SearchPanelViewController: NSViewController {
 
         // 1. 阴影层 - 用于显示外部阴影
         let shadowLayer = CALayer()
-        shadowLayer.backgroundColor = NSColor.black.withAlphaComponent(0.05).cgColor
+        shadowLayer.backgroundColor = NSColor.clear.cgColor
         shadowLayer.cornerRadius = 28
         shadowLayer.cornerCurve = .continuous
         shadowLayer.shadowColor = NSColor.black.cgColor
@@ -227,9 +227,7 @@ class SearchPanelViewController: NSViewController {
         vev.layer?.cornerRadius = 28
         vev.layer?.cornerCurve = .continuous
         vev.layer?.masksToBounds = true
-        vev.layer?.borderWidth = 0.5
-        // Use a dynamic border color that is more vibrant than separatorColor
-        vev.layer?.borderColor = NSColor.white.withAlphaComponent(0.12).cgColor
+        vev.layer?.borderWidth = 0
         vev.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(vev, positioned: .below, relativeTo: contentView)
         self.visualEffectView = vev
@@ -243,8 +241,7 @@ class SearchPanelViewController: NSViewController {
             gev.layer?.cornerRadius = 28
             gev.layer?.cornerCurve = .continuous
             gev.layer?.masksToBounds = true
-            gev.layer?.borderWidth = 0.5
-            gev.layer?.borderColor = NSColor.white.withAlphaComponent(0.12).cgColor
+            gev.layer?.borderWidth = 0
             gev.translatesAutoresizingMaskIntoConstraints = false
             container.addSubview(gev, positioned: .below, relativeTo: contentView)
             self.glassEffectView = gev
