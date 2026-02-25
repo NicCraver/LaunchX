@@ -52,9 +52,10 @@ class ReminderActionView: NSView {
         containerView.state = .active
         containerView.wantsLayer = true
         containerView.layer?.cornerRadius = 12
+        containerView.layer?.cornerCurve = .continuous
         containerView.layer?.masksToBounds = true
         containerView.layer?.borderWidth = 0.5
-        containerView.layer?.borderColor = NSColor.white.withAlphaComponent(0.1).cgColor
+        containerView.layer?.borderColor = NSColor.white.withAlphaComponent(0.12).cgColor
         containerView.translatesAutoresizingMaskIntoConstraints = false
         addSubview(containerView)
 
@@ -125,7 +126,7 @@ class ReminderActionView: NSView {
 
         // 添加阴影
         layer?.shadowColor = NSColor.black.cgColor
-        layer?.shadowOpacity = 0.3
+        layer?.shadowOpacity = 0.35
         layer?.shadowOffset = CGSize(width: 0, height: -4)
         layer?.shadowRadius = 12
 

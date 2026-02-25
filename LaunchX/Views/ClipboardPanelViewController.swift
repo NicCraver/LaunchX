@@ -90,6 +90,7 @@ class ClipboardPanelViewController: NSViewController {
         let containerView = ResizableContainerView()
         containerView.wantsLayer = true
         containerView.layer?.cornerRadius = 20
+        containerView.layer?.cornerCurve = .continuous
         containerView.layer?.masksToBounds = true
 
         // 1. 创建传统毛玻璃层
@@ -99,9 +100,10 @@ class ClipboardPanelViewController: NSViewController {
         vev.state = .active
         vev.wantsLayer = true
         vev.layer?.cornerRadius = 20
+        vev.layer?.cornerCurve = .continuous
         vev.layer?.masksToBounds = true
         vev.layer?.borderWidth = 0.5
-        vev.layer?.borderColor = NSColor.separatorColor.cgColor
+        vev.layer?.borderColor = NSColor.white.withAlphaComponent(0.12).cgColor
         vev.translatesAutoresizingMaskIntoConstraints = false
         containerView.addSubview(vev)
         self.visualEffectView = vev
@@ -113,7 +115,10 @@ class ClipboardPanelViewController: NSViewController {
             gev.tintColor = NSColor(named: "PanelBackgroundColor")
             gev.wantsLayer = true
             gev.layer?.cornerRadius = 20
+            gev.layer?.cornerCurve = .continuous
             gev.layer?.masksToBounds = true
+            gev.layer?.borderWidth = 0.5
+            gev.layer?.borderColor = NSColor.white.withAlphaComponent(0.12).cgColor
             gev.translatesAutoresizingMaskIntoConstraints = false
             containerView.addSubview(gev)
             self.glassEffectView = gev

@@ -11,7 +11,7 @@ class ClipboardPanel: NSPanel {
     private let panelMaxSize = NSSize(width: 600, height: 800)
 
     /// 圆角半径
-    private let cornerRadius: CGFloat = 12
+    private let cornerRadius: CGFloat = 10
 
     /// 拖拽状态
     private var isResizing = false
@@ -63,6 +63,7 @@ class ClipboardPanel: NSPanel {
             if let view = contentView {
                 view.wantsLayer = true
                 view.layer?.cornerRadius = cornerRadius
+                view.layer?.cornerCurve = .continuous
                 view.layer?.masksToBounds = true
             }
         }

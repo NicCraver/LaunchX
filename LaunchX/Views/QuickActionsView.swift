@@ -188,11 +188,12 @@ class QuickActionsView: NSView {
         visualEffectView.state = .active
         visualEffectView.wantsLayer = true
         visualEffectView.layer?.cornerRadius = 10
+        visualEffectView.layer?.cornerCurve = .continuous
         visualEffectView.layer?.masksToBounds = true
 
         // 添加边框
         visualEffectView.layer?.borderWidth = 0.5
-        visualEffectView.layer?.borderColor = NSColor.separatorColor.cgColor
+        visualEffectView.layer?.borderColor = NSColor.white.withAlphaComponent(0.12).cgColor
 
         visualEffectView.translatesAutoresizingMaskIntoConstraints = false
         addSubview(visualEffectView)

@@ -182,18 +182,23 @@ class SearchPanelViewController: NSViewController {
 
         // 1. 阴影层 - 用于显示外部阴影
         let shadowLayer = CALayer()
-        shadowLayer.backgroundColor = NSColor.black.withAlphaComponent(0.01).cgColor
-        shadowLayer.cornerRadius = 26
+        shadowLayer.backgroundColor = NSColor.black.withAlphaComponent(0.05).cgColor
+        shadowLayer.cornerRadius = 28
+        shadowLayer.cornerCurve = .continuous
         shadowLayer.shadowColor = NSColor.black.cgColor
-        shadowLayer.shadowOpacity = 0.4
-        shadowLayer.shadowOffset = CGSize(width: 0, height: -4)
-        shadowLayer.shadowRadius = 20
+        shadowLayer.shadowOpacity = 0.35
+        shadowLayer.shadowOffset = CGSize(width: 0, height: -12)
+        shadowLayer.shadowRadius = 32
         containerView.layer?.addSublayer(shadowLayer)
         containerView.layer?.setValue(shadowLayer, forKey: "shadowLayer")
 
         // 2. 创建内容承载视图 (contentView)
         // 所有的搜索框、列表等都放在这个层，背景切换时不影响内容
         let contentWrapper = NSView()
+        contentWrapper.wantsLayer = true
+        contentWrapper.layer?.cornerRadius = 28
+        contentWrapper.layer?.cornerCurve = .continuous
+        contentWrapper.layer?.masksToBounds = true
         contentWrapper.translatesAutoresizingMaskIntoConstraints = false
         containerView.addSubview(contentWrapper)
         self.contentView = contentWrapper
@@ -219,11 +224,12 @@ class SearchPanelViewController: NSViewController {
         vev.blendingMode = .behindWindow
         vev.state = .active
         vev.wantsLayer = true
-        vev.layer?.cornerRadius = 26
+        vev.layer?.cornerRadius = 28
         vev.layer?.cornerCurve = .continuous
         vev.layer?.masksToBounds = true
         vev.layer?.borderWidth = 0.5
-        vev.layer?.borderColor = NSColor.separatorColor.cgColor
+        // Use a dynamic border color that is more vibrant than separatorColor
+        vev.layer?.borderColor = NSColor.white.withAlphaComponent(0.12).cgColor
         vev.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(vev, positioned: .below, relativeTo: contentView)
         self.visualEffectView = vev
@@ -234,8 +240,11 @@ class SearchPanelViewController: NSViewController {
             gev.style = .clear
             gev.tintColor = NSColor(named: "PanelBackgroundColor")
             gev.wantsLayer = true
-            gev.layer?.cornerRadius = 26
+            gev.layer?.cornerRadius = 28
+            gev.layer?.cornerCurve = .continuous
             gev.layer?.masksToBounds = true
+            gev.layer?.borderWidth = 0.5
+            gev.layer?.borderColor = NSColor.white.withAlphaComponent(0.12).cgColor
             gev.translatesAutoresizingMaskIntoConstraints = false
             container.addSubview(gev, positioned: .below, relativeTo: contentView)
             self.glassEffectView = gev
