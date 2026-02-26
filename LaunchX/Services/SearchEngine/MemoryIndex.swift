@@ -216,6 +216,17 @@ final class MemoryIndex {
             return false
         }
 
+        /// 类型优先级（用于同层排序）
+        /// 数值越小优先级越高
+        var typePriority: Int {
+            if isSystemCommand { return 0 }  // 系统命令最高
+            if isUtility { return 1 }       // 实用工具
+            if isApp { return 2 }           // 应用程序
+            if isWebLink { return 3 }       // 网页直达
+            if isDirectory { return 4 }     // 目录
+            return 5                        // 普通文件最低
+        }
+
         /// Convert to SearchResult for UI
         func toSearchResult() -> SearchResult {
             return SearchResult(
@@ -466,9 +477,17 @@ final class MemoryIndex {
 
         // 2. Use Trie for fast prefix matching (breakthrough for large datasets)
         let trieCandidates = getTrieCandidates(query: query)
+
+        // 收集 Trie 匹配项（带类型信息），先收集再按类型排序
+        var trieMatches: [SearchItem] = []
+        trieMatches.reserveCapacity(min(trieCandidates.count, maxResults))
+
         for path in trieCandidates {
-            guard results.count < maxResults, let item = allItems[path] else { continue }
-            guard seenPaths.insert(path).inserted else { continue }
+            // Early truncation to avoid parsing/sorting 5000+ candidates for short queries
+            if trieMatches.count >= maxResults * 3 { break }
+
+            guard let item = allItems[path] else { continue }
+            guard !seenPaths.contains(path) else { continue }
 
             // Apply exclusions early to avoid unnecessary processing
             if excludedApps.contains(path) { continue }
@@ -486,8 +505,19 @@ final class MemoryIndex {
 
             // Check actual match
             if item.matchesQuery(lowerQuery) != nil {
-                results.append(item)
+                trieMatches.append(item)
             } else if queryIsAscii && item.matchesPinyin(lowerQuery) {
+                trieMatches.append(item)
+            }
+        }
+
+        // 按类型优先级排序：系统命令 > 实用工具 > 应用 > 网页直达 > 目录 > 文件
+        trieMatches.sort { $0.typePriority < $1.typePriority }
+
+        // 加入结果
+        for item in trieMatches {
+            guard results.count < maxResults else { break }
+            if seenPaths.insert(item.path).inserted {
                 results.append(item)
             }
         }
@@ -541,7 +571,19 @@ final class MemoryIndex {
             maxResults: maxResults
         )
 
-        return Array(results.prefix(maxResults))
+        // 最终排序：matchType > typePriority > 原始顺序（稳定排序保持层间优先级）
+        let finalResults = Array(results.prefix(maxResults))
+        return finalResults.enumerated().map { (index, item) -> (Int, SearchItem, SearchItem.MatchType) in
+            let matchType = item.matchesQuery(lowerQuery) ?? .pinyin
+            return (index, item, matchType)
+        }.sorted { a, b in
+            // 先按匹配类型排序
+            if a.2 != b.2 { return a.2 < b.2 }
+            // 同匹配类型按类型优先级排序
+            if a.1.typePriority != b.1.typePriority { return a.1.typePriority < b.1.typePriority }
+            // 同类型保持原始顺序
+            return a.0 < b.0
+        }.map { $0.1 }
     }
 
     // MARK: - Optimized Search Helpers
