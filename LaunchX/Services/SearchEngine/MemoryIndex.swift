@@ -483,9 +483,6 @@ final class MemoryIndex {
         trieMatches.reserveCapacity(min(trieCandidates.count, maxResults))
 
         for path in trieCandidates {
-            // Early truncation to avoid parsing/sorting 5000+ candidates for short queries
-            if trieMatches.count >= maxResults * 3 { break }
-
             guard let item = allItems[path] else { continue }
             guard !seenPaths.contains(path) else { continue }
 
