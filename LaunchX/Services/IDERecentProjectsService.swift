@@ -78,8 +78,12 @@ final class IDERecentProjectsService {
         switch ideType {
         case .vscode:
             return getVSCodeRecentProjects(limit: limit)
+        case .cursor:
+            return getCursorRecentProjects(limit: limit)
         case .zed:
             return getZedRecentProjects(limit: limit)
+        case .antigravity:
+            return getAntigravityRecentProjects(limit: limit)
         default:
             if ideType.isJetBrains {
                 return getJetBrainsRecentProjects(for: ideType, limit: limit)
@@ -189,6 +193,97 @@ final class IDERecentProjectsService {
                     name: name,
                     path: projectPath,
                     ideType: .vscode
+                ))
+        }
+
+        return projects
+    }
+
+    // MARK: - Cursor
+
+    private func getCursorRecentProjects(limit: Int) -> [IDEProject] {
+        let dbPath = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(
+                "Library/Application Support/Cursor/User/globalStorage/state.vscdb"
+            )
+            .path
+
+        guard FileManager.default.fileExists(atPath: dbPath) else {
+            return []
+        }
+
+        // 使用 sqlite3 命令行查询
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/sqlite3")
+        process.arguments = [
+            dbPath, "SELECT value FROM ItemTable WHERE key='history.recentlyOpenedPathsList';",
+        ]
+
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = FileHandle.nullDevice
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            guard let jsonString = String(data: data, encoding: .utf8),
+                !jsonString.isEmpty
+            else {
+                return []
+            }
+
+            return parseCursorRecentProjects(jsonString, limit: limit)
+        } catch {
+            print("Failed to query Cursor database: \(error)")
+            return []
+        }
+    }
+
+    private func parseCursorRecentProjects(_ jsonString: String, limit: Int) -> [IDEProject] {
+        guard let data = jsonString.data(using: .utf8),
+            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let entries = json["entries"] as? [[String: Any]]
+        else {
+            return []
+        }
+
+        var projects: [IDEProject] = []
+        var seenPaths = Set<String>()  // 用于去重
+
+        for entry in entries {
+            guard projects.count < limit else { break }
+
+            var path: String?
+
+            // 优先获取 folderUri（项目文件夹）
+            if let folderUri = entry["folderUri"] as? String {
+                path = uriToPath(folderUri)
+            }
+            // 其次获取 workspace（工作区文件）
+            else if let workspace = entry["workspace"] as? String {
+                // 工作区文件，取其所在目录
+                if let wsPath = uriToPath(workspace) {
+                    path = (wsPath as NSString).deletingLastPathComponent
+                }
+            }
+
+            guard let projectPath = path,
+                !seenPaths.contains(projectPath),
+                FileManager.default.fileExists(atPath: projectPath)
+            else {
+                continue
+            }
+
+            seenPaths.insert(projectPath)
+
+            let name = (projectPath as NSString).lastPathComponent
+            projects.append(
+                IDEProject(
+                    name: name,
+                    path: projectPath,
+                    ideType: .cursor
                 ))
         }
 
@@ -374,6 +469,99 @@ final class IDERecentProjectsService {
                     name: name,
                     path: path,
                     ideType: ideType
+                ))
+        }
+
+        return projects
+    }
+
+    // MARK: - Antigravity
+
+    private func getAntigravityRecentProjects(limit: Int) -> [IDEProject] {
+        // Antigravity 使用类似 VSCode 的数据库结构
+        let dbPath = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(
+                "Library/Application Support/Antigravity/User/globalStorage/state.vscdb"
+            )
+            .path
+
+        guard FileManager.default.fileExists(atPath: dbPath) else {
+            return []
+        }
+
+        // 使用 sqlite3 命令行查询
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/sqlite3")
+        process.arguments = [
+            dbPath, "SELECT value FROM ItemTable WHERE key='history.recentlyOpenedPathsList';",
+        ]
+
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = FileHandle.nullDevice
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            guard let jsonString = String(data: data, encoding: .utf8),
+                !jsonString.isEmpty
+            else {
+                return []
+            }
+
+            return parseAntigravityRecentProjects(jsonString, limit: limit)
+        } catch {
+            print("Failed to query Antigravity database: \(error)")
+            return []
+        }
+    }
+
+    private func parseAntigravityRecentProjects(_ jsonString: String, limit: Int) -> [IDEProject]
+    {
+        guard let data = jsonString.data(using: .utf8),
+            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let entries = json["entries"] as? [[String: Any]]
+        else {
+            return []
+        }
+
+        var projects: [IDEProject] = []
+        var seenPaths = Set<String>()  // 用于去重
+
+        for entry in entries {
+            guard projects.count < limit else { break }
+
+            var path: String?
+
+            // 优先获取 folderUri（项目文件夹）
+            if let folderUri = entry["folderUri"] as? String {
+                path = uriToPath(folderUri)
+            }
+            // 其次获取 workspace（工作区文件）
+            else if let workspace = entry["workspace"] as? String {
+                // 工作区文件，取其所在目录
+                if let wsPath = uriToPath(workspace) {
+                    path = (wsPath as NSString).deletingLastPathComponent
+                }
+            }
+
+            guard let projectPath = path,
+                !seenPaths.contains(projectPath),
+                FileManager.default.fileExists(atPath: projectPath)
+            else {
+                continue
+            }
+
+            seenPaths.insert(projectPath)
+
+            let name = (projectPath as NSString).lastPathComponent
+            projects.append(
+                IDEProject(
+                    name: name,
+                    path: projectPath,
+                    ideType: .antigravity
                 ))
         }
 
