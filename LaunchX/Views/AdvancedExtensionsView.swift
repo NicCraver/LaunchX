@@ -8,10 +8,10 @@ enum AdvancedExtensionType: String, CaseIterable, Identifiable {
     case snippet = "Snippet"
     case aiTranslate = "AI 翻译"
     case bookmarkSearch = "搜索书签"
-    // case terminalCommand = "执行终端命令"
     case twoFactorAuth = "2FA 短信"
     case memeSearch = "表情包"
     case memeFavorite = "表情收藏"
+    case terminal = "终端"
 
     var id: String { rawValue }
 
@@ -43,6 +43,7 @@ enum AdvancedExtensionType: String, CaseIterable, Identifiable {
         case .twoFactorAuth: return "lock.shield.fill"
         case .memeSearch: return "face.smiling"
         case .memeFavorite: return "star.fill"
+        case .terminal: return "terminal"
         }
     }
 
@@ -56,6 +57,7 @@ enum AdvancedExtensionType: String, CaseIterable, Identifiable {
         case .twoFactorAuth: return .green
         case .memeSearch: return .orange
         case .memeFavorite: return .yellow
+        case .terminal: return .blue
         }
     }
 }
@@ -103,9 +105,6 @@ struct AdvancedExtensionsView: View {
         switch selectedExtension {
         case .bookmarkSearch:
             BookmarkSearchSettingsView()
-        // 暂不开发
-        // case .terminalCommand:
-        //     ComingSoonView(title: "执行终端命令", description: "快速执行常用终端命令")
         case .clipboard:
             ClipboardSettingsView()
         case .snippet:
@@ -118,6 +117,8 @@ struct AdvancedExtensionsView: View {
             MemeSearchSettingsView()
         case .memeFavorite:
             MemeFavoriteSettingsView()
+        case .terminal:
+            TerminalSettingsView()
         }
     }
 }

@@ -94,6 +94,7 @@ class PanelManager: NSObject, NSWindowDelegate {
             .moveToActiveSpace, .fullScreenAuxiliary, .ignoresCycle,
         ]
 
+        NSApp.activate(ignoringOtherApps: true)
         panel.makeKeyAndOrderFront(nil)
 
         // Focus the search field
