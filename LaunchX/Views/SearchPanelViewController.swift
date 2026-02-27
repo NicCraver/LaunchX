@@ -2411,13 +2411,17 @@ class SearchPanelViewController: NSViewController {
     // MARK: - Public Methods
 
     func focus() {
-        view.window?.makeFirstResponder(searchField)
-
         // 每次显示面板时刷新状态，确保设置更改立即生效
         refreshDisplayMode()
 
         // 强制立即更新窗口高度，确保在 Simple 模式下启动时不会显示多余高度
         updateVisibility()
+
+        // 确保搜索框在 UI 更新后获得焦点
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.view.window?.makeFirstResponder(self.searchField)
+        }
     }
 
     /// 刷新显示模式（Simple/Full）
@@ -3507,55 +3511,90 @@ class SearchPanelViewController: NSViewController {
         hideQuickActions()
 
         let targetPath = isDirectory ? path : (path as NSString).deletingLastPathComponent
-
-        // 检查终端是否已在运行
-        let isRunning = NSWorkspace.shared.runningApplications.contains {
-            $0.bundleIdentifier == "com.apple.Terminal"
-        }
-
-        // 使用 osascript 命令行工具
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-
+        let settings = TerminalSettings.load()
+        let terminal = settings.selectedTerminal
         let escapedPath = targetPath.replacingOccurrences(of: "\"", with: "\\\"")
 
-        let script: String
-        if isRunning {
-            script = """
-                tell application "Terminal"
-                    activate
-                    do script "cd " & quoted form of "\(escapedPath)"
-                end tell
-                """
-        } else {
-            // 如果终端未运行，它在启动时会自动打开一个窗口。
-            // 我们需要等待窗口出现，并直接在第一个窗口执行，以避免出现第二个窗口。
-            script = """
-                tell application "Terminal"
-                    activate
-                    set counter to 0
-                    repeat until (count of windows) > 0 or counter > 20
-                        delay 0.1
-                        set counter to counter + 1
-                    end repeat
-                    if (count of windows) > 0 then
-                        do script "cd " & quoted form of "\(escapedPath)" in window 1
-                    else
+        switch terminal {
+        case .appleTerminal:
+            let isRunning = NSWorkspace.shared.runningApplications.contains {
+                $0.bundleIdentifier == terminal.bundleIdentifier
+            }
+            let script: String
+            if isRunning {
+                script = """
+                    tell application "Terminal"
+                        activate
                         do script "cd " & quoted form of "\(escapedPath)"
-                    end if
+                    end tell
+                    """
+            } else {
+                script = """
+                    tell application "Terminal"
+                        activate
+                        set counter to 0
+                        repeat until (count of windows) > 0 or counter > 20
+                            delay 0.1
+                            set counter to counter + 1
+                        end repeat
+                        if (count of windows) > 0 then
+                            do script "cd " & quoted form of "\(escapedPath)" in window 1
+                        else
+                            do script "cd " & quoted form of "\(escapedPath)"
+                        end if
+                    end tell
+                    """
+            }
+            runAppleScript(script)
+
+        case .iterm2:
+            let script = """
+                tell application "iTerm"
+                    activate
+                    try
+                        if (count of windows) = 0 then
+                            create window with default profile
+                        else
+                            tell current window
+                                create tab with default profile
+                            end tell
+                        end if
+                        tell current session of current window
+                            write text "cd " & quoted form of "\(escapedPath)"
+                        end tell
+                    on error
+                        create window with default profile
+                        tell current session of current window
+                            write text "cd " & quoted form of "\(escapedPath)"
+                        end tell
+                    end try
                 end tell
                 """
+            runAppleScript(script)
+
+        case .warp, .ghostty:
+            let task = Process()
+            task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+            task.arguments = ["-b", terminal.bundleIdentifier, targetPath]
+            do {
+                try task.run()
+            } catch {
+                print("Failed to run open: \(error)")
+            }
         }
 
-        task.arguments = ["-e", script]
+        PanelManager.shared.hidePanel()
+    }
 
+    private func runAppleScript(_ script: String) {
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        task.arguments = ["-e", script]
         do {
             try task.run()
         } catch {
             print("Failed to run osascript: \(error)")
         }
-
-        PanelManager.shared.hidePanel()
     }
 
     /// 在 Finder 中显示

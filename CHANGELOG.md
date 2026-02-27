@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.2.17
+- 支持自定义终端工具，Ghostty、iTerm2、Warp等
+
 ## v0.2.16
 - 支持 Cursor、Antigravity 编辑器的快速打开最近项目
 - 搜索优化
