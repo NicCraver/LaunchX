@@ -350,6 +350,23 @@ final class FileIndexer {
     /// Check if an app has a custom icon defined in Info.plist
     /// Apps without icons (like system services in /System/Library/CoreServices/) return false
     private func appHasCustomIcon(at path: String) -> Bool {
+        let appName = (path as NSString).lastPathComponent
+
+        // Filter out Electron/Chromium helper processes
+        // These are auxiliary processes for apps like VSCode, Cursor, Chrome, etc.
+        let helperPatterns = [
+            " Helper",           // "Cursor Helper", "Chrome Helper"
+            " Helper (GPU)",     // "Cursor Helper (GPU)"
+            " Helper (Renderer)", // "Cursor Helper (Renderer)"
+            " Helper (Plugin)",  // "Cursor Helper (Plugin)"
+        ]
+
+        for pattern in helperPatterns {
+            if appName.contains(pattern) {
+                return false
+            }
+        }
+
         let infoPlistPath = path + "/Contents/Info.plist"
         guard let infoPlistData = FileManager.default.contents(atPath: infoPlistPath),
             let plist = try? PropertyListSerialization.propertyList(

@@ -4,7 +4,9 @@ import Foundation
 /// IDE 类型枚举
 enum IDEType: String, CaseIterable {
     case vscode = "Visual Studio Code"
+    case cursor = "Cursor"
     case zed = "Zed"
+    case antigravity = "Antigravity"
     case jetbrainsIntelliJ = "IntelliJ IDEA"
     case jetbrainsPyCharm = "PyCharm"
     case jetbrainsWebStorm = "WebStorm"
@@ -16,7 +18,9 @@ enum IDEType: String, CaseIterable {
     var bundleIdentifiers: [String] {
         switch self {
         case .vscode: return ["com.microsoft.VSCode", "com.microsoft.VSCodeInsiders"]
+        case .cursor: return ["com.todesktop.230313mzl4w4u92", "com.cursor.Cursor"]
         case .zed: return ["dev.zed.Zed", "dev.zed.Zed-Preview", "dev.zed.Zed-Nightly"]
+        case .antigravity: return ["com.google.Antigravity", "com.google.AntigravityPreview"]
         case .jetbrainsIntelliJ:
             return [
                 "com.jetbrains.intellij", "com.jetbrains.intellij.ce", "com.jetbrains.intellij-EAP",
@@ -35,7 +39,7 @@ enum IDEType: String, CaseIterable {
     /// 是否为 JetBrains 系列
     var isJetBrains: Bool {
         switch self {
-        case .vscode, .zed: return false
+        case .vscode, .cursor, .zed, .antigravity: return false
         default: return true
         }
     }
@@ -47,8 +51,14 @@ enum IDEType: String, CaseIterable {
         if lowercasedPath.contains("visual studio code") || lowercasedPath.hasSuffix("/code.app") {
             return .vscode
         }
+        if lowercasedPath.contains("cursor") || lowercasedPath.hasSuffix("/cursor.app") {
+            return .cursor
+        }
         if lowercasedPath.hasSuffix("/zed.app") {
             return .zed
+        }
+        if lowercasedPath.contains("antigravity") || lowercasedPath.hasSuffix("/antigravity.app") {
+            return .antigravity
         }
         if lowercasedPath.contains("intellij") {
             return .jetbrainsIntelliJ
