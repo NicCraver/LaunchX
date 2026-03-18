@@ -20,20 +20,24 @@ struct SearchConfig: Codable, Equatable {
     /// Core apps that should always be searchable and have default aliases
     static let coreApps: [String: String] = [
         "/System/Applications/System Settings.app": "set",
-        "/System/Applications/Utilities/Terminal.app": "ter",
         "/System/Library/CoreServices/Finder.app": "fin",
-        "/System/Applications/Utilities/Activity Monitor.app": "act",
-        "/System/Volumes/Preboot/Cryptexes/App/System/Applications/Safari.app": "saf",
     ]
 
     /// Default excluded folder names
     static let defaultExcludedFolderNames: [String] = [
         "node_modules",
         "dist",
+        "assets",
+        "sdk",
+        ".git",
     ]
 
     /// Default excluded file extensions
-    static let defaultExcludedExtensions: [String] = []
+    static let defaultExcludedExtensions: [String] = [
+        ".temp",
+        ".bak",
+        ".log",
+    ]
 
     /// Default excluded paths
     static let defaultExcludedPaths: [String] = []

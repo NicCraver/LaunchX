@@ -17,6 +17,14 @@ class ReminderActionView: NSView {
     private let containerView = NSVisualEffectView()
     private let stackView = NSStackView()
 
+    // 状态
+    private var selectedIndex: Int = 0 {
+        didSet {
+            updateButtonAppearance()
+        }
+    }
+    private var hasURL: Bool = false
+
     // 跳转链接按钮
     private let jumpButton = NSView()
     private let jumpLabel = NSTextField(labelWithString: "前往跳转")
@@ -89,7 +97,7 @@ class ReminderActionView: NSView {
 
         NSLayoutConstraint.activate([
             jumpLabel.centerXAnchor.constraint(equalTo: jumpButton.centerXAnchor),
-            jumpLabel.centerYAnchor.constraint(equalTo: jumpButton.centerYAnchor)
+            jumpLabel.centerYAnchor.constraint(equalTo: jumpButton.centerYAnchor),
         ])
 
         // 5. 打开应用按钮
@@ -105,7 +113,7 @@ class ReminderActionView: NSView {
 
         NSLayoutConstraint.activate([
             appLabel.centerXAnchor.constraint(equalTo: appButton.centerXAnchor),
-            appLabel.centerYAnchor.constraint(equalTo: appButton.centerYAnchor)
+            appLabel.centerYAnchor.constraint(equalTo: appButton.centerYAnchor),
         ])
 
         // 约束设置
@@ -121,7 +129,7 @@ class ReminderActionView: NSView {
             containerHeightConstraint!,
 
             stackView.centerXAnchor.constraint(equalTo: containerView.centerXAnchor),
-            stackView.centerYAnchor.constraint(equalTo: containerView.centerYAnchor)
+            stackView.centerYAnchor.constraint(equalTo: containerView.centerYAnchor),
         ])
 
         // 添加阴影
@@ -136,6 +144,33 @@ class ReminderActionView: NSView {
 
         let appGesture = NSClickGestureRecognizer(target: self, action: #selector(handleOpenApp))
         appButton.addGestureRecognizer(appGesture)
+
+        // 添加追踪区域用于鼠标悬停
+        let jumpTracking = NSTrackingArea(
+            rect: .zero,
+            options: [.mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
+            owner: self,
+            userInfo: ["index": 0]
+        )
+        jumpButton.addTrackingArea(jumpTracking)
+
+        let appTracking = NSTrackingArea(
+            rect: .zero,
+            options: [.mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
+            owner: self,
+            userInfo: ["index": 1]
+        )
+        appButton.addTrackingArea(appTracking)
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        if let userInfo = event.trackingArea?.userInfo,
+            let index = userInfo["index"] as? Int
+        {
+            if hasURL || index == 1 {
+                selectedIndex = index
+            }
+        }
     }
 
     @objc private func handleJump() {
@@ -148,7 +183,41 @@ class ReminderActionView: NSView {
 
     // MARK: - Logic
 
+    private func updateButtonAppearance() {
+        if hasURL {
+            if selectedIndex == 0 {
+                // 选中跳转链接
+                jumpButton.layer?.backgroundColor = NSColor.systemYellow.cgColor
+                jumpLabel.textColor = .black
+                jumpLabel.font = .systemFont(ofSize: 14, weight: .bold)
+
+                appButton.layer?.backgroundColor =
+                    NSColor.labelColor.withAlphaComponent(0.1).cgColor
+                appLabel.textColor = .labelColor
+                appLabel.font = .systemFont(ofSize: 14, weight: .medium)
+            } else {
+                // 选中打开应用
+                jumpButton.layer?.backgroundColor =
+                    NSColor.labelColor.withAlphaComponent(0.1).cgColor
+                jumpLabel.textColor = .labelColor
+                jumpLabel.font = .systemFont(ofSize: 14, weight: .medium)
+
+                appButton.layer?.backgroundColor = NSColor.systemYellow.cgColor
+                appLabel.textColor = .black
+                appLabel.font = .systemFont(ofSize: 14, weight: .bold)
+            }
+        } else {
+            // 只有打开应用按钮
+            appButton.layer?.backgroundColor = NSColor.systemYellow.cgColor
+            appLabel.textColor = .black
+            appLabel.font = .systemFont(ofSize: 14, weight: .bold)
+        }
+    }
+
     func updateUI(hasURL: Bool) {
+        self.hasURL = hasURL
+        self.selectedIndex = 0
+
         // 清理并重新填充 StackView
         stackView.arrangedSubviews.forEach { $0.removeFromSuperview() }
 
@@ -161,18 +230,8 @@ class ReminderActionView: NSView {
 
             jumpButton.isHidden = false
             iconView.isHidden = false
-
-            // 跳转按钮为主按钮（黄色）
-            jumpButton.layer?.backgroundColor = NSColor.systemYellow.cgColor
             jumpLabel.stringValue = "前往跳转"
-            jumpLabel.textColor = .black
-            jumpLabel.font = .systemFont(ofSize: 14, weight: .bold)
-
-            // 应用按钮为次按钮（灰色）
-            appButton.layer?.backgroundColor = NSColor.labelColor.withAlphaComponent(0.1).cgColor
             appLabel.stringValue = "在应用中打开"
-            appLabel.textColor = .labelColor
-            appLabel.font = .systemFont(ofSize: 14, weight: .medium)
 
             containerHeightConstraint?.constant = 165
         } else {
@@ -181,15 +240,12 @@ class ReminderActionView: NSView {
 
             jumpButton.isHidden = true
             iconView.isHidden = true
-
-            // 应用按钮变为主按钮（黄色）
-            appButton.layer?.backgroundColor = NSColor.systemYellow.cgColor
             appLabel.stringValue = "在应用中打开"
-            appLabel.textColor = .black
-            appLabel.font = .systemFont(ofSize: 14, weight: .bold)
 
             containerHeightConstraint?.constant = 70
         }
+
+        updateButtonAppearance()
     }
 
     // MARK: - Event Handling
@@ -197,10 +253,25 @@ class ReminderActionView: NSView {
     override var acceptsFirstResponder: Bool { true }
 
     override func keyDown(with event: NSEvent) {
-        switch Int(event.keyCode) {
+        let keyCode = Int(event.keyCode)
+        let isControl = event.modifierFlags.contains(.control)
+
+        switch keyCode {
+        case 126:  // Up arrow
+            if hasURL { selectedIndex = 0 }
+        case 125:  // Down arrow
+            if hasURL { selectedIndex = 1 }
+        case 35 where isControl:  // Ctrl + P
+            if hasURL { selectedIndex = 0 }
+        case 45 where isControl:  // Ctrl + N
+            if hasURL { selectedIndex = 1 }
         case 36:  // Return
-            if !jumpButton.isHidden {
-                handleJump()
+            if hasURL {
+                if selectedIndex == 0 {
+                    handleJump()
+                } else {
+                    handleOpenApp()
+                }
             } else {
                 handleOpenApp()
             }

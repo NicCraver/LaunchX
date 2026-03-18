@@ -44,6 +44,10 @@ struct ClipboardItem: Identifiable, Codable, Hashable {
     // 文本内容（文本、链接）
     var textContent: String?
 
+    // 富文本格式数据
+    var rtfData: Data?
+    var htmlData: Data?
+
     // 图片数据（PNG 格式存储，不保存到 JSON，单独存储）
     var imageData: Data?
 
@@ -64,7 +68,7 @@ struct ClipboardItem: Identifiable, Codable, Hashable {
 
     enum CodingKeys: String, CodingKey {
         case id, contentType, createdAt, isPinned
-        case textContent, filePaths, colorHex
+        case textContent, rtfData, htmlData, filePaths, colorHex
         case sourceAppBundleId, sourceAppName, dataSize
     }
 
@@ -76,6 +80,8 @@ struct ClipboardItem: Identifiable, Codable, Hashable {
         createdAt: Date = Date(),
         isPinned: Bool = false,
         textContent: String? = nil,
+        rtfData: Data? = nil,
+        htmlData: Data? = nil,
         imageData: Data? = nil,
         filePaths: [String]? = nil,
         colorHex: String? = nil,
@@ -87,6 +93,8 @@ struct ClipboardItem: Identifiable, Codable, Hashable {
         self.createdAt = createdAt
         self.isPinned = isPinned
         self.textContent = textContent
+        self.rtfData = rtfData
+        self.htmlData = htmlData
         self.imageData = imageData
         self.filePaths = filePaths
         self.colorHex = colorHex
@@ -97,6 +105,12 @@ struct ClipboardItem: Identifiable, Codable, Hashable {
         var size: Int64 = 0
         if let text = textContent {
             size += Int64(text.utf8.count)
+        }
+        if let rtf = rtfData {
+            size += Int64(rtf.count)
+        }
+        if let html = htmlData {
+            size += Int64(html.count)
         }
         if let data = imageData {
             size += Int64(data.count)

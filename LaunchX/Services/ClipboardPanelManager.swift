@@ -156,12 +156,51 @@ class ClipboardPanelManager: NSObject, NSWindowDelegate {
 
     /// 粘贴当前选中项为纯文本
     func pasteSelectedAsPlainText() {
-        guard let items = viewController?.getSelectedItems(), let first = items.first else {
-            return
-        }
-        ClipboardService.shared.pasteAsPlainText(first)
-        if !isPinned {
-            hidePanel()
+        // 检查面板是否打开且有选中项
+        if let items = viewController?.getSelectedItems(), let first = items.first {
+            // 使用选中项执行纯文本粘贴
+            ClipboardService.shared.pasteAsPlainText(first)
+            if !isPinned {
+                hidePanel()
+            }
+        } else {
+            // 面板未打开或无选中项，直接读取系统剪贴板并执行纯文本粘贴
+            let pasteboard = NSPasteboard.general
+
+            // 保存原始剪贴板内容（所有格式）
+            let originalText = pasteboard.string(forType: .string)
+            let originalRTF = pasteboard.data(forType: .rtf)
+            let originalHTML = pasteboard.data(forType: .html)
+
+            // 读取纯文本内容
+            if let text = originalText, !text.isEmpty {
+                // 清空剪贴板并只写入纯文本
+                pasteboard.clearContents()
+                pasteboard.setString(text, forType: .string)
+
+                // 延迟执行粘贴
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                    ClipboardService.shared.simulatePasteCommand()
+
+                    // 粘贴事件发送后立即恢复原始剪贴板内容
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        pasteboard.clearContents()
+                        // 按优先级恢复：RTF -> HTML -> 纯文本
+                        if let rtf = originalRTF {
+                            pasteboard.setData(rtf, forType: .rtf)
+                        }
+                        if let html = originalHTML {
+                            pasteboard.setData(html, forType: .html)
+                        }
+                        if let text = originalText {
+                            pasteboard.setString(text, forType: .string)
+                        }
+
+                        // 同步 changeCount，避免监控逻辑重复记录
+                        ClipboardService.shared.syncChangeCount()
+                    }
+                }
+            }
         }
     }
 }

@@ -415,19 +415,6 @@ struct HotKeyButton: View {
 
 // MARK: - 按键帽视图
 
-struct KeyCapView: View {
-    let text: String
-
-    var body: some View {
-        Text(text)
-            .font(.system(size: 11, weight: .medium, design: .rounded))
-            .padding(.horizontal, 4)
-            .padding(.vertical, 2)
-            .background(Color(nsColor: .controlBackgroundColor))
-            .cornerRadius(3)
-    }
-}
-
 // MARK: - ViewModel
 
 class AliasShortcutViewModel: ObservableObject {

@@ -524,15 +524,3 @@ struct MainHotKeyRecorderPopover: View {
 
 // MARK: - 设置页按键帽视图
 
-struct KeyCapViewSettings: View {
-    let text: String
-
-    var body: some View {
-        Text(text)
-            .font(.system(size: 12, weight: .medium, design: .rounded))
-            .padding(.horizontal, 6)
-            .padding(.vertical, 3)
-            .background(Color(nsColor: .controlBackgroundColor))
-            .cornerRadius(4)
-    }
-}

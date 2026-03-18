@@ -138,20 +138,6 @@ struct HotKeyRecorderPopover: View {
 
 // MARK: - 大号按键帽视图
 
-struct KeyCapViewLarge: View {
-    let text: String
-
-    var body: some View {
-        Text(text)
-            .font(.system(size: 13, weight: .medium, design: .rounded))
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(Color(nsColor: .controlBackgroundColor))
-            .cornerRadius(4)
-            .shadow(color: .black.opacity(0.1), radius: 1, x: 0, y: 1)
-    }
-}
-
 // MARK: - Preview
 
 #Preview {

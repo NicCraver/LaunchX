@@ -353,20 +353,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             AITranslatePanelManager.shared.togglePanel()
         }
 
-        // 设置表情包快捷键回调
-        HotKeyService.shared.onMemeHotKeyPressed = {
-            let settings = MemeSearchSettings.load()
-            guard settings.isEnabled else { return }
-            PanelManager.shared.showPanelInMemeMode()
-        }
-
-        // 设置表情包收藏快捷键回调
-        HotKeyService.shared.onFavoriteHotKeyPressed = {
-            let settings = MemeFavoriteSettings.load()
-            guard settings.isEnabled else { return }
-            PanelManager.shared.showPanelInFavoriteMode()
-        }
-
         // 优先从新的 ToolsConfig 加载，否则回退到 CustomItemsConfig
         let toolsConfig = ToolsConfig.load()
         if !toolsConfig.tools.isEmpty {
@@ -390,12 +376,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // 加载翻译快捷键
         HotKeyService.shared.loadTranslateHotKeys()
-
-        // 加载表情包快捷键
-        HotKeyService.shared.loadMemeHotKey()
-
-        // 加载表情包收藏快捷键
-        HotKeyService.shared.loadFavoriteHotKey()
 
         // 启动剪贴板监听
         ClipboardService.shared.startMonitoring()

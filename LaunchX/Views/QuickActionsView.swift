@@ -334,10 +334,16 @@ class QuickActionsView: NSView {
     }
 
     override func keyDown(with event: NSEvent) {
+        let isControl = event.modifierFlags.contains(.control)
+
         switch Int(event.keyCode) {
         case 126:  // Up arrow
             moveSelectionUp()
         case 125:  // Down arrow
+            moveSelectionDown()
+        case 35 where isControl:  // Ctrl + P
+            moveSelectionUp()
+        case 45 where isControl:  // Ctrl + N
             moveSelectionDown()
         case 36:  // Return
             executeSelectedAction()

@@ -21,14 +21,14 @@ struct SnippetSettingsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // 标题行
-            HStack(spacing: 12) {
+            HStack(spacing: SettingsHeaderStyle.iconTitleSpacing) {
                 Image(systemName: "chevron.left.forwardslash.chevron.right")
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 20, height: 20)
+                    .font(.system(size: SettingsHeaderStyle.iconSize))
                     .foregroundColor(.orange)
+                    .frame(width: SettingsHeaderStyle.iconFrameSize, height: SettingsHeaderStyle.iconFrameSize)
                 Text("Snippet")
-                    .font(.headline)
+                    .font(SettingsHeaderStyle.titleFont)
+                    .fontWeight(SettingsHeaderStyle.titleFontWeight)
                 Spacer()
                 Toggle("", isOn: $settings.isEnabled)
                     .toggleStyle(.switch)
@@ -41,9 +41,9 @@ struct SnippetSettingsView: View {
                         }
                     }
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 20)
-            .padding(.bottom, 16)
+            .padding(.horizontal, SettingsHeaderStyle.horizontalPadding)
+            .padding(.top, SettingsHeaderStyle.topPadding)
+            .padding(.bottom, SettingsHeaderStyle.bottomPadding)
 
             Divider()
 

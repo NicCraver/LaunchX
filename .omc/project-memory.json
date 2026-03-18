@@ -1,0 +1,108 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1773222531730,
+  "projectRoot": "/Users/eric/dev/mac_app/LaunchX",
+  "techStack": {
+    "languages": [
+      {
+        "name": "C/C++",
+        "version": null,
+        "confidence": "high",
+        "markers": [
+          "Makefile"
+        ]
+      }
+    ],
+    "frameworks": [],
+    "packageManager": null,
+    "runtime": null
+  },
+  "build": {
+    "buildCommand": "make build",
+    "testCommand": "make test",
+    "lintCommand": null,
+    "devCommand": null,
+    "scripts": {}
+  },
+  "conventions": {
+    "namingStyle": null,
+    "importStyle": null,
+    "testPattern": null,
+    "fileOrganization": null
+  },
+  "structure": {
+    "isMonorepo": false,
+    "workspaces": [],
+    "mainDirectories": [],
+    "gitBranches": {
+      "defaultBranch": "main",
+      "branchingStrategy": null
+    }
+  },
+  "customNotes": [],
+  "directoryMap": {
+    "LaunchX": {
+      "path": "LaunchX",
+      "purpose": null,
+      "fileCount": 4,
+      "lastAccessed": 1773222531724,
+      "keyFiles": [
+        "Info.plist",
+        "LanuchXApp.swift",
+        "Persistence.swift"
+      ]
+    },
+    "LaunchX.xcodeproj": {
+      "path": "LaunchX.xcodeproj",
+      "purpose": null,
+      "fileCount": 1,
+      "lastAccessed": 1773222531724,
+      "keyFiles": [
+        "project.pbxproj"
+      ]
+    },
+    "LaunchXTests": {
+      "path": "LaunchXTests",
+      "purpose": null,
+      "fileCount": 1,
+      "lastAccessed": 1773222531725,
+      "keyFiles": [
+        "LanuchXTests.swift"
+      ]
+    },
+    "LaunchXUITests": {
+      "path": "LaunchXUITests",
+      "purpose": null,
+      "fileCount": 2,
+      "lastAccessed": 1773222531727,
+      "keyFiles": [
+        "LanuchXUITests.swift",
+        "LanuchXUITestsLaunchTests.swift"
+      ]
+    },
+    "LaunchX/App": {
+      "path": "LaunchX/App",
+      "purpose": "Application code",
+      "fileCount": 3,
+      "lastAccessed": 1773222531729,
+      "keyFiles": [
+        "AITranslatePanel.swift",
+        "ClipboardPanel.swift",
+        "FloatingPanel.swift"
+      ]
+    },
+    "LaunchX/Models": {
+      "path": "LaunchX/Models",
+      "purpose": "Data models",
+      "fileCount": 14,
+      "lastAccessed": 1773222531730,
+      "keyFiles": [
+        "AITranslateItem.swift",
+        "BackupModel.swift",
+        "ClipboardItem.swift"
+      ]
+    }
+  },
+  "hotPaths": [],
+  "userDirectives": []
+}

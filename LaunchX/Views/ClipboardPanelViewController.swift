@@ -1,5 +1,7 @@
 import Cocoa
 
+import Cocoa
+
 // MARK: - 搜索框键盘导航代理协议
 
 protocol ClipboardSearchFieldNavigationDelegate: AnyObject {
@@ -58,30 +60,30 @@ class ClipboardPanelViewController: NSViewController {
 
     // MARK: - UI 组件
 
-    private var searchField: ClipboardSearchField!
-    private var visualEffectView: NSVisualEffectView?
-    private var glassEffectView: NSView?
-    private let filterButton = NSButton()
-    private let filterMenu = NSMenu()
-    private let clearButton = NSButton()
-    private let pinButton = NSButton()
-    private let dragArea = DraggableView()
-    private let tableView = NSTableView()
-    private let scrollView = NSScrollView()
-    private let statusLabel = NSTextField()
-    private let shortcutHintView = ShortcutHintView()
+    var searchField: ClipboardSearchField!
+    var visualEffectView: NSVisualEffectView?
+    var glassEffectView: NSView?
+    let filterButton = NSButton()
+    let filterMenu = NSMenu()
+    let clearButton = NSButton()
+    let pinButton = NSButton()
+    let dragArea = DraggableView()
+    let tableView = NSTableView()
+    let scrollView = NSScrollView()
+    let statusLabel = NSTextField()
+    let shortcutHintView = ShortcutHintView()
 
     // MARK: - 状态
 
-    private var items: [ClipboardItem] = []
-    private var filteredItems: [ClipboardItem] = []
-    private var selectedFilter: ClipboardContentType? = nil
-    private var selectedIndices: Set<Int> = []
-    private var clickMode: ClipboardClickMode = .doubleClick
+    var items: [ClipboardItem] = []
+    var filteredItems: [ClipboardItem] = []
+    var selectedFilter: ClipboardContentType? = nil
+    var selectedIndices: Set<Int> = []
+    var clickMode: ClipboardClickMode = .doubleClick
 
     // MARK: - 常量
 
-    private let rowHeight: CGFloat = 44
+    let rowHeight: CGFloat = 44
 
     // MARK: - 生命周期
 
@@ -159,7 +161,7 @@ class ClipboardPanelViewController: NSViewController {
     }
 
     /// 处理液态玻璃设置变化
-    @objc private func handleLiquidGlassSettingDidChange() {
+    @objc func handleLiquidGlassSettingDidChange() {
         let useLiquidGlass =
             UserDefaults.standard.object(forKey: "enableLiquidGlass") as? Bool ?? true
 
@@ -184,7 +186,7 @@ class ClipboardPanelViewController: NSViewController {
 
     // MARK: - UI 设置
 
-    private func setupUI() {
+    func setupUI() {
         // 可拖拽区域（顶部居中，热区比可见横杠大）
         dragArea.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(dragArea)
@@ -247,7 +249,7 @@ class ClipboardPanelViewController: NSViewController {
         setupConstraints()
     }
 
-    private func setupFilterButton() {
+    func setupFilterButton() {
         // 使用普通按钮 + 菜单，避免下拉箭头
         filterButton.bezelStyle = .inline
         filterButton.isBordered = false
@@ -286,13 +288,13 @@ class ClipboardPanelViewController: NSViewController {
         view.addSubview(filterButton)
     }
 
-    @objc private func showFilterMenu() {
+    @objc func showFilterMenu() {
         // 在按钮下方弹出菜单，指定 in: filterButton 确保菜单在正确的层级显示
         let point = NSPoint(x: 0, y: filterButton.bounds.height + 4)
         filterMenu.popUp(positioning: nil, at: point, in: filterButton)
     }
 
-    private func setupTableView() {
+    func setupTableView() {
         // 配置表格视图
         tableView.delegate = self
         tableView.dataSource = self
@@ -326,7 +328,7 @@ class ClipboardPanelViewController: NSViewController {
         view.addSubview(scrollView)
     }
 
-    private func setupConstraints() {
+    func setupConstraints() {
         NSLayoutConstraint.activate([
             // 拖拽区域（增大热区方便拖拽）
             dragArea.topAnchor.constraint(equalTo: view.topAnchor, constant: 6),
@@ -376,7 +378,7 @@ class ClipboardPanelViewController: NSViewController {
 
     // MARK: - 数据绑定
 
-    private func setupBindings() {
+    func setupBindings() {
         // 监听剪贴板服务的变化
         NotificationCenter.default.addObserver(
             self,
@@ -388,7 +390,7 @@ class ClipboardPanelViewController: NSViewController {
 
     // MARK: - 加载数据
 
-    private func loadSettings() {
+    func loadSettings() {
         let settings = ClipboardSettings.load()
         clickMode = settings.clickMode
     }
@@ -403,14 +405,14 @@ class ClipboardPanelViewController: NSViewController {
         loadItems()
     }
 
-    private func applyFilter() {
+    func applyFilter() {
         let query = searchField.stringValue
         filteredItems = ClipboardService.shared.search(query: query, filter: selectedFilter)
         tableView.reloadData()
         updateStatusLabel()
     }
 
-    private func updateStatusLabel() {
+    func updateStatusLabel() {
         let selected = tableView.selectedRowIndexes.count
         let total = filteredItems.count
         if selected > 0 {
@@ -441,7 +443,7 @@ class ClipboardPanelViewController: NSViewController {
 
     // MARK: - 事件处理
 
-    @objc private func selectFilter(_ sender: NSMenuItem) {
+    @objc func selectFilter(_ sender: NSMenuItem) {
         let tag = sender.tag
         let newFilter: ClipboardContentType? = (tag == -1) ? nil : ClipboardContentType.allCases[tag]
 
@@ -480,7 +482,7 @@ class ClipboardPanelViewController: NSViewController {
         applyFilter()
     }
 
-    @objc private func clearHistory() {
+    @objc func clearHistory() {
         let alert = NSAlert()
         alert.messageText = "清空剪贴板历史"
         alert.informativeText = "确定要清空所有剪贴板历史吗？固定的项目不会被删除。"
@@ -494,15 +496,15 @@ class ClipboardPanelViewController: NSViewController {
         }
     }
 
-    @objc private func togglePin() {
+    @objc func togglePin() {
         ClipboardPanelManager.shared.togglePinned()
     }
 
-    @objc private func handleClipboardChange() {
+    @objc func handleClipboardChange() {
         loadItems()
     }
 
-    @objc private func tableViewClicked() {
+    @objc func tableViewClicked() {
         // 单击模式下，点击即粘贴
         if clickMode == .singleClick {
             let clickedRow = tableView.clickedRow
@@ -512,7 +514,7 @@ class ClipboardPanelViewController: NSViewController {
         }
     }
 
-    @objc private func tableViewDoubleClicked() {
+    @objc func tableViewDoubleClicked() {
         let clickedRow = tableView.clickedRow
         guard clickedRow >= 0, clickedRow < filteredItems.count else { return }
 
@@ -592,7 +594,7 @@ class ClipboardPanelViewController: NSViewController {
         super.keyDown(with: event)
     }
 
-    private func moveSelection(by delta: Int) {
+    func moveSelection(by delta: Int) {
         guard !filteredItems.isEmpty else { return }
 
         let currentIndex = tableView.selectedRow
@@ -616,7 +618,7 @@ class ClipboardPanelViewController: NSViewController {
     }
 
     /// 滚动使选中行保持在中间位置（参考主搜索列表实现）
-    private func scrollToKeepSelectionCentered() {
+    func scrollToKeepSelectionCentered() {
         let selectedRow = tableView.selectedRow
         guard selectedRow >= 0 else { return }
 
@@ -638,7 +640,7 @@ class ClipboardPanelViewController: NSViewController {
     // MARK: - 粘贴功能
 
     /// 粘贴项目（保持原始格式）
-    private func pasteItem(_ item: ClipboardItem) {
+    func pasteItem(_ item: ClipboardItem) {
         // 先写入剪贴板
         ClipboardService.shared.copyToClipboard(item)
 
@@ -655,7 +657,7 @@ class ClipboardPanelViewController: NSViewController {
     }
 
     /// 粘贴项目为纯文本
-    private func pasteItemAsPlainText(_ item: ClipboardItem) {
+    func pasteItemAsPlainText(_ item: ClipboardItem) {
         // 先写入剪贴板（纯文本）
         ClipboardService.shared.copyAsPlainText(item)
 
@@ -672,7 +674,7 @@ class ClipboardPanelViewController: NSViewController {
     }
 
     /// 执行粘贴操作
-    private func performPaste() {
+    func performPaste() {
         // 使用 CGEvent 直接发送按键事件，更可靠
         let source = CGEventSource(stateID: .combinedSessionState)
 
@@ -688,718 +690,3 @@ class ClipboardPanelViewController: NSViewController {
     }
 }
 
-// MARK: - NSTextFieldDelegate
-
-extension ClipboardPanelViewController: NSTextFieldDelegate {
-    func controlTextDidChange(_ obj: Notification) {
-        applyFilter()
-    }
-
-    // 处理搜索框中的特殊按键
-    func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector)
-        -> Bool
-    {
-        // Escape: 关闭面板
-        if commandSelector == #selector(NSResponder.cancelOperation(_:)) {
-            ClipboardPanelManager.shared.forceHidePanel()
-            return true
-        }
-
-        // 上箭头: 向上移动
-        if commandSelector == #selector(NSResponder.moveUp(_:)) {
-            moveSelection(by: -1)
-            return true
-        }
-
-        // 下箭头: 向下移动
-        if commandSelector == #selector(NSResponder.moveDown(_:)) {
-            moveSelection(by: 1)
-            return true
-        }
-
-        // Return: 粘贴
-        if commandSelector == #selector(NSResponder.insertNewline(_:)) {
-            if let selectedRow = tableView.selectedRowIndexes.first,
-                selectedRow < filteredItems.count
-            {
-                let item = filteredItems[selectedRow]
-                pasteItem(item)
-                return true
-            }
-        }
-
-        return false
-    }
-}
-
-// MARK: - ClipboardSearchFieldNavigationDelegate
-
-extension ClipboardPanelViewController: ClipboardSearchFieldNavigationDelegate {
-    func searchFieldDidPressUpArrow() {
-        moveSelection(by: -1)
-    }
-
-    func searchFieldDidPressDownArrow() {
-        moveSelection(by: 1)
-    }
-
-    func searchFieldDidPressControlP() {
-        moveSelection(by: -1)
-    }
-
-    func searchFieldDidPressControlN() {
-        moveSelection(by: 1)
-    }
-
-    func searchFieldDidPressReturn(withCommand: Bool) {
-        guard let selectedRow = tableView.selectedRowIndexes.first,
-            selectedRow < filteredItems.count
-        else { return }
-
-        let item = filteredItems[selectedRow]
-
-        if withCommand {
-            pasteItemAsPlainText(item)
-        } else {
-            pasteItem(item)
-        }
-    }
-
-    func searchFieldDidPressEscape() {
-        ClipboardPanelManager.shared.forceHidePanel()
-    }
-
-    func searchFieldDidSelectFilter(at index: Int) {
-        let targetTag = index == 0 ? -1 : index - 1
-        if let item = filterMenu.items.first(where: { $0.tag == targetTag }) {
-            selectFilter(item)
-        }
-    }
-}
-
-// MARK: - NSTableViewDataSource & Delegate
-
-extension ClipboardPanelViewController: NSTableViewDataSource, NSTableViewDelegate {
-    func numberOfRows(in tableView: NSTableView) -> Int {
-        return filteredItems.count
-    }
-
-    func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int)
-        -> NSView?
-    {
-        guard row < filteredItems.count else { return nil }
-
-        let item = filteredItems[row]
-
-        // 创建或复用单元格
-        let cellIdentifier = NSUserInterfaceItemIdentifier("ClipboardCell")
-        var cell =
-            tableView.makeView(withIdentifier: cellIdentifier, owner: nil) as? ClipboardCellView
-
-        if cell == nil {
-            cell = ClipboardCellView()
-            cell?.identifier = cellIdentifier
-        }
-
-        cell?.configure(with: item)
-        return cell
-    }
-
-    func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
-        guard row < filteredItems.count else { return rowHeight }
-
-        let item = filteredItems[row]
-
-        // 5行文字高度: 5 * 17 (13pt字体 + 行间距) + 16 (上下各8pt padding) = 101
-        let maxMultilineHeight: CGFloat = 101
-
-        // 图片类型根据实际图片尺寸计算高度
-        if item.contentType == .image {
-            if let data = item.imageData, let image = NSImage(data: data) {
-                // 图片预览最大宽度200，最小宽度50
-                let maxPreviewWidth: CGFloat = 200
-                let aspectRatio = image.size.width / max(image.size.height, 1)
-
-                // 计算图片预览的实际尺寸
-                // 如果图片很宽（宽高比 > 1），宽度受限，高度较小
-                // 如果图片很高（宽高比 < 1），高度受限于 maxMultilineHeight - padding
-                let maxImageHeight: CGFloat = 85  // 最大图片高度
-                let imageWidth = min(maxImageHeight * aspectRatio, maxPreviewWidth)
-                let imageHeight = imageWidth / max(aspectRatio, 0.1)
-
-                // 行高 = 图片高度 + 上下 padding (8pt each)
-                let height = min(imageHeight, maxImageHeight) + 16
-                return max(rowHeight, height)
-            }
-            return maxMultilineHeight
-        }
-
-        // 文本类型根据内容计算高度
-        if item.contentType == .text || item.contentType == .link {
-            if let text = item.textContent {
-                // 计算实际显示行数（考虑换行符和长文本自动换行）
-                let newlineCount = text.components(separatedBy: .newlines).count
-
-                // 估算每行可显示的字符数（假设平均每字符约8pt宽度，可用宽度约350pt）
-                let charsPerLine = 44
-                let estimatedLines = max(
-                    newlineCount, (text.count + charsPerLine - 1) / charsPerLine)
-                let lineCount = min(estimatedLines, 5)
-
-                if lineCount > 1 {
-                    // 每行约 17pt (13pt 字体 + 行间距)，上下各 8pt padding
-                    let height = CGFloat(lineCount) * 17 + 16
-                    return max(rowHeight, min(height, maxMultilineHeight))
-                }
-            }
-        }
-
-        return rowHeight
-    }
-
-    func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
-        // 使用自定义 rowView，始终保持蓝色高亮（即使窗口不是 key window）
-        let rowView = EmphasizedTableRowView()
-        return rowView
-    }
-
-    func tableViewSelectionDidChange(_ notification: Notification) {
-        updateStatusLabel()
-
-        // 注意：单击模式的粘贴由 tableView 的 action 处理，而不是 selectionDidChange
-        // 这样可以避免键盘导航时意外触发粘贴
-    }
-}
-
-// MARK: - 剪贴板单元格视图
-
-class ClipboardCellView: NSTableCellView {
-
-    private let appIconView = NSImageView()  // 来源App图标
-    private let contentLabel = NSTextField()  // 内容文字
-    private let colorCircleView = NSView()  // 颜色圆形显示
-    private let pinIndicator = NSImageView()
-    private let previewImageView = NSImageView()  // 图片预览
-
-    // 约束引用，用于动态调整
-    private var contentLabelCenterYConstraint: NSLayoutConstraint?
-    private var contentLabelTopConstraint: NSLayoutConstraint?
-
-    // 图片预览尺寸约束（用于动态调整）
-    private var previewImageWidthConstraint: NSLayoutConstraint?
-    private var previewImageHeightConstraint: NSLayoutConstraint?
-
-    override init(frame frameRect: NSRect) {
-        super.init(frame: frameRect)
-        setupUI()
-    }
-
-    required init?(coder: NSCoder) {
-        super.init(coder: coder)
-        setupUI()
-    }
-
-    private func setupUI() {
-        // 来源App图标
-        appIconView.imageScaling = .scaleProportionallyUpOrDown
-        appIconView.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(appIconView)
-
-        // 颜色圆形（用于颜色类型）
-        colorCircleView.wantsLayer = true
-        colorCircleView.layer?.cornerRadius = 12  // 24/2
-        colorCircleView.layer?.borderColor = NSColor.white.cgColor
-        colorCircleView.layer?.borderWidth = 2
-        colorCircleView.layer?.masksToBounds = true
-        colorCircleView.translatesAutoresizingMaskIntoConstraints = false
-        colorCircleView.isHidden = true
-        addSubview(colorCircleView)
-
-        // 固定指示器
-        pinIndicator.image = NSImage(systemSymbolName: "pin.fill", accessibilityDescription: "已固定")
-        pinIndicator.contentTintColor = .systemOrange
-        pinIndicator.translatesAutoresizingMaskIntoConstraints = false
-        pinIndicator.isHidden = true
-        addSubview(pinIndicator)
-
-        // 内容文字
-        contentLabel.isEditable = false
-        contentLabel.isBordered = false
-        contentLabel.backgroundColor = .clear
-        contentLabel.font = .systemFont(ofSize: 13)
-        contentLabel.lineBreakMode = .byTruncatingTail
-        contentLabel.maximumNumberOfLines = 5  // 改为5行限制
-        contentLabel.cell?.wraps = true
-        contentLabel.cell?.truncatesLastVisibleLine = true
-        contentLabel.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(contentLabel)
-
-        // 图片预览
-        previewImageView.imageScaling = .scaleProportionallyUpOrDown
-        previewImageView.wantsLayer = true
-        previewImageView.layer?.cornerRadius = 4
-        previewImageView.layer?.masksToBounds = true
-        previewImageView.translatesAutoresizingMaskIntoConstraints = false
-        previewImageView.isHidden = true
-        addSubview(previewImageView)
-
-        // 创建可切换的约束
-        contentLabelCenterYConstraint = contentLabel.centerYAnchor.constraint(
-            equalTo: appIconView.centerYAnchor)
-        // 文字距离顶部14pt，视觉上与图标垂直居中（图标顶部8pt + 图标高28pt/2 - 字体高度/2 ≈ 14pt）
-        contentLabelTopConstraint = contentLabel.topAnchor.constraint(
-            equalTo: topAnchor, constant: 14)
-
-        // 图片预览尺寸约束（默认正方形）
-        previewImageWidthConstraint = previewImageView.widthAnchor.constraint(equalToConstant: 85)
-        previewImageHeightConstraint = previewImageView.heightAnchor.constraint(equalToConstant: 85)
-
-        // 布局
-        NSLayoutConstraint.activate([
-            // App图标（左侧，顶部对齐）
-            appIconView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
-            appIconView.topAnchor.constraint(equalTo: topAnchor, constant: 8),
-            appIconView.widthAnchor.constraint(equalToConstant: 28),
-            appIconView.heightAnchor.constraint(equalToConstant: 28),
-
-            // 颜色圆形（替代App图标位置）
-            colorCircleView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
-            colorCircleView.topAnchor.constraint(equalTo: topAnchor, constant: 10),
-            colorCircleView.widthAnchor.constraint(equalToConstant: 24),
-            colorCircleView.heightAnchor.constraint(equalToConstant: 24),
-
-            // 固定指示器（右侧，顶部对齐）
-            pinIndicator.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
-            pinIndicator.topAnchor.constraint(equalTo: topAnchor, constant: 15),
-            pinIndicator.widthAnchor.constraint(equalToConstant: 14),
-            pinIndicator.heightAnchor.constraint(equalToConstant: 14),
-
-            // 内容文字（水平位置固定，垂直位置动态调整）
-            contentLabel.leadingAnchor.constraint(
-                equalTo: appIconView.trailingAnchor, constant: 10),
-            contentLabel.trailingAnchor.constraint(
-                equalTo: pinIndicator.leadingAnchor, constant: -8),
-            contentLabel.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor, constant: -8),
-
-            // 图片预览（顶部对齐，与图标顶部对齐）
-            previewImageView.leadingAnchor.constraint(
-                equalTo: appIconView.trailingAnchor, constant: 10),
-            previewImageView.topAnchor.constraint(equalTo: appIconView.topAnchor),
-            previewImageWidthConstraint!,
-            previewImageHeightConstraint!,
-        ])
-    }
-
-    func configure(with item: ClipboardItem) {
-        // 重置状态
-        previewImageView.isHidden = true
-        contentLabel.isHidden = false
-        appIconView.isHidden = false
-        colorCircleView.isHidden = true
-
-        // 固定指示器
-        pinIndicator.isHidden = !item.isPinned
-
-        // 设置来源App图标
-        if let bundleId = item.sourceAppBundleId,
-            let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId)
-        {
-            appIconView.image = NSWorkspace.shared.icon(forFile: appURL.path)
-        } else {
-            appIconView.image = item.icon
-        }
-
-        // 根据类型配置
-        switch item.contentType {
-        case .image:
-            // 图片类型显示预览
-            if let data = item.imageData, let image = NSImage(data: data) {
-                previewImageView.image = image
-                previewImageView.isHidden = false
-                contentLabel.isHidden = true
-
-                // 计算图片尺寸，根据实际比例自适应
-                let maxPreviewWidth: CGFloat = 200
-                let maxPreviewHeight: CGFloat = 85
-                let aspectRatio = image.size.width / max(image.size.height, 1)
-
-                let imageWidth: CGFloat
-                let imageHeight: CGFloat
-
-                if aspectRatio >= 1 {
-                    // 宽图：宽度优先，高度按比例
-                    imageWidth = min(maxPreviewHeight * aspectRatio, maxPreviewWidth)
-                    imageHeight = imageWidth / aspectRatio
-                } else {
-                    // 高图：高度优先，宽度按比例
-                    imageHeight = maxPreviewHeight
-                    imageWidth = imageHeight * aspectRatio
-                }
-
-                previewImageWidthConstraint?.constant = max(imageWidth, 28)  // 最小宽度28（与图标同宽）
-                previewImageHeightConstraint?.constant = max(imageHeight, 28)  // 最小高度28
-
-                // 图片类型不需要文字约束
-                contentLabelCenterYConstraint?.isActive = false
-                contentLabelTopConstraint?.isActive = false
-            } else {
-                contentLabel.stringValue = "图片"
-                // 文字和图标垂直居中
-                contentLabelCenterYConstraint?.isActive = true
-                contentLabelTopConstraint?.isActive = false
-            }
-
-        case .color:
-            // 颜色类型显示圆形颜色块
-            if let hex = item.colorHex, let color = NSColor(hex: hex) {
-                colorCircleView.layer?.backgroundColor = color.cgColor
-                colorCircleView.isHidden = false
-                appIconView.isHidden = true
-                contentLabel.stringValue = hex.uppercased()
-            } else {
-                contentLabel.stringValue = item.displayTitle
-            }
-            // 文字和图标垂直居中（单行）
-            contentLabelCenterYConstraint?.isActive = true
-            contentLabelTopConstraint?.isActive = false
-
-        case .text, .link:
-            let text = item.textContent ?? ""
-            contentLabel.stringValue = text
-
-            // 文字始终顶部对齐（固定距离顶部，视觉上与图标居中）
-            contentLabelCenterYConstraint?.isActive = false
-            contentLabelTopConstraint?.isActive = true
-
-        case .file:
-            if let paths = item.filePaths, let firstPath = paths.first {
-                let fileName = (firstPath as NSString).lastPathComponent
-                if paths.count > 1 {
-                    contentLabel.stringValue = "\(fileName) 等 \(paths.count) 个文件"
-                } else {
-                    contentLabel.stringValue = fileName
-                }
-            } else {
-                contentLabel.stringValue = item.displayTitle
-            }
-            // 文字和图标垂直居中
-            contentLabelCenterYConstraint?.isActive = true
-            contentLabelTopConstraint?.isActive = false
-        }
-    }
-}
-
-// MARK: - 自定义 TableRowView（始终保持蓝色高亮）
-
-class EmphasizedTableRowView: NSTableRowView {
-    // 重写 isEmphasized 属性，始终返回 true
-    // 这样即使窗口不是 key window，选中高亮也会保持蓝色
-    override var isEmphasized: Bool {
-        get { return true }
-        set {}
-    }
-}
-
-// MARK: - 可拖拽视图（用于窗口拖拽）
-
-class DraggableView: NSView {
-
-    private var initialMouseLocation: NSPoint = .zero
-    private var initialWindowOrigin: NSPoint = .zero
-    private let handleView = NSView()
-
-    override init(frame frameRect: NSRect) {
-        super.init(frame: frameRect)
-        setupHandle()
-    }
-
-    required init?(coder: NSCoder) {
-        super.init(coder: coder)
-        setupHandle()
-    }
-
-    private func setupHandle() {
-        // 小横杠视觉指示器
-        handleView.wantsLayer = true
-        updateHandleColor()
-        handleView.layer?.cornerRadius = 2
-        handleView.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(handleView)
-
-        NSLayoutConstraint.activate([
-            handleView.centerXAnchor.constraint(equalTo: centerXAnchor),
-            handleView.centerYAnchor.constraint(equalTo: centerYAnchor),
-            handleView.widthAnchor.constraint(equalToConstant: 36),
-            handleView.heightAnchor.constraint(equalToConstant: 4),
-        ])
-    }
-
-    override func viewDidChangeEffectiveAppearance() {
-        super.viewDidChangeEffectiveAppearance()
-        // 确保系统主题切换时，Layer 的颜色也能同步更新
-        updateHandleColor()
-    }
-
-    private func updateHandleColor() {
-        // 使用比 separatorColor 更明显的 tertiaryLabelColor
-        handleView.layer?.backgroundColor = NSColor.tertiaryLabelColor.cgColor
-    }
-
-    override func mouseDown(with event: NSEvent) {
-        initialMouseLocation = NSEvent.mouseLocation
-        initialWindowOrigin = window?.frame.origin ?? .zero
-    }
-
-    override func mouseDragged(with event: NSEvent) {
-        guard let window = window else { return }
-
-        let currentLocation = NSEvent.mouseLocation
-        let deltaX = currentLocation.x - initialMouseLocation.x
-        let deltaY = currentLocation.y - initialMouseLocation.y
-
-        let newOrigin = NSPoint(
-            x: initialWindowOrigin.x + deltaX,
-            y: initialWindowOrigin.y + deltaY
-        )
-
-        window.setFrameOrigin(newOrigin)
-    }
-}
-
-// MARK: - 可调整大小的容器视图（处理左右边缘拖拽）
-
-class ResizableContainerView: NSView {
-
-    private let resizeEdgeWidth: CGFloat = 10
-    private let panelMinWidth: CGFloat = 430
-    private let panelMaxWidth: CGFloat = 800
-
-    private var isResizing = false
-    private var resizeEdge: ResizeEdge = .none
-    private var initialFrame: NSRect = .zero
-    private var initialMouseLocation: NSPoint = .zero
-
-    enum ResizeEdge {
-        case none, left, right
-    }
-
-    // 重写 hitTest 让边缘区域的事件由自己处理
-    override func hitTest(_ point: NSPoint) -> NSView? {
-        // 如果不在窗口内，不处理
-        guard let window = window else { return super.hitTest(point) }
-
-        let windowPoint = window.convertPoint(fromScreen: NSEvent.mouseLocation)
-        let localPoint = convert(windowPoint, from: nil)
-
-        // 检查是否在视图范围内
-        guard bounds.contains(localPoint) else { return nil }
-
-        // 如果在左右边缘，返回自己来处理事件
-        if localPoint.x < resizeEdgeWidth || localPoint.x > bounds.width - resizeEdgeWidth {
-            return self
-        }
-
-        // 否则正常传递给子视图
-        return super.hitTest(point)
-    }
-
-    override func updateTrackingAreas() {
-        super.updateTrackingAreas()
-
-        // 移除旧的追踪区域
-        for area in trackingAreas {
-            removeTrackingArea(area)
-        }
-
-        // 左边缘追踪区域
-        let leftEdgeRect = NSRect(x: 0, y: 0, width: resizeEdgeWidth, height: bounds.height)
-        let leftOptions: NSTrackingArea.Options = [
-            .mouseEnteredAndExited, .activeAlways, .cursorUpdate,
-        ]
-        let leftTrackingArea = NSTrackingArea(
-            rect: leftEdgeRect, options: leftOptions, owner: self, userInfo: ["edge": "left"])
-        addTrackingArea(leftTrackingArea)
-
-        // 右边缘追踪区域
-        let rightEdgeRect = NSRect(
-            x: bounds.width - resizeEdgeWidth, y: 0, width: resizeEdgeWidth, height: bounds.height)
-        let rightTrackingArea = NSTrackingArea(
-            rect: rightEdgeRect, options: leftOptions, owner: self, userInfo: ["edge": "right"])
-        addTrackingArea(rightTrackingArea)
-    }
-
-    override func cursorUpdate(with event: NSEvent) {
-        let location = convert(event.locationInWindow, from: nil)
-        if location.x < resizeEdgeWidth || location.x > bounds.width - resizeEdgeWidth {
-            NSCursor.resizeLeftRight.set()
-        }
-    }
-
-    override func mouseEntered(with event: NSEvent) {
-        NSCursor.resizeLeftRight.set()
-    }
-
-    override func mouseExited(with event: NSEvent) {
-        if !isResizing {
-            NSCursor.arrow.set()
-        }
-    }
-
-    override func mouseDown(with event: NSEvent) {
-        let location = convert(event.locationInWindow, from: nil)
-
-        if location.x < resizeEdgeWidth {
-            resizeEdge = .left
-            isResizing = true
-        } else if location.x > bounds.width - resizeEdgeWidth {
-            resizeEdge = .right
-            isResizing = true
-        } else {
-            resizeEdge = .none
-            isResizing = false
-            super.mouseDown(with: event)
-            return
-        }
-
-        if isResizing {
-            initialFrame = window?.frame ?? .zero
-            initialMouseLocation = NSEvent.mouseLocation
-        }
-    }
-
-    override func mouseDragged(with event: NSEvent) {
-        guard isResizing, let window = window else {
-            super.mouseDragged(with: event)
-            return
-        }
-
-        let currentLocation = NSEvent.mouseLocation
-        let deltaX = currentLocation.x - initialMouseLocation.x
-
-        var newFrame = initialFrame
-
-        switch resizeEdge {
-        case .left:
-            var newWidth = initialFrame.width - deltaX
-            // 限制在边界内
-            newWidth = max(panelMinWidth, min(panelMaxWidth, newWidth))
-            let actualDelta = initialFrame.width - newWidth
-            newFrame.origin.x = initialFrame.origin.x + actualDelta
-            newFrame.size.width = newWidth
-        case .right:
-            var newWidth = initialFrame.width + deltaX
-            // 限制在边界内
-            newWidth = max(panelMinWidth, min(panelMaxWidth, newWidth))
-            newFrame.size.width = newWidth
-        case .none:
-            break
-        }
-
-        window.setFrame(newFrame, display: true)
-    }
-
-    override func mouseUp(with event: NSEvent) {
-        if isResizing {
-            isResizing = false
-            resizeEdge = .none
-
-            // 保存新尺寸
-            if let window = window {
-                var settings = ClipboardSettings.load()
-                settings.panelWidth = window.frame.width
-                settings.panelHeight = window.frame.height
-                settings.save()
-            }
-
-            NSCursor.arrow.set()
-        } else {
-            super.mouseUp(with: event)
-        }
-    }
-}
-
-// MARK: - 快捷键提示视图
-
-class ShortcutHintView: NSView {
-
-    private let stackView = NSStackView()
-    private let keySize: CGFloat = 16
-
-    override init(frame frameRect: NSRect) {
-        super.init(frame: frameRect)
-        setupUI()
-    }
-
-    required init?(coder: NSCoder) {
-        super.init(coder: coder)
-        setupUI()
-    }
-
-    private func setupUI() {
-        // 改为水平布局，一行显示
-        stackView.orientation = .horizontal
-        stackView.alignment = .centerY
-        stackView.spacing = 16
-        stackView.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(stackView)
-
-        // 粘贴选中行: ↵
-        let pasteHint = createHintGroup(text: "粘贴", keys: ["↵"])
-        stackView.addArrangedSubview(pasteHint)
-
-        // 粘贴为纯文本: ⌘ ↵
-        let plainTextHint = createHintGroup(text: "纯文本", keys: ["⌘", "↵"])
-        stackView.addArrangedSubview(plainTextHint)
-
-        NSLayoutConstraint.activate([
-            stackView.topAnchor.constraint(equalTo: topAnchor),
-            stackView.bottomAnchor.constraint(equalTo: bottomAnchor),
-            stackView.leadingAnchor.constraint(equalTo: leadingAnchor),
-            stackView.trailingAnchor.constraint(equalTo: trailingAnchor),
-        ])
-    }
-
-    private func createHintGroup(text: String, keys: [String]) -> NSView {
-        let groupStack = NSStackView()
-        groupStack.orientation = .horizontal
-        groupStack.spacing = 3
-        groupStack.alignment = .centerY
-
-        // 文字标签
-        let label = NSTextField(labelWithString: text)
-        label.font = .systemFont(ofSize: 10)
-        label.textColor = .tertiaryLabelColor
-        groupStack.addArrangedSubview(label)
-
-        // 按键图标
-        for key in keys {
-            let keyView = createKeyView(key)
-            groupStack.addArrangedSubview(keyView)
-        }
-
-        return groupStack
-    }
-
-    private func createKeyView(_ key: String) -> NSView {
-        let container = NSView()
-        container.wantsLayer = true
-        container.layer?.backgroundColor = NSColor.quaternaryLabelColor.cgColor
-        container.layer?.cornerRadius = 3
-
-        let label = NSTextField(labelWithString: key)
-        label.font = .systemFont(ofSize: 10, weight: .medium)
-        label.textColor = .secondaryLabelColor
-        label.alignment = .center
-        label.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(label)
-
-        NSLayoutConstraint.activate([
-            label.centerXAnchor.constraint(equalTo: container.centerXAnchor),
-            label.centerYAnchor.constraint(equalTo: container.centerYAnchor),
-            container.widthAnchor.constraint(equalToConstant: keySize),
-            container.heightAnchor.constraint(equalToConstant: keySize),
-        ])
-
-        return container
-    }
-}

@@ -1,0 +1,16 @@
+schema: spec-driven
+
+context: |
+    Description: Macos App, same as Raycast, Hapigo
+    Tech stack：Swift, sparkle
+
+rules:
+    proposal:
+        - Include rollback plan
+        - Identify affected components
+    specs:
+        - Use Given/When/Then format for scenarios
+    design:
+        - Include sequence diagrams for complex flows
+    # tasks:
+    #     -
