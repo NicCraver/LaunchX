@@ -8,6 +8,11 @@ final class IDERecentProjectsService {
 
     private init() {}
 
+    enum CommandError: Error {
+        case invalidUTF8
+        case nonZeroExitStatus(Int32)
+    }
+
     // MARK: - Installed IDE Detection
 
     /// 可用于打开文件夹的应用信息
@@ -121,27 +126,13 @@ final class IDERecentProjectsService {
             return []
         }
 
-        // 使用 sqlite3 命令行查询
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/sqlite3")
-        process.arguments = [
-            dbPath, "SELECT value FROM ItemTable WHERE key='history.recentlyOpenedPathsList';",
-        ]
-
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = FileHandle.nullDevice
-
         do {
-            try process.run()
-            process.waitUntilExit()
-
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            guard let jsonString = String(data: data, encoding: .utf8),
-                !jsonString.isEmpty
-            else {
-                return []
-            }
+            let jsonString = try Self.runCommand(
+                executablePath: "/usr/bin/sqlite3",
+                arguments: [
+                    dbPath, "SELECT value FROM ItemTable WHERE key='history.recentlyOpenedPathsList';",
+                ])
+            guard !jsonString.isEmpty else { return [] }
 
             return parseVSCodeRecentProjects(jsonString, limit: limit)
         } catch {
@@ -212,27 +203,13 @@ final class IDERecentProjectsService {
             return []
         }
 
-        // 使用 sqlite3 命令行查询
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/sqlite3")
-        process.arguments = [
-            dbPath, "SELECT value FROM ItemTable WHERE key='history.recentlyOpenedPathsList';",
-        ]
-
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = FileHandle.nullDevice
-
         do {
-            try process.run()
-            process.waitUntilExit()
-
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            guard let jsonString = String(data: data, encoding: .utf8),
-                !jsonString.isEmpty
-            else {
-                return []
-            }
+            let jsonString = try Self.runCommand(
+                executablePath: "/usr/bin/sqlite3",
+                arguments: [
+                    dbPath, "SELECT value FROM ItemTable WHERE key='history.recentlyOpenedPathsList';",
+                ])
+            guard !jsonString.isEmpty else { return [] }
 
             return parseCursorRecentProjects(jsonString, limit: limit)
         } catch {
@@ -301,28 +278,14 @@ final class IDERecentProjectsService {
             return []
         }
 
-        // 使用 sqlite3 命令行查询
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/sqlite3")
-        process.arguments = [
-            dbPath,
-            "SELECT paths, timestamp FROM workspaces WHERE paths IS NOT NULL AND paths != '' ORDER BY timestamp DESC LIMIT \(limit);",
-        ]
-
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = FileHandle.nullDevice
-
         do {
-            try process.run()
-            process.waitUntilExit()
-
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            guard let output = String(data: data, encoding: .utf8),
-                !output.isEmpty
-            else {
-                return []
-            }
+            let output = try Self.runCommand(
+                executablePath: "/usr/bin/sqlite3",
+                arguments: [
+                    dbPath,
+                    "SELECT paths, timestamp FROM workspaces WHERE paths IS NOT NULL AND paths != '' ORDER BY timestamp DESC LIMIT \(limit);",
+                ])
+            guard !output.isEmpty else { return [] }
 
             return parseZedRecentProjects(output, limit: limit)
         } catch {
@@ -489,27 +452,13 @@ final class IDERecentProjectsService {
             return []
         }
 
-        // 使用 sqlite3 命令行查询
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/sqlite3")
-        process.arguments = [
-            dbPath, "SELECT value FROM ItemTable WHERE key='history.recentlyOpenedPathsList';",
-        ]
-
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = FileHandle.nullDevice
-
         do {
-            try process.run()
-            process.waitUntilExit()
-
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            guard let jsonString = String(data: data, encoding: .utf8),
-                !jsonString.isEmpty
-            else {
-                return []
-            }
+            let jsonString = try Self.runCommand(
+                executablePath: "/usr/bin/sqlite3",
+                arguments: [
+                    dbPath, "SELECT value FROM ItemTable WHERE key='history.recentlyOpenedPathsList';",
+                ])
+            guard !jsonString.isEmpty else { return [] }
 
             return parseAntigravityRecentProjects(jsonString, limit: limit)
         } catch {
@@ -577,5 +526,31 @@ final class IDERecentProjectsService {
         // 移除 file:// 前缀并解码 URL 编码
         let encoded = String(uri.dropFirst(7))
         return encoded.removingPercentEncoding
+    }
+
+    static func runCommand(executablePath: String, arguments: [String]) throws -> String {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: executablePath)
+        process.arguments = arguments
+
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = FileHandle.nullDevice
+
+        try process.run()
+
+        // 先持续读取 stdout，避免子进程在管道缓冲区写满后阻塞，导致 waitUntilExit 互锁。
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+
+        guard process.terminationStatus == 0 else {
+            throw CommandError.nonZeroExitStatus(process.terminationStatus)
+        }
+
+        guard let output = String(data: data, encoding: .utf8) else {
+            throw CommandError.invalidUTF8
+        }
+
+        return output
     }
 }
